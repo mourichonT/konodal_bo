@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Config Firebase (pas un vrai secret, mais garde .env hors du repo par
+# hygiène/portabilité - cf. .env.example pour le format attendu).
+.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
