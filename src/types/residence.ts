@@ -20,6 +20,12 @@ export type Residence = {
   csmembers?: string[]
   totalLot: number
   geranceRef?: GeranceRef
+  // Géocodées paresseusement côté backoffice (API Adresse/BAN, cf.
+  // lib/geocode.ts) pour la carte des résidences - absentes tant qu'une
+  // résidence n'a pas encore été géocodée. Champ propre au backoffice,
+  // ignoré par l'app mobile (ne fait pas partie de son modèle Residence).
+  lat?: number
+  lng?: number
 }
 
 export const emptyAddress: Address = {

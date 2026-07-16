@@ -29,6 +29,22 @@ export function subscribeToResidences(
   )
 }
 
+export function subscribeToResidence(
+  id: string,
+  onData: (residence: Residence | null) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(residencesCollection, id),
+    (snapshot) => {
+      onData(
+        snapshot.exists() ? { id: snapshot.id, ...(snapshot.data() as Omit<Residence, "id">) } : null
+      )
+    },
+    onError
+  )
+}
+
 export type ResidenceInput = {
   name: string
   address: Address
@@ -44,4 +60,8 @@ export async function createResidence(input: ResidenceInput) {
 
 export async function updateResidence(id: string, input: ResidenceInput) {
   await updateDoc(doc(db, "residences", id), { ...input })
+}
+
+export async function updateResidenceGeo(id: string, lat: number, lng: number) {
+  await updateDoc(doc(db, "residences", id), { lat, lng })
 }

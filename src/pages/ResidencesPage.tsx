@@ -1,9 +1,13 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { Plus } from "lucide-react"
+import { Building2, Plus, Search } from "lucide-react"
+import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -22,24 +26,37 @@ import {
 import {
   createResidence,
   subscribeToResidences,
-  updateResidence,
+  updateResidenceGeo,
   type ResidenceInput,
 } from "@/lib/residences"
+import { geocodeAddress } from "@/lib/geocode"
 import { emptyAddress, type Residence } from "@/types/residence"
 
-function residenceToInput(residence: Residence): ResidenceInput {
-  return {
-    name: residence.name,
-    address: residence.address,
-    mail_contact: residence.mail_contact ?? "",
-  }
+// maplibre-gl pèse ~600 Ko gzippé : chargé à la demande, seulement par les
+// visiteurs de cette page, plutôt que gonfler le bundle principal partagé
+// par tout le backoffice.
+const ResidencesMap = lazy(() =>
+  import("@/components/ResidencesMap").then((m) => ({ default: m.ResidencesMap }))
+)
+
+function matchesSearch(residence: Residence, search: string): boolean {
+  const haystack = [
+    residence.name,
+    residence.address.street,
+    residence.address.zipCode,
+    residence.address.city,
+    residence.mail_contact,
+  ]
+    .join(" ")
+    .toLowerCase()
+  return haystack.includes(search.toLowerCase())
 }
 
 export default function ResidencesPage() {
   const [residences, setResidences] = useState<Residence[]>([])
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<Residence | null>(null)
   const [creating, setCreating] = useState(false)
+  const [search, setSearch] = useState("")
 
   useEffect(() => {
     setLoading(true)
@@ -55,75 +72,211 @@ export default function ResidencesPage() {
     )
   }, [])
 
+  const filteredResidences = useMemo(
+    () => residences.filter((residence) => matchesSearch(residence, search)),
+    [residences, search]
+  )
+
+  // Géocodage paresseux : une résidence sans lat/lng est géocodée une seule
+  // fois via l'API Adresse (gratuite, sans clé) puis les coordonnées sont
+  // persistées en base - les chargements suivants n'ont donc plus jamais à
+  // regéocoder cette résidence. `geocodingRef` évite de relancer une requête
+  // pour une résidence déjà en cours de géocodage (l'effet se redéclenche à
+  // chaque mise à jour de `residences`, y compris juste après l'écriture).
+  const geocodingRef = useRef(new Set<string>())
+  useEffect(() => {
+    for (const residence of residences) {
+      if (residence.lat != null && residence.lng != null) continue
+      if (geocodingRef.current.has(residence.id)) continue
+      geocodingRef.current.add(residence.id)
+      geocodeAddress(residence.address)
+        .then((point) => point && updateResidenceGeo(residence.id, point.lat, point.lng))
+        .catch(() => {
+          // Échec silencieux (adresse introuvable, réseau...) : la résidence
+          // reste juste absente de la carte, un prochain chargement retentera.
+        })
+        .finally(() => geocodingRef.current.delete(residence.id))
+    }
+  }, [residences])
+
+  const topCities = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const residence of residences) {
+      const city = residence.address.city?.trim()
+      if (!city) continue
+      counts.set(city, (counts.get(city) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .map(([city, count]) => ({ city, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
+  }, [residences])
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Résidences</h1>
-        <Button onClick={() => setCreating(true)}>
-          <Plus />
-          Ajouter une résidence
-        </Button>
+      <h1 className="text-2xl font-semibold">Résidences</h1>
+
+      <div className="flex gap-4">
+        <div className="flex w-72 shrink-0 flex-col gap-4">
+          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <CardContent className="flex flex-col gap-1">
+              <span className="text-sm text-muted-foreground">Total résidences</span>
+              <span className="text-3xl font-semibold">{residences.length}</span>
+            </CardContent>
+          </Card>
+
+          <Card className="flex-1 rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <CardHeader>
+              <CardTitle className="text-base">Top 5 des villes</CardTitle>
+            </CardHeader>
+            <CardContent className="h-56">
+              {topCities.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Pas encore de données.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={topCities}
+                    layout="vertical"
+                    margin={{ top: 0, right: 24, bottom: 0, left: 0 }}
+                  >
+                    <XAxis type="number" hide />
+                    <YAxis
+                      type="category"
+                      dataKey="city"
+                      tickLine={false}
+                      axisLine={false}
+                      width={70}
+                      tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "var(--muted)" }}
+                      contentStyle={{
+                        background: "var(--popover)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "var(--radius-md)",
+                        fontSize: 12,
+                      }}
+                    />
+                    <Bar dataKey="count" fill="var(--primary)" radius={[0, 4, 4, 0]} barSize={16}>
+                      <LabelList
+                        dataKey="count"
+                        position="right"
+                        style={{ fill: "var(--foreground)", fontSize: 12 }}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="flex-1 overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <CardHeader>
+            <CardTitle className="text-lg">Carte des résidences</CardTitle>
+            <CardDescription>Localisation géographique de toutes les résidences.</CardDescription>
+          </CardHeader>
+          <CardContent className="h-96">
+            <div className="h-full w-full overflow-hidden rounded-lg ring-1 ring-foreground/10">
+              <Suspense
+                fallback={
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    Chargement de la carte…
+                  </div>
+                }
+              >
+                <ResidencesMap residences={residences} />
+              </Suspense>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Résidence</TableHead>
-              <TableHead>Adresse</TableHead>
-              <TableHead>Code postal</TableHead>
-              <TableHead>Ville</TableHead>
-              <TableHead>Lots</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {residences.map((residence) => (
-              <TableRow key={residence.id}>
-                <TableCell className="font-medium">{residence.name}</TableCell>
-                <TableCell>{residence.address.street}</TableCell>
-                <TableCell>{residence.address.zipCode}</TableCell>
-                <TableCell>{residence.address.city}</TableCell>
-                <TableCell>{residence.totalLot}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="outline" size="sm" onClick={() => setEditing(residence)}>
-                    Modifier
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {!loading && residences.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                  Aucune résidence pour l'instant.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+        <CardHeader>
+          <CardTitle className="text-lg">Répertoire des résidences</CardTitle>
+          <CardDescription>Rechercher, filtrer et gérer toutes les résidences.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col">
+          <div className="mt-[10px] mb-[50px] flex items-center justify-between gap-4">
+            <div className="relative w-full max-w-sm">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher une résidence…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="rounded-full pl-9"
+              />
+            </div>
+            <Button className="rounded-full" onClick={() => setCreating(true)}>
+              <Plus />
+              Ajouter une résidence
+            </Button>
+          </div>
+
+          <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+            <Table>
+              <TableHeader className="bg-muted/40">
+                <TableRow>
+                  <TableHead>Nom</TableHead>
+                  <TableHead>Adresse</TableHead>
+                  <TableHead>Code postal</TableHead>
+                  <TableHead>Ville</TableHead>
+                  <TableHead>Lots</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredResidences.map((residence) => (
+                  <TableRow key={residence.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                          <Building2 className="size-4" />
+                        </div>
+                        {residence.name}
+                      </div>
+                    </TableCell>
+                    <TableCell>{residence.address.street}</TableCell>
+                    <TableCell>{residence.address.zipCode}</TableCell>
+                    <TableCell>{residence.address.city}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{residence.totalLot} lots</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" render={<Link to={`/residences/${residence.id}`} />}>
+                        Gérer
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!loading && filteredResidences.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                      {residences.length === 0
+                        ? "Aucune résidence pour l'instant."
+                        : "Aucun résultat pour cette recherche."}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <p className="mt-4 text-sm text-muted-foreground">
+            {filteredResidences.length} résidence{filteredResidences.length > 1 ? "s" : ""} affichée
+            {filteredResidences.length > 1 ? "s" : ""} sur {residences.length}
+          </p>
+        </CardContent>
+      </Card>
 
       <ResidenceFormDialog
         open={creating}
         onOpenChange={setCreating}
-        title="Ajouter une résidence"
         onSubmit={async (input) => {
           await createResidence(input)
           toast.success("Résidence créée")
           setCreating(false)
-        }}
-      />
-
-      <ResidenceFormDialog
-        open={editing !== null}
-        onOpenChange={(open) => !open && setEditing(null)}
-        title="Modifier la résidence"
-        initial={editing ? residenceToInput(editing) : undefined}
-        onSubmit={async (input) => {
-          if (!editing) return
-          await updateResidence(editing.id, input)
-          toast.success("Résidence mise à jour")
-          setEditing(null)
         }}
       />
     </div>
@@ -133,32 +286,28 @@ export default function ResidencesPage() {
 function ResidenceFormDialog({
   open,
   onOpenChange,
-  title,
-  initial,
   onSubmit,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  title: string
-  initial?: ResidenceInput
   onSubmit: (input: ResidenceInput) => Promise<void>
 }) {
-  const [name, setName] = useState(initial?.name ?? "")
-  const [street, setStreet] = useState(initial?.address.street ?? emptyAddress.street)
-  const [zipCode, setZipCode] = useState(initial?.address.zipCode ?? emptyAddress.zipCode)
-  const [city, setCity] = useState(initial?.address.city ?? emptyAddress.city)
-  const [mailContact, setMailContact] = useState(initial?.mail_contact ?? "")
+  const [name, setName] = useState("")
+  const [street, setStreet] = useState(emptyAddress.street)
+  const [zipCode, setZipCode] = useState(emptyAddress.zipCode)
+  const [city, setCity] = useState(emptyAddress.city)
+  const [mailContact, setMailContact] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (open) {
-      setName(initial?.name ?? "")
-      setStreet(initial?.address.street ?? emptyAddress.street)
-      setZipCode(initial?.address.zipCode ?? emptyAddress.zipCode)
-      setCity(initial?.address.city ?? emptyAddress.city)
-      setMailContact(initial?.mail_contact ?? "")
+      setName("")
+      setStreet(emptyAddress.street)
+      setZipCode(emptyAddress.zipCode)
+      setCity(emptyAddress.city)
+      setMailContact("")
     }
-  }, [open, initial])
+  }, [open])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -179,37 +328,39 @@ function ResidenceFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
+        <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
+          <DialogHeader className="pb-4">
+            <DialogTitle>Ajouter une résidence</DialogTitle>
           </DialogHeader>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="res-name">Nom de la résidence</Label>
-            <Input id="res-name" required value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="res-street">Adresse</Label>
-            <Input id="res-street" required value={street} onChange={(e) => setStreet(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="res-zip">Code postal</Label>
-              <Input id="res-zip" required value={zipCode} onChange={(e) => setZipCode(e.target.value)} />
+              <Label htmlFor="res-name">Nom de la résidence</Label>
+              <Input id="res-name" required value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="res-city">Ville</Label>
-              <Input id="res-city" required value={city} onChange={(e) => setCity(e.target.value)} />
+              <Label htmlFor="res-street">Adresse</Label>
+              <Input id="res-street" required value={street} onChange={(e) => setStreet(e.target.value)} />
             </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="res-mail">Email de contact</Label>
-            <Input
-              id="res-mail"
-              type="email"
-              value={mailContact}
-              onChange={(e) => setMailContact(e.target.value)}
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="res-zip">Code postal</Label>
+                <Input id="res-zip" required value={zipCode} onChange={(e) => setZipCode(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="res-city">Ville</Label>
+                <Input id="res-city" required value={city} onChange={(e) => setCity(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="res-mail">Email de contact</Label>
+              <Input
+                id="res-mail"
+                type="email"
+                value={mailContact}
+                onChange={(e) => setMailContact(e.target.value)}
+              />
+            </div>
           </div>
 
           <DialogFooter>
