@@ -6,6 +6,7 @@ import {
   onSnapshot,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   type DocumentData,
   type DocumentSnapshot,
@@ -106,6 +107,32 @@ export async function setUserApproved(uid: string, isApproved: boolean) {
 // NoApprovalPage) - distinct d'une simple révocation sans explication.
 export async function rejectUser(uid: string, reason: string) {
   await updateDoc(doc(usersCollection, uid), { isApproved: false, rejectionReason: reason })
+}
+
+export type UserIdentityInput = {
+  name: string
+  surname: string
+  phone: string
+  birthday: Date | null
+  sex: string
+  nationality: string
+  placeOfborn: string
+}
+
+// Correction d'une erreur de reconnaissance (OCR à l'inscription) par un
+// admin - met à jour uniquement les champs imbriqués user.*/profil.phone,
+// jamais email (identifiant du compte Firebase Auth, non modifiable ici) ni
+// isApproved/accountType/isInfoCorrect (gérés séparément).
+export async function updateUserIdentity(uid: string, input: UserIdentityInput) {
+  await updateDoc(doc(usersCollection, uid), {
+    "user.name": input.name,
+    "user.surname": input.surname,
+    "user.sex": input.sex,
+    "user.nationality": input.nationality,
+    "user.placeOfborn": input.placeOfborn,
+    "user.birthday": input.birthday ? Timestamp.fromDate(input.birthday) : null,
+    "profil.phone": input.phone,
+  })
 }
 
 export type UserDocument = {

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { Building2, Plus, Search } from "lucide-react"
+import { Building2, Pencil, Plus, Save, Search } from "lucide-react"
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -245,6 +245,7 @@ export default function ResidencesPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="outline" size="sm" render={<Link to={`/residences/${residence.id}`} />}>
+                        <Pencil />
                         Gérer
                       </Button>
                     </TableCell>
@@ -365,6 +366,7 @@ function ResidenceFormDialog({
 
           <DialogFooter>
             <Button type="submit" disabled={submitting}>
+              <Save />
               Enregistrer
             </Button>
           </DialogFooter>

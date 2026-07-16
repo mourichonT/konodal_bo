@@ -68,8 +68,8 @@ export default function ResidenceDetailPage() {
   if (!id) return null
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-1">
+    <div className="-mt-[20px] flex flex-col gap-8">
+      <div className="flex flex-col gap-3">
         <Link
           to="/residences"
           className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"

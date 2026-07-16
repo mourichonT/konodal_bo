@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { Search, User as UserIcon } from "lucide-react"
+import { Eye, Search, User as UserIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -72,7 +72,7 @@ export default function ResidentsPage() {
         </Card>
         <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
           <CardContent className="flex flex-col gap-1">
-            <span className="text-sm text-muted-foreground">Identités approuvées</span>
+            <span className="text-sm text-muted-foreground">Comptes approuvés</span>
             <span className="text-3xl font-semibold">{approvedCount}</span>
           </CardContent>
         </Card>
@@ -132,6 +132,7 @@ export default function ResidentsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="outline" size="sm" render={<Link to={`/residents/${user.uid}`} />}>
+                        <Eye />
                         Voir la fiche
                       </Button>
                     </TableCell>

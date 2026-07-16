@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, FileText } from "lucide-react"
+import { ArrowLeft, Ban, Check, Eye, FileText, RefreshCw, Save, X } from "lucide-react"
 import { getDownloadURL, ref } from "firebase/storage"
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -25,6 +26,7 @@ import {
   subscribeToUserDocuments,
   subscribeToUserLotDocuments,
   subscribeToUserLots,
+  updateUserIdentity,
   type UserDocument,
   type UserLot,
 } from "@/lib/users"
@@ -106,8 +108,8 @@ export default function ResidentDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-1">
+    <div className="-mt-[20px] flex flex-col gap-8">
+      <div className="flex flex-col gap-3">
         <Link
           to="/residents"
           className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -128,7 +130,7 @@ export default function ResidentDetailPage() {
         <>
           <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
             <CardHeader>
-              <CardTitle className="text-lg">Identité</CardTitle>
+              <CardTitle className="text-lg">Compte</CardTitle>
               <CardDescription>
                 Vérifier les documents ci-dessous avant d'approuver l'accès à l'application.
               </CardDescription>
@@ -148,10 +150,17 @@ export default function ResidentDetailPage() {
                   disabled={savingApproval}
                   onClick={handleToggleApproved}
                 >
+                  {user.isApproved ? <X /> : <Check />}
                   {user.isApproved ? "Révoquer l'identité" : "Approuver l'identité"}
                 </Button>
                 {!user.isApproved && (
-                  <Button variant="destructive" size="sm" onClick={() => setRejecting(true)}>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="bg-destructive text-white hover:bg-destructive/90"
+                    onClick={() => setRejecting(true)}
+                  >
+                    <Ban />
                     Refuser
                   </Button>
                 )}
@@ -164,39 +173,10 @@ export default function ResidentDetailPage() {
                   {user.rejectionReason}
                 </div>
               )}
-              <div className="grid gap-2 text-sm sm:grid-cols-2">
-                <div>
-                  <span className="text-muted-foreground">Email : </span>
-                  {user.email || "—"}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Téléphone : </span>
-                  {user.phone || "—"}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Date de naissance : </span>
-                  {user.birthday ? user.birthday.toLocaleDateString("fr-FR") : "—"}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Sexe : </span>
-                  {user.sex || "—"}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Nationalité : </span>
-                  {user.nationality || "—"}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Lieu de naissance : </span>
-                  {user.placeOfborn || "—"}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Infos confirmées par l'utilisateur : </span>
-                  {user.isInfoCorrect ? "Oui" : "Non"}
-                </div>
-              </div>
+              <IdentityFields user={user} />
 
-              <div className="flex flex-col gap-2 border-t pt-3">
-                <span className="text-xs font-medium text-muted-foreground">Documents d'identité</span>
+              <div className="pr-[20px] flex flex-col gap-2 pt-[22px] pb-[20px]">
+                <Label className="mb-[20px]">Document(s)</Label>
                 {documents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Aucun document déposé.</p>
                 ) : (
@@ -260,15 +240,132 @@ export default function ResidentDetailPage() {
             <DialogFooter>
               <Button
                 variant="destructive"
+                className="bg-destructive text-white hover:bg-destructive/90"
                 disabled={savingRejection || !rejectReason.trim()}
                 onClick={handleReject}
               >
+                <Ban />
                 Confirmer le refus
               </Button>
             </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function toDateInputValue(date: Date | null): string {
+  if (!date) return ""
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+// Champs corrigibles par un admin en cas d'erreur de reconnaissance (OCR à
+// l'inscription) - tout sauf l'email, identifiant du compte Firebase Auth.
+function IdentityFields({ user }: { user: KonodalUser }) {
+  const [name, setName] = useState(user.name)
+  const [surname, setSurname] = useState(user.surname)
+  const [phone, setPhone] = useState(user.phone)
+  const [birthday, setBirthday] = useState(toDateInputValue(user.birthday))
+  const [sex, setSex] = useState(user.sex)
+  const [nationality, setNationality] = useState(user.nationality)
+  const [placeOfborn, setPlaceOfborn] = useState(user.placeOfborn)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setName(user.name)
+    setSurname(user.surname)
+    setPhone(user.phone)
+    setBirthday(toDateInputValue(user.birthday))
+    setSex(user.sex)
+    setNationality(user.nationality)
+    setPlaceOfborn(user.placeOfborn)
+  }, [user.uid])
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await updateUserIdentity(user.uid, {
+        name,
+        surname,
+        phone,
+        sex,
+        nationality,
+        placeOfborn,
+        birthday: birthday ? new Date(birthday) : null,
+      })
+      toast.success("Identité mise à jour")
+    } catch (err) {
+      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-3 text-sm sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="identity-email">Email</Label>
+          <Input id="identity-email" value={user.email} disabled />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="identity-phone">Téléphone</Label>
+          <Input id="identity-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="identity-name">Prénom</Label>
+          <Input id="identity-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="identity-surname">Nom</Label>
+          <Input id="identity-surname" value={surname} onChange={(e) => setSurname(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="identity-birthday">Date de naissance</Label>
+          <Input
+            id="identity-birthday"
+            type="date"
+            value={birthday}
+            onChange={(e) => setBirthday(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="identity-sex">Sexe</Label>
+          <Input id="identity-sex" value={sex} onChange={(e) => setSex(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="identity-nationality">Nationalité</Label>
+          <Input
+            id="identity-nationality"
+            value={nationality}
+            onChange={(e) => setNationality(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="identity-placeofborn">Lieu de naissance</Label>
+          <Input
+            id="identity-placeofborn"
+            value={placeOfborn}
+            onChange={(e) => setPlaceOfborn(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <p className="text-sm">
+        <span className="text-muted-foreground">Infos confirmées par l'utilisateur : </span>
+        {user.isInfoCorrect ? "Oui" : "Non"}
+      </p>
+
+      <div className="mb-[20px] flex justify-end">
+        <Button size="sm" disabled={saving} onClick={handleSave}>
+          <Save />
+          Enregistrer les modifications
+        </Button>
+      </div>
     </div>
   )
 }
@@ -300,6 +397,7 @@ function DocumentRow({ document }: { document: UserDocument }) {
       </div>
       {url ? (
         <Button variant="outline" size="sm" render={<a href={url} target="_blank" rel="noreferrer" />}>
+          <Eye />
           Ouvrir
         </Button>
       ) : (
@@ -440,7 +538,7 @@ function LotRow({
             {lotInfo?.batiment ? ` — ${lotInfo.batiment}` : ""}
             {lotInfo?.lot ? ` — ${lotInfo.lot}` : ""}
           </span>
-          <span className="text-muted-foreground">
+          <span className="pl-3 text-muted-foreground">
             {lotInfo?.refLot ? `Réf. ${lotInfo.refLot}` : "—"}
           </span>
           {parentLotInfo && (
@@ -465,16 +563,17 @@ function LotRow({
             title={!userApproved ? "Approuve d'abord l'identité pour que la synchronisation fonctionne" : undefined}
             onClick={handleApprove}
           >
-            {lot.isApprovedLot ? "Réapprouver" : "Approuver"}
+            {lot.isApprovedLot ? <RefreshCw /> : <Check />}
+            {lot.isApprovedLot ? "Actualiser" : "Approuver"}
           </Button>
         </div>
       </div>
 
       {groupedChildren.length > 0 && (
         <div className="flex flex-col gap-1 border-t pt-3 text-sm">
-          <span className="text-xs font-medium text-muted-foreground">Lots groupés avec celui-ci</span>
+          <span className="font-medium text-muted-foreground">Lots groupés avec celui-ci</span>
           {groupedChildren.map((child) => (
-            <span key={child.id} className="text-muted-foreground">
+            <span key={child.id} className="pl-3 text-muted-foreground">
               {child.batiment || child.id}
               {child.lot ? ` — ${child.lot}` : ""}
               {child.refLot ? ` · Réf. ${child.refLot}` : ""}
@@ -483,8 +582,8 @@ function LotRow({
         </div>
       )}
 
-      <div className="flex flex-col gap-2 border-t pt-3">
-        <span className="text-xs font-medium text-muted-foreground">Justificatifs du lot</span>
+      <div className="pr-[20px] flex flex-col gap-2 pt-[22px] pb-[20px]">
+        <Label className="mb-[20px]">Document(s)</Label>
         {documents.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucun document déposé pour ce lot.</p>
         ) : (

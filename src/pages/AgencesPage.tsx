@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { toast } from "sonner"
-import { Briefcase, Plus, Search, X } from "lucide-react"
+import { Briefcase, Pencil, Plus, Save, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -175,6 +175,7 @@ export default function AgencesPage() {
                       <TableCell>{primaryContact || "—"}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" onClick={() => setEditing(gerance)}>
+                          <Pencil />
                           Modifier
                         </Button>
                       </TableCell>
@@ -335,6 +336,7 @@ function GeranceFormDialog({
 
           <DialogFooter>
             <Button type="submit" disabled={submitting}>
+              <Save />
               Enregistrer
             </Button>
           </DialogFooter>
@@ -414,8 +416,8 @@ function ServiceSection({
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Agents</span>
-              <Button type="button" variant="outline" size="xs" onClick={addAgent}>
+              <Label>Agents</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addAgent}>
                 <Plus />
                 Ajouter un agent
               </Button>
