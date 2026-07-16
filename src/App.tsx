@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom"
+import { Routes, Route, Navigate } from "react-router-dom"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import LoginPage from "@/pages/LoginPage"
@@ -9,6 +9,9 @@ import ResidenceDetailPage from "@/pages/ResidenceDetailPage"
 import ResidentsPage from "@/pages/ResidentsPage"
 import ResidentDetailPage from "@/pages/ResidentDetailPage"
 import SinistresPage from "@/pages/SinistresPage"
+import SinistresKanbanPage from "@/pages/SinistresKanbanPage"
+import SinistresListPage from "@/pages/SinistresListPage"
+import SinistreDetailPage from "@/pages/SinistreDetailPage"
 import AgencesPage from "@/pages/AgencesPage"
 
 function App() {
@@ -24,7 +27,12 @@ function App() {
         }
       >
         <Route index element={<DashboardPage />} />
-        <Route path="sinistres" element={<SinistresPage />} />
+        <Route path="sinistres" element={<SinistresPage />}>
+          <Route index element={<Navigate to="kanban" replace />} />
+          <Route path="kanban" element={<SinistresKanbanPage />} />
+          <Route path="liste" element={<SinistresListPage />} />
+        </Route>
+        <Route path="sinistres/:residenceId/:postId" element={<SinistreDetailPage />} />
         <Route path="residences" element={<ResidencesPage />} />
         <Route path="residences/:id" element={<ResidenceDetailPage />} />
         <Route path="residents" element={<ResidentsPage />} />
