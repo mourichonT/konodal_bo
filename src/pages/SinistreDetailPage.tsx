@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,6 +69,10 @@ export default function SinistreDetailPage() {
   const [updating, setUpdating] = useState(false)
   const [updatingPriority, setUpdatingPriority] = useState(false)
   const [updatingArchived, setUpdatingArchived] = useState(false)
+  // Sortie du statut "Non envoyé" via ce dropdown : même garde que le
+  // drag-and-drop Kanban, cf. SinistresKanbanPage.tsx (pose declaredDate,
+  // irréversible côté règle Firestore).
+  const [pendingStatus, setPendingStatus] = useState<SinistreStatus | null>(null)
   const [residenceName, setResidenceName] = useState<string | null>(null)
   const [comments, setComments] = useState<PostComment[]>([])
   const [authorNames, setAuthorNames] = useState<Record<string, string>>({})
@@ -186,17 +191,39 @@ export default function SinistreDetailPage() {
   const next =
     currentIndex >= 0 && currentIndex < allSinistres.length - 1 ? allSinistres[currentIndex + 1] : null
 
-  async function handleStatusChange(statut: SinistreStatus) {
+  async function applyStatusChange(statut: SinistreStatus, options?: { markDeclared?: boolean }) {
     if (!residenceId || !postId) return
     setUpdating(true)
     try {
-      await updateSinistreStatut(residenceId, postId, statut)
+      await updateSinistreStatut(residenceId, postId, statut, options)
       toast.success("Statut mis à jour")
     } catch (err) {
       toast.error("Échec de la mise à jour : " + (err as Error).message)
     } finally {
       setUpdating(false)
     }
+  }
+
+  function handleStatusChange(statut: SinistreStatus) {
+    if (!residenceId || !postId || !sinistre) return
+    if (statut === "Non envoyé" && sinistre.declaredDate) {
+      toast.error("Impossible de repasser un ticket déjà transmis en \"À venir\"")
+      return
+    }
+    const currentStatut = sinistre.statut || "Non envoyé"
+    if (currentStatut === statut) return
+    if (currentStatut === "Non envoyé") {
+      setPendingStatus(statut)
+      return
+    }
+    void applyStatusChange(statut)
+  }
+
+  async function handleConfirmPendingStatus() {
+    if (!pendingStatus) return
+    const statut = pendingStatus
+    setPendingStatus(null)
+    await applyStatusChange(statut, { markDeclared: true })
   }
 
   async function handlePriorityChange(priority: SinistrePriority) {
@@ -355,7 +382,12 @@ export default function SinistreDetailPage() {
                         >
                           <DropdownMenuLabel>Statut</DropdownMenuLabel>
                           {SINISTRE_STATUSES.map((statut) => (
-                            <DropdownMenuRadioItem key={statut} value={statut} className="gap-2">
+                            <DropdownMenuRadioItem
+                              key={statut}
+                              value={statut}
+                              disabled={statut === "Non envoyé" && !!sinistre.declaredDate}
+                              className="gap-2"
+                            >
                               <span className={cn("size-2 shrink-0 rounded-full", sinistreStatusDotClass[statut])} />
                               {sinistreStatusLabels[statut]}
                             </DropdownMenuRadioItem>
@@ -555,6 +587,24 @@ export default function SinistreDetailPage() {
             </div>
           </div>
       )}
+
+      <Dialog open={!!pendingStatus} onOpenChange={(open) => !open && setPendingStatus(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="pb-4">
+            <DialogTitle>Déplacer ce ticket ?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Êtes-vous sûr de vouloir déplacer ce ticket ? Une fois confirmé, ce ticket sera
+            considéré comme déclaré.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingStatus(null)}>
+              Annuler
+            </Button>
+            <Button onClick={handleConfirmPendingStatus}>Confirmer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

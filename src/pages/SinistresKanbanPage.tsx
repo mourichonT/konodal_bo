@@ -34,6 +34,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import type { SinistresOutletContext } from "@/pages/SinistresPage"
 import type { SinistreWithResidence } from "@/hooks/useAllSinistres"
@@ -60,6 +62,15 @@ export default function SinistresKanbanPage() {
   // l'écriture) - purgé dès que le statut confirmé rejoint l'override, ou en
   // cas d'échec de l'écriture.
   const [statusOverrides, setStatusOverrides] = useState<Record<string, SinistreStatus>>({})
+  // Sortie du statut "Non envoyé" (App: déclaration/transmission) : demande
+  // confirmation avant d'appliquer le déplacement, car ça pose declaredDate
+  // (irréversible côté règle Firestore).
+  const [pendingDrop, setPendingDrop] = useState<{
+    residenceId: string
+    id: string
+    key: string
+    statut: SinistreStatus
+  } | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
@@ -82,19 +93,16 @@ export default function SinistresKanbanPage() {
     setActiveId(String(event.active.id))
   }
 
-  async function handleDragEnd(event: DragEndEvent) {
-    setActiveId(null)
-    const { active, over } = event
-    if (!over) return
-    const statut = over.id as SinistreStatus
-    const [residenceId, id] = String(active.id).split(":")
-    const key = String(active.id)
-    const current = sinistres.find((s) => cardKey(s) === key)
-    if (current && (current.statut || "Non envoyé") === statut) return
-
+  async function applyStatusChange(
+    residenceId: string,
+    id: string,
+    key: string,
+    statut: SinistreStatus,
+    options?: { markDeclared?: boolean }
+  ) {
     setStatusOverrides((prev) => ({ ...prev, [key]: statut }))
     try {
-      await updateSinistreStatut(residenceId, id, statut)
+      await updateSinistreStatut(residenceId, id, statut, options)
     } catch (err) {
       toast.error("Échec du changement de statut : " + (err as Error).message)
       setStatusOverrides((prev) => {
@@ -103,6 +111,36 @@ export default function SinistresKanbanPage() {
         return next
       })
     }
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null)
+    const { active, over } = event
+    if (!over) return
+    const statut = over.id as SinistreStatus
+    const [residenceId, id] = String(active.id).split(":")
+    const key = String(active.id)
+    const current = sinistres.find((s) => cardKey(s) === key)
+    const currentStatut = current?.statut || "Non envoyé"
+    if (currentStatut === statut) return
+    if (statut === "Non envoyé" && current?.declaredDate) {
+      toast.error("Impossible de repasser un ticket déjà transmis en \"À venir\"")
+      return
+    }
+
+    if (currentStatut === "Non envoyé") {
+      setPendingDrop({ residenceId, id, key, statut })
+      return
+    }
+
+    await applyStatusChange(residenceId, id, key, statut)
+  }
+
+  async function handleConfirmPendingDrop() {
+    if (!pendingDrop) return
+    const { residenceId, id, key, statut } = pendingDrop
+    setPendingDrop(null)
+    await applyStatusChange(residenceId, id, key, statut, { markDeclared: true })
   }
 
   const activeSinistre = activeId ? (sinistres.find((s) => cardKey(s) === activeId) ?? null) : null
@@ -153,6 +191,24 @@ export default function SinistresKanbanPage() {
           {activeSinistre && <KanbanCardContent sinistre={activeSinistre} dragging />}
         </DragOverlay>
       </DndContext>
+
+      <Dialog open={!!pendingDrop} onOpenChange={(open) => !open && setPendingDrop(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="pb-4">
+            <DialogTitle>Déplacer ce ticket ?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Êtes-vous sûr de vouloir déplacer ce ticket ? Une fois confirmé, ce ticket sera
+            considéré comme déclaré.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDrop(null)}>
+              Annuler
+            </Button>
+            <Button onClick={handleConfirmPendingDrop}>Confirmer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

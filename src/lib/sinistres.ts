@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   onSnapshot,
   query,
@@ -73,17 +74,24 @@ export function subscribeToSinistre(
 }
 
 // Réservé isCsMember/isSuperAdmin côté firestore.rules (posts/{id}.update).
-// dateClosed : écrit uniquement à la transition vers "Terminé" (même
-// convention que côté app, icon_modify_or_delette.dart), jamais modélisé
-// ailleurs pour ne pas risquer de l'effacer sur un autre changement.
+// dateClosed : posé au passage à "Terminé", effacé dès qu'on en ressort vers
+// n'importe quel autre statut (même logique que côté app,
+// icon_modify_or_delette.dart) - remis à jour si le ticket revient à Terminé.
+//
+// markDeclared : à passer quand on fait sortir un ticket de "Non envoyé"
+// depuis le BO (équivalent du passage "Non envoyé -> Transmis" côté app,
+// icon_modify_or_delette.dart, qui pose declaredDate) - une fois posé, la
+// règle Firestore interdit tout retour à "Non envoyé".
 export async function updateSinistreStatut(
   residenceId: string,
   postId: string,
-  statut: SinistreStatus
+  statut: SinistreStatus,
+  options?: { markDeclared?: boolean }
 ) {
   await updateDoc(doc(db, "residences", residenceId, "posts", postId), {
     statut,
-    ...(statut === "Terminé" ? { dateClosed: serverTimestamp() } : {}),
+    dateClosed: statut === "Terminé" ? serverTimestamp() : deleteField(),
+    ...(options?.markDeclared ? { declaredDate: serverTimestamp() } : {}),
   })
 }
 
