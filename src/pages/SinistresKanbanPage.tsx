@@ -1,9 +1,39 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate, useOutletContext } from "react-router-dom"
 import { toast } from "sonner"
-import { SINISTRE_STATUSES, sinistreStatusLabels, type SinistreStatus } from "@/types/sinistre"
-import { updateSinistreStatut } from "@/lib/sinistres"
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core"
+import { Archive, ArchiveRestore, MessageSquare, TriangleAlert, Users } from "lucide-react"
+import {
+  SINISTRE_PRIORITIES,
+  SINISTRE_STATUSES,
+  sinistrePriorityLabels,
+  sinistreStatusLabels,
+  type SinistrePriority,
+  type SinistreStatus,
+} from "@/types/sinistre"
+import { updateSinistreArchived, updateSinistrePriority, updateSinistreStatut } from "@/lib/sinistres"
 import { SinistreThumbnail } from "@/components/SinistreThumbnail"
+import { SinistrePriorityIcon } from "@/components/SinistrePriorityIcon"
+import { useCommentStats } from "@/hooks/useCommentCount"
+import { useSignalementCount } from "@/hooks/useSignalementCount"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import type { SinistresOutletContext } from "@/pages/SinistresPage"
 import type { SinistreWithResidence } from "@/hooks/useAllSinistres"
@@ -15,63 +45,157 @@ const columnAccent: Record<SinistreStatus, string> = {
   Terminé: "border-t-emerald-500",
 }
 
-export default function SinistresKanbanPage() {
-  const { sinistres, loading } = useOutletContext<SinistresOutletContext>()
-  const navigate = useNavigate()
-  const [dragOverColumn, setDragOverColumn] = useState<SinistreStatus | null>(null)
+function cardKey(sinistre: Pick<SinistreWithResidence, "residenceId" | "id">) {
+  return `${sinistre.residenceId}:${sinistre.id}`
+}
 
-  async function handleDrop(statut: SinistreStatus, e: React.DragEvent) {
-    e.preventDefault()
-    setDragOverColumn(null)
-    const raw = e.dataTransfer.getData("application/json")
-    if (!raw) return
-    const { residenceId, id } = JSON.parse(raw) as { residenceId: string; id: string }
+export default function SinistresKanbanPage() {
+  const { sinistres, loading, filters } = useOutletContext<SinistresOutletContext>()
+  const { search, residenceFilter, dateFrom, dateTo, showNonDeclares, showArchived } = filters
+  const normalizedSearch = search.trim().toLowerCase()
+  const navigate = useNavigate()
+  const [activeId, setActiveId] = useState<string | null>(null)
+  // Déplace la carte instantanément vers la colonne cible au drop, sans
+  // attendre l'aller-retour Firestore (le listener met un instant à refléter
+  // l'écriture) - purgé dès que le statut confirmé rejoint l'override, ou en
+  // cas d'échec de l'écriture.
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, SinistreStatus>>({})
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+
+  useEffect(() => {
+    setStatusOverrides((prev) => {
+      const next = { ...prev }
+      let changed = false
+      for (const s of sinistres) {
+        const key = cardKey(s)
+        if (key in next && next[key] === (s.statut || "Non envoyé")) {
+          delete next[key]
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [sinistres])
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id))
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null)
+    const { active, over } = event
+    if (!over) return
+    const statut = over.id as SinistreStatus
+    const [residenceId, id] = String(active.id).split(":")
+    const key = String(active.id)
+    const current = sinistres.find((s) => cardKey(s) === key)
+    if (current && (current.statut || "Non envoyé") === statut) return
+
+    setStatusOverrides((prev) => ({ ...prev, [key]: statut }))
     try {
       await updateSinistreStatut(residenceId, id, statut)
     } catch (err) {
       toast.error("Échec du changement de statut : " + (err as Error).message)
+      setStatusOverrides((prev) => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
     }
   }
 
-  return (
-    <div className="grid grid-cols-4 gap-4">
-      {SINISTRE_STATUSES.map((statut) => {
-        const columnSinistres = sinistres.filter((s) => (s.statut || "Non envoyé") === statut)
-        return (
-          <div
-            key={statut}
-            onDragOver={(e) => {
-              e.preventDefault()
-              setDragOverColumn(statut)
-            }}
-            onDragLeave={() => setDragOverColumn(null)}
-            onDrop={(e) => handleDrop(statut, e)}
-            className={cn(
-              "flex flex-col gap-3 rounded-2xl border-t-4 bg-white p-3 shadow-[0_8px_30px_rgb(0,0,0,0.06)]",
-              columnAccent[statut],
-              dragOverColumn === statut && "ring-2 ring-primary"
-            )}
-          >
-            <div className="flex items-center justify-between px-1">
-              <h2 className="text-sm font-semibold">{sinistreStatusLabels[statut]}</h2>
-              <span className="text-xs text-muted-foreground">{columnSinistres.length}</span>
-            </div>
+  const activeSinistre = activeId ? (sinistres.find((s) => cardKey(s) === activeId) ?? null) : null
 
-            <div className="flex min-h-24 flex-col gap-2">
-              {columnSinistres.map((sinistre) => (
-                <KanbanCard
-                  key={`${sinistre.residenceId}-${sinistre.id}`}
-                  sinistre={sinistre}
-                  onOpen={() => navigate(`/sinistres/${sinistre.residenceId}/${sinistre.id}`)}
-                />
-              ))}
-              {!loading && columnSinistres.length === 0 && (
-                <p className="px-1 text-sm text-muted-foreground">Aucun ticket.</p>
-              )}
-            </div>
-          </div>
-        )
-      })}
+  return (
+    <div className="flex flex-col gap-4">
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div
+          className={cn(
+            "grid gap-4",
+            showNonDeclares ? "grid-cols-4" : "grid-cols-3"
+          )}
+        >
+          {SINISTRE_STATUSES.filter((statut) => showNonDeclares || statut !== "Non envoyé").map((statut) => {
+            const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null
+            const toDate = dateTo ? new Date(`${dateTo}T23:59:59`) : null
+            const columnSinistres = sinistres.filter((s) => {
+              const effectiveStatut = statusOverrides[cardKey(s)] ?? (s.statut || "Non envoyé")
+              if (effectiveStatut !== statut) return false
+              if (!showArchived && s.archived) return false
+              if (residenceFilter !== "all" && s.residenceId !== residenceFilter) return false
+              if (fromDate && (!s.timeStamp || s.timeStamp < fromDate)) return false
+              if (toDate && (!s.timeStamp || s.timeStamp > toDate)) return false
+              if (!normalizedSearch) return true
+              return (
+                s.title.toLowerCase().includes(normalizedSearch) ||
+                s.description.toLowerCase().includes(normalizedSearch) ||
+                s.id.slice(-6).toLowerCase().includes(normalizedSearch)
+              )
+            })
+            return (
+              <KanbanColumn
+                key={statut}
+                statut={statut}
+                sinistres={columnSinistres}
+                loading={loading}
+                onOpen={(sinistre) =>
+                  navigate(`/sinistres/${sinistre.residenceId}/${sinistre.id}`, {
+                    state: { from: "kanban" },
+                  })
+                }
+              />
+            )
+          })}
+        </div>
+
+        <DragOverlay>
+          {activeSinistre && <KanbanCardContent sinistre={activeSinistre} dragging />}
+        </DragOverlay>
+      </DndContext>
+    </div>
+  )
+}
+
+function KanbanColumn({
+  statut,
+  sinistres,
+  loading,
+  onOpen,
+}: {
+  statut: SinistreStatus
+  sinistres: SinistreWithResidence[]
+  loading: boolean
+  onOpen: (sinistre: SinistreWithResidence) => void
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: statut })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex flex-col gap-3 rounded-2xl border-t-4 bg-white p-3 shadow-[0_8px_30px_rgb(0,0,0,0.06)]",
+        columnAccent[statut],
+        isOver && "ring-2 ring-primary"
+      )}
+    >
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-sm font-semibold">{sinistreStatusLabels[statut]}</h2>
+        <span className="text-xs text-muted-foreground">{sinistres.length}</span>
+      </div>
+
+      <div className="flex min-h-24 flex-col gap-2">
+        {sinistres.map((sinistre) => (
+          <KanbanCard
+            key={cardKey(sinistre)}
+            sinistre={sinistre}
+            onOpen={() => onOpen(sinistre)}
+          />
+        ))}
+        {!loading && sinistres.length === 0 && (
+          <p className="px-1 text-sm text-muted-foreground">Aucun ticket.</p>
+        )}
+      </div>
     </div>
   )
 }
@@ -83,22 +207,120 @@ function KanbanCard({
   sinistre: SinistreWithResidence
   onOpen: () => void
 }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: cardKey(sinistre),
+  })
+
   return (
     <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData(
-          "application/json",
-          JSON.stringify({ residenceId: sinistre.residenceId, id: sinistre.id })
-        )
-      }}
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
       onClick={onOpen}
-      className="flex cursor-grab items-center gap-3 rounded-lg border p-2 text-sm hover:bg-muted/50 active:cursor-grabbing"
+      style={
+        transform
+          ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+          : undefined
+      }
+      className={cn("cursor-grab active:cursor-grabbing", isDragging && "opacity-0")}
     >
-      <SinistreThumbnail pathImage={sinistre.pathImage} className="size-12 shrink-0 rounded-md" />
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate font-medium">{sinistre.title || "Sans titre"}</span>
-        <span className="truncate text-xs text-muted-foreground">{sinistre.residenceName}</span>
+      <KanbanCardContent sinistre={sinistre} />
+    </div>
+  )
+}
+
+function KanbanCardContent({
+  sinistre,
+  dragging,
+}: {
+  sinistre: SinistreWithResidence
+  dragging?: boolean
+}) {
+  const commentStats = useCommentStats(sinistre.residenceId, sinistre.id)
+  const signalementCount = useSignalementCount(sinistre.residenceId, sinistre.id)
+
+  async function handlePriorityChange(priority: SinistrePriority) {
+    try {
+      await updateSinistrePriority(sinistre.residenceId, sinistre.id, priority)
+    } catch (err) {
+      toast.error("Échec de la mise à jour de la priorité : " + (err as Error).message)
+    }
+  }
+
+  async function handleToggleArchived() {
+    try {
+      await updateSinistreArchived(sinistre.residenceId, sinistre.id, !sinistre.archived)
+    } catch (err) {
+      toast.error("Échec de l'archivage : " + (err as Error).message)
+    }
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-2 rounded-lg border bg-white p-[20px] text-sm shadow-[0_8px_30px_rgb(0,0,0,0.06)]",
+        dragging ? "shadow-lg" : "hover:bg-muted/50"
+      )}
+    >
+      <div className="flex items-center gap-4">
+        <SinistreThumbnail pathImage={sinistre.pathImage} className="size-14 shrink-0 rounded-md" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate font-medium">{sinistre.title || "Sans titre"}</span>
+          <span className="truncate text-xs text-muted-foreground">{sinistre.residenceName}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {sinistre.timeStamp ? sinistre.timeStamp.toLocaleDateString("fr-FR") : "—"}
+          </span>
+        </div>
+        <div onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex shrink-0 items-center rounded-full p-1 hover:bg-muted">
+              <SinistrePriorityIcon priority={sinistre.priority} className="size-[25px]" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuRadioGroup
+                value={sinistre.priority}
+                onValueChange={(value) => handlePriorityChange(value as SinistrePriority)}
+              >
+                <DropdownMenuLabel>Priorité</DropdownMenuLabel>
+                {SINISTRE_PRIORITIES.map((priority) => (
+                  <DropdownMenuRadioItem key={priority} value={priority} className="gap-2">
+                    <SinistrePriorityIcon priority={priority} className="size-3.5" />
+                    {sinistrePriorityLabels[priority]}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        {(sinistre.statut === "Terminé" || sinistre.archived) && (
+          <button
+            type="button"
+            title={sinistre.archived ? "Désarchiver" : "Archiver"}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleToggleArchived()
+            }}
+            className="flex shrink-0 items-center rounded-full p-1 text-muted-foreground hover:bg-muted"
+          >
+            {sinistre.archived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
+          </button>
+        )}
+      </div>
+      <div className="mt-[5px] flex items-center justify-between border-t pt-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1">
+          <TriangleAlert className="size-3.5" />
+          {signalementCount + 1}
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <Users className="size-3.5" />
+            {commentStats.uniqueUserCount}
+          </div>
+          <div className="flex items-center gap-1">
+            <MessageSquare className="size-3.5" />
+            {commentStats.count}
+          </div>
+        </div>
       </div>
     </div>
   )
