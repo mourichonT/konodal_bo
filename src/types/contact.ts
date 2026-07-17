@@ -18,6 +18,26 @@ export const CONTACT_SERVICES = [
   "Toiture / étanchéité",
 ] as const
 
+// URL d'icône Storage par service, utilisée comme pathImage des interventions
+// (events) créées depuis le BO quand le prestataire choisi est un contact
+// (plutôt que la gérance, cf. GERANCE_PLACEHOLDER_LOGO_URL dans lib/events.ts).
+// Vide tant que les assets ne sont pas uploadés - à compléter une fois les
+// 12 icônes disponibles dans Storage (ex: assets/services/{slug}.png).
+export const CONTACT_SERVICE_ICON_URLS: Record<(typeof CONTACT_SERVICES)[number], string> = {
+  Nettoyage: "",
+  "Espaces verts": "",
+  Électricité: "",
+  "Entretiens Ascenseur": "",
+  "Chauffage collectif": "",
+  Plomberie: "",
+  "Ventilation (VMC)": "",
+  "Portes et portails": "",
+  Vidéosurveillance: "",
+  "Sécurité incendie": "",
+  "Gestion administrative": "",
+  "Toiture / étanchéité": "",
+}
+
 export type Contact = {
   id: string
   name: string
@@ -26,9 +46,6 @@ export type Contact = {
   mail: string
   address: Address
   web: string
-  // Résidences référençant ce contact (collection racine "contacts",
-  // partagée - cf. konodal_app/lib/models/pages_models/contact.dart).
-  residencesIds: string[]
   // Doublons probables détectés par nom normalisé entre résidences
   // différentes (migrate_contacts_to_root.py) - jamais fusionnés
   // automatiquement, à traiter manuellement ici.

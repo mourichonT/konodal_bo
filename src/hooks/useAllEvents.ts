@@ -6,7 +6,7 @@ import type { ResidenceEvent } from "@/types/event"
 
 export type EventWithResidence = ResidenceEvent & { residenceName: string }
 
-// Agrège les events "prestation" de toutes les résidences, même choix que
+// Agrège les events "intervention" de toutes les résidences, même choix que
 // useAllSinistres (pas de collectionGroup disponible côté connectkasa) - on
 // expose aussi `residences` (pas seulement les résidences ayant déjà des
 // events) car le formulaire de création doit pouvoir cibler une résidence

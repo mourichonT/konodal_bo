@@ -56,7 +56,7 @@ export default function EvenementsListPage() {
               {!loading && filteredEvents.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                    Aucune prestation pour l'instant.
+                    Aucune intervention pour l'instant.
                   </TableCell>
                 </TableRow>
               )}
@@ -65,7 +65,7 @@ export default function EvenementsListPage() {
         </div>
 
         <p className="mt-4 text-sm text-muted-foreground">
-          {filteredEvents.length} prestation{filteredEvents.length > 1 ? "s" : ""} au total
+          {filteredEvents.length} intervention{filteredEvents.length > 1 ? "s" : ""} au total
         </p>
       </CardContent>
     </Card>

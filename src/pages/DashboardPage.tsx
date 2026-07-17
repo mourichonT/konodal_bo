@@ -26,7 +26,7 @@ export default function DashboardPage() {
 
   const stats: Stat[] = [
     { label: "Résidences", to: "/residences", icon: Building2, value: residencesCount },
-    { label: "Résidents / bailleurs", to: "/residents", icon: Users, value: null },
+    { label: "Utilisateurs", to: "/residents", icon: Users, value: null },
     { label: "Sinistres", to: "/sinistres", icon: TriangleAlert, value: null },
   ]
 
@@ -87,6 +87,6 @@ export default function DashboardPage() {
 
 const navQuickLinks = [
   { to: "/residences", label: "Résidences", description: "Gérer les résidences et leurs lots" },
-  { to: "/residents", label: "Résidents / bailleurs", description: "Gérer les comptes résidents et bailleurs" },
+  { to: "/residents", label: "Utilisateurs", description: "Gérer les comptes résidents et bailleurs" },
   { to: "/sinistres", label: "Sinistres", description: "Suivre les déclarations de sinistres" },
 ]

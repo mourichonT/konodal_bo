@@ -115,7 +115,7 @@ export default function ResidentDetailPage() {
           className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
-          Résidents / bailleurs
+          Utilisateurs
         </Link>
         <h1 className="text-2xl font-semibold">
           {user ? `${user.name} ${user.surname}`.trim() || user.email : loading ? "…" : "Résident introuvable"}

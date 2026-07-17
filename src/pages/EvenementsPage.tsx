@@ -64,7 +64,7 @@ export default function EvenementsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Prestations</h1>
+        <h1 className="text-2xl font-semibold">Interventions</h1>
         <div className="flex items-center gap-2">
           <div className="flex gap-2">
             {tabs.map((tab) => (
@@ -86,7 +86,7 @@ export default function EvenementsPage() {
           </div>
           <Button onClick={() => setCreating(true)}>
             <Plus />
-            Ajouter une prestation
+            Ajouter une intervention
           </Button>
         </div>
       </div>
@@ -97,7 +97,7 @@ export default function EvenementsPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher une prestation par mot-clé..."
+            placeholder="Rechercher une intervention par mot-clé..."
             className="pl-8"
           />
         </div>
@@ -138,12 +138,12 @@ export default function EvenementsPage() {
       <EventFormDialog
         open={creating}
         onOpenChange={setCreating}
-        title="Ajouter une prestation"
+        title="Ajouter une intervention"
         residences={residences}
         onSubmit={async (residenceId, input) => {
           if (!user) return
           await createEvent(residenceId, user.uid, input)
-          toast.success("Prestation créée")
+          toast.success("Intervention créée")
           setCreating(false)
         }}
       />

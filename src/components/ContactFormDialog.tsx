@@ -16,41 +16,40 @@ export function ContactFormDialog({
   onOpenChange,
   title,
   residences,
-  initial,
   onSubmit,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   title: string
   residences: ResidenceOption[]
-  initial?: ContactInput
   onSubmit: (input: ContactInput) => Promise<void>
 }) {
-  const [name, setName] = useState(initial?.name ?? "")
-  const [service, setService] = useState(initial?.service ?? CONTACT_SERVICES[0])
-  const [phone, setPhone] = useState(initial?.phone ?? "")
-  const [mail, setMail] = useState(initial?.mail ?? "")
-  const [street, setStreet] = useState(initial?.address.street ?? emptyAddress.street)
-  const [zipCode, setZipCode] = useState(initial?.address.zipCode ?? emptyAddress.zipCode)
-  const [city, setCity] = useState(initial?.address.city ?? emptyAddress.city)
-  const [web, setWeb] = useState(initial?.web ?? "")
-  const [residencesIds, setResidencesIds] = useState<string[]>(initial?.residencesIds ?? [])
+  const [name, setName] = useState("")
+  const [service, setService] = useState<string>(CONTACT_SERVICES[0])
+  const [phone, setPhone] = useState("")
+  const [mail, setMail] = useState("")
+  const [street, setStreet] = useState(emptyAddress.street)
+  const [zipCode, setZipCode] = useState(emptyAddress.zipCode)
+  const [city, setCity] = useState(emptyAddress.city)
+  const [web, setWeb] = useState("")
+  const [residencesIds, setResidencesIds] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
 
+  // Ce formulaire ne sert qu'à la création (l'édition vit sur
+  // ContactDetailPage) - réinitialise à vide à chaque ouverture.
   useEffect(() => {
     if (open) {
-      setName(initial?.name ?? "")
-      setService(initial?.service ?? CONTACT_SERVICES[0])
-      setPhone(initial?.phone ?? "")
-      setMail(initial?.mail ?? "")
-      setStreet(initial?.address.street ?? emptyAddress.street)
-      setZipCode(initial?.address.zipCode ?? emptyAddress.zipCode)
-      setCity(initial?.address.city ?? emptyAddress.city)
-      setWeb(initial?.web ?? "")
-      setResidencesIds(initial?.residencesIds ?? [])
+      setName("")
+      setService(CONTACT_SERVICES[0])
+      setPhone("")
+      setMail("")
+      setStreet(emptyAddress.street)
+      setZipCode(emptyAddress.zipCode)
+      setCity(emptyAddress.city)
+      setWeb("")
+      setResidencesIds([])
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial])
+  }, [open])
 
   function toggleResidence(id: string, checked: boolean) {
     setResidencesIds((prev) => (checked ? [...prev, id] : prev.filter((r) => r !== id)))

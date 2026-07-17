@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { CheckCircle2, Clock3, Merge, Pencil, Plus, Search, Trash2, X, XCircle } from "lucide-react"
+import { CheckCircle2, Clock3, Merge, Pencil, Plus, Search, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,7 @@ import {
   deleteContact,
   dismissDuplicate,
   mergeContacts,
+  residenceIdsForContact,
   updateContactApproval,
   type ContactInput,
 } from "@/lib/contacts"
@@ -129,13 +130,13 @@ export default function ContactsPage() {
                   <div>
                     <span className="font-medium">{a.name}</span>{" "}
                     <span className="text-muted-foreground">
-                      ({a.residencesIds.map((id) => residenceNameById.get(id) ?? id).join(", ") || "—"})
+                      ({residenceIdsForContact(residences, a.id).map((id) => residenceNameById.get(id) ?? id).join(", ") || "—"})
                     </span>
                   </div>
                   <div>
                     <span className="font-medium">{b.name}</span>{" "}
                     <span className="text-muted-foreground">
-                      ({b.residencesIds.map((id) => residenceNameById.get(id) ?? id).join(", ") || "—"})
+                      ({residenceIdsForContact(residences, b.id).map((id) => residenceNameById.get(id) ?? id).join(", ") || "—"})
                     </span>
                   </div>
                 </div>
@@ -194,7 +195,9 @@ export default function ContactsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredContacts.map((contact) => (
+                {filteredContacts.map((contact) => {
+                  const contactResidenceIds = residenceIdsForContact(residences, contact.id)
+                  return (
                   <TableRow key={contact.id}>
                     <TableCell className="font-medium">{contact.name || "Sans nom"}</TableCell>
                     <TableCell>{contact.service}</TableCell>
@@ -202,10 +205,10 @@ export default function ContactsPage() {
                     <TableCell>{contact.mail}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {contact.residencesIds.length === 0 && (
+                        {contactResidenceIds.length === 0 && (
                           <span className="text-sm text-muted-foreground">—</span>
                         )}
-                        {contact.residencesIds.map((id) => (
+                        {contactResidenceIds.map((id) => (
                           <Badge key={id} variant="secondary">
                             {residenceNameById.get(id) ?? id}
                           </Badge>
@@ -214,21 +217,20 @@ export default function ContactsPage() {
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant="outline"
-                        className={cn(
-                          "border-transparent",
-                          contact.isApproved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                        )}
+                        variant={contact.isApproved ? "default" : "outline"}
+                        className={!contact.isApproved ? "border-transparent bg-amber-100 text-amber-800" : undefined}
                       >
                         {contact.isApproved ? "Approuvé" : "En attente"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleToggleApproval(contact)}>
-                          {contact.isApproved ? <XCircle /> : <CheckCircle2 />}
-                          {contact.isApproved ? "Désapprouver" : "Approuver"}
-                        </Button>
+                        {!contact.isApproved && (
+                          <Button variant="outline" size="sm" onClick={() => handleToggleApproval(contact)}>
+                            <CheckCircle2 />
+                            Approuver
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"
@@ -243,7 +245,8 @@ export default function ContactsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
                 {!loading && filteredContacts.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">

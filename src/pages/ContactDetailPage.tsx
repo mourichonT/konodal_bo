@@ -11,16 +11,15 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { subscribeToResidences } from "@/lib/residences"
 import {
   deleteContact,
+  setContactResidenceLink,
   subscribeToContact,
   updateContact,
   updateContactApproval,
-  updateContactResidences,
 } from "@/lib/contacts"
 import { CONTACT_SERVICES } from "@/types/contact"
 import { emptyAddress } from "@/types/residence"
 import type { Contact } from "@/types/contact"
 import type { Residence } from "@/types/residence"
-import { cn } from "@/lib/utils"
 
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -114,12 +113,9 @@ export default function ContactDetailPage() {
   }
 
   async function handleToggleResidence(residenceId: string, checked: boolean) {
-    if (!id || !contact) return
-    const next = checked
-      ? [...contact.residencesIds, residenceId]
-      : contact.residencesIds.filter((r) => r !== residenceId)
+    if (!id) return
     try {
-      await updateContactResidences(id, next)
+      await setContactResidenceLink(residenceId, id, checked)
     } catch (err) {
       toast.error("Échec de la mise à jour : " + (err as Error).message)
     }
@@ -155,11 +151,8 @@ export default function ContactDetailPage() {
           {contact && (
             <div className="flex items-center gap-2">
               <Badge
-                variant="outline"
-                className={cn(
-                  "border-transparent",
-                  contact.isApproved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                )}
+                variant={contact.isApproved ? "default" : "outline"}
+                className={!contact.isApproved ? "border-transparent bg-amber-100 text-amber-800" : undefined}
               >
                 {contact.isApproved ? "Approuvé" : "En attente"}
               </Badge>
@@ -271,7 +264,7 @@ export default function ContactDetailPage() {
                   >
                     <input
                       type="checkbox"
-                      checked={contact.residencesIds.includes(residence.id)}
+                      checked={!!residence.contactRefs?.[contact.id]}
                       onChange={(e) => handleToggleResidence(residence.id, e.target.checked)}
                       className="size-4 rounded border-input accent-primary"
                     />

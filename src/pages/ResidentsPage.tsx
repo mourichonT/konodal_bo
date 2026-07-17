@@ -55,7 +55,7 @@ export default function ResidentsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Résidents / bailleurs</h1>
+      <h1 className="text-2xl font-semibold">Utilisateurs</h1>
 
       <div className="grid grid-cols-3 gap-4">
         <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">

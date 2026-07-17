@@ -36,15 +36,15 @@ const navItems = [
   },
   {
     to: "/evenements",
-    label: "Prestations",
+    label: "Interventions",
     icon: Wrench,
     children: [
       { to: "/evenements/calendrier", label: "Calendrier" },
-      { to: "/evenements/liste", label: "Liste des prestations" },
+      { to: "/evenements/liste", label: "Liste des interventions" },
     ],
   },
   { to: "/residences", label: "Résidences", icon: Building2 },
-  { to: "/residents", label: "Résidents / bailleurs", icon: Users },
+  { to: "/residents", label: "Utilisateurs", icon: Users },
   { to: "/agences", label: "Agences", icon: Briefcase },
   { to: "/contacts", label: "Contacts", icon: BookUser },
 ]
@@ -57,10 +57,10 @@ function initialsFor(name?: string | null, email?: string | null): string {
   return (email?.[0] ?? "?").toUpperCase()
 }
 
-// Section rétractable (Sinistres, Prestations...) : ouverte par défaut si
+// Section rétractable (Sinistres, Interventions...) : ouverte par défaut si
 // son chemin est actif, refermée dès qu'on navigue ailleurs - state partagé
 // par toutes les sections plutôt qu'un booléen dédié par section (pattern
-// dupliqué une première fois avec Prestations après Sinistres).
+// dupliqué une première fois avec Interventions après Sinistres).
 function useOpenSections(navItems: { to: string; children?: unknown }[]) {
   const location = useLocation()
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
@@ -99,12 +99,12 @@ export function Sidebar() {
   const [openSections, toggleSection] = useOpenSections(navItems)
 
   return (
-    <aside className="relative flex h-full w-64 shrink-0 flex-col overflow-hidden rounded-[30px] bg-sidebar text-sidebar-foreground">
+    <aside className="relative flex h-full w-[226px] shrink-0 flex-col overflow-hidden rounded-[30px] bg-sidebar text-sidebar-foreground">
       <img
         src={logoKWhite}
         alt=""
         aria-hidden
-        className="pointer-events-none absolute -right-4 bottom-0 w-[269px] max-w-none opacity-10 blur-[2px] select-none"
+        className="pointer-events-none absolute -right-4 bottom-0 w-[269px] max-w-none opacity-5 blur-[2px] select-none"
       />
 
       <div className="relative flex items-center px-5 py-6">
@@ -149,7 +149,7 @@ export function Sidebar() {
                   </button>
                 </div>
                 {isOpen && (
-                  <div className="flex flex-col gap-1 py-2 pl-[22px]">
+                  <div className="flex flex-col gap-1 py-2 pl-[7px]">
                     {item.children.map((child) => (
                       <NavLink
                         key={child.to}

@@ -19,12 +19,14 @@ import EvenementDetailPage from "@/pages/EvenementDetailPage"
 import AgencesPage from "@/pages/AgencesPage"
 import ContactsPage from "@/pages/ContactsPage"
 import ContactDetailPage from "@/pages/ContactDetailPage"
+import SharedInterventionPage from "@/pages/SharedInterventionPage"
 
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/partage/:token" element={<SharedInterventionPage />} />
       <Route
         element={
           <ProtectedRoute>

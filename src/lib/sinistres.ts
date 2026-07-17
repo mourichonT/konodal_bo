@@ -47,6 +47,7 @@ function toSinistre(residenceId: string, d: DocumentSnapshot<DocumentData>): Sin
     declaredDate: toDateOrNull(dates.declaredDate),
     closedDate: toDateOrNull(dates.closedDate ?? dates.dateClosed),
     inProgressDate: toDateOrNull(dates.inProgressDate),
+    interventionDate: toDateOrNull(dates.interventionDate),
     archived: (data.archived as boolean) ?? false,
     user: (data.user as string) ?? "",
   }
@@ -108,6 +109,19 @@ export async function updateSinistreStatut(
     ...(statut === "En cours" ? { "dates.inProgressDate": serverTimestamp() } : {}),
     ...(statut === "Transmis" ? { "dates.inProgressDate": deleteField() } : {}),
     ...(options?.markDeclared ? { "dates.declaredDate": serverTimestamp() } : {}),
+  })
+}
+
+// Champ backoffice uniquement - posé quand une intervention est programmée
+// depuis ce ticket (SinistreDetailPage, "Programmer une intervention") ;
+// écrase la précédente si une nouvelle intervention est reprogrammée.
+export async function updateSinistreInterventionDate(
+  residenceId: string,
+  postId: string,
+  interventionDate: Date
+) {
+  await updateDoc(doc(db, "residences", residenceId, "posts", postId), {
+    "dates.interventionDate": interventionDate,
   })
 }
 

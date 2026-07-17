@@ -12,7 +12,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore"
 import { db } from "@/firebase"
-import { EVENT_TYPE_PRESTATION, type ResidenceEvent } from "@/types/event"
+import { EVENT_TYPE_INTERVENTION, type ResidenceEvent } from "@/types/event"
 
 function toDateOrNull(value: unknown): Date | null {
   return value && typeof (value as { toDate?: unknown }).toDate === "function"
@@ -37,21 +37,23 @@ function toResidenceEvent(residenceId: string, d: DocumentSnapshot<DocumentData>
     description: (data.description as string) ?? "",
     eventDate: toDateOrNull(event.eventDate),
     prestaName: (event.prestaName as string) ?? "",
+    pathImage: (data.pathImage as string) ?? "",
     creationDate: toDateOrNull(dates.creationDate ?? dates.timeStamp),
     user: (data.user as string) ?? "",
+    linkedSinistreId: (data.linkedSinistreId as string) || undefined,
   }
 }
 
-function includesPrestation(d: DocumentSnapshot<DocumentData>): boolean {
+function includesIntervention(d: DocumentSnapshot<DocumentData>): boolean {
   const data = d.data() ?? {}
   const event = (data.event as Record<string, unknown>) ?? data
   const eventType = (event.eventType as unknown[]) ?? []
-  return eventType.includes(EVENT_TYPE_PRESTATION)
+  return eventType.includes(EVENT_TYPE_INTERVENTION)
 }
 
 // residences/{id}/posts, filtré type == "events" : pas de filtre Firestore
 // sur le tableau imbriqué event.eventType (pas d'index dédié, comme pour les
-// sinistres) - le tri "prestation uniquement" se fait client-side.
+// sinistres) - le tri "intervention uniquement" se fait client-side.
 export function subscribeToResidenceEvents(
   residenceId: string,
   onData: (events: ResidenceEvent[]) => void,
@@ -62,7 +64,7 @@ export function subscribeToResidenceEvents(
     q,
     (snapshot) =>
       onData(
-        snapshot.docs.filter(includesPrestation).map((d) => toResidenceEvent(residenceId, d))
+        snapshot.docs.filter(includesIntervention).map((d) => toResidenceEvent(residenceId, d))
       ),
     onError
   )
@@ -81,11 +83,26 @@ export function subscribeToEvent(
   )
 }
 
+// Placeholder en attendant une vraie photo de profil par gérance (à
+// implémenter plus tard) - utilisé comme pathImage quand le prestataire
+// choisi est la gérance plutôt qu'un contact de la résidence.
+export const GERANCE_PLACEHOLDER_LOGO_URL =
+  "https://firebasestorage.googleapis.com/v0/b/konodal-dev.firebasestorage.app/o/assets%2Flogo%2Flogo-blanc_vertical.png?alt=media&token=91bc28f2-cca4-49f3-90bf-5e859d8d270c"
+
 export type EventInput = {
   title: string
   description: string
   eventDate: Date
   prestaName: string
+  // Résolu par EventFormDialog selon le prestataire choisi (gérance ->
+  // GERANCE_PLACEHOLDER_LOGO_URL, contact -> CONTACT_SERVICE_ICON_URLS) -
+  // vide tant qu'aucune icône n'est résolue, l'app affiche alors son
+  // placeholder générique (imageAnnounced()), comme avant ce lot.
+  pathImage: string
+  // Champ backoffice uniquement - renseigné seulement quand l'intervention
+  // est créée depuis la fiche d'un sinistre ("Programmer une intervention"),
+  // jamais éditable directement dans le formulaire.
+  linkedSinistreId?: string
 }
 
 // Réservé isSuperAdmin() côté firestore.rules (posts/{id}.create) - la règle
@@ -99,12 +116,14 @@ export async function createEvent(residenceId: string, uid: string, input: Event
     hideUser: false,
     title: input.title,
     description: input.description,
+    pathImage: input.pathImage,
     dates: { creationDate: serverTimestamp() },
     event: {
       eventDate: input.eventDate,
-      eventType: [EVENT_TYPE_PRESTATION],
+      eventType: [EVENT_TYPE_INTERVENTION],
       prestaName: input.prestaName,
     },
+    ...(input.linkedSinistreId ? { linkedSinistreId: input.linkedSinistreId } : {}),
   })
 }
 
@@ -112,6 +131,7 @@ export async function updateEvent(residenceId: string, postId: string, input: Ev
   await updateDoc(doc(db, "residences", residenceId, "posts", postId), {
     title: input.title,
     description: input.description,
+    pathImage: input.pathImage,
     "event.eventDate": input.eventDate,
     "event.prestaName": input.prestaName,
   })

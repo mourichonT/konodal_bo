@@ -6,6 +6,7 @@ import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
+  CalendarPlus,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -23,6 +24,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { EventFormDialog } from "@/components/EventFormDialog"
 import { SinistreMediaViewer } from "@/components/SinistreMediaViewer"
 import { SinistrePriorityIcon } from "@/components/SinistrePriorityIcon"
 import { db } from "@/firebase"
@@ -34,11 +36,13 @@ import {
   subscribeToPostComments,
   type PostComment,
 } from "@/lib/comments"
+import { createEvent } from "@/lib/events"
 import {
   fetchSinistreReportPdf,
   subscribeToSinistre,
   subscribeToSinistreSignalements,
   updateSinistreArchived,
+  updateSinistreInterventionDate,
   updateSinistrePriority,
   updateSinistreStatut,
 } from "@/lib/sinistres"
@@ -57,6 +61,7 @@ import {
 } from "@/types/sinistre"
 import type { Sinistre } from "@/types/sinistre"
 import type { KonodalUser } from "@/types/user"
+import type { GeranceRef } from "@/types/residence"
 
 export default function SinistreDetailPage() {
   const { residenceId, postId } = useParams<{ residenceId: string; postId: string }>()
@@ -74,6 +79,9 @@ export default function SinistreDetailPage() {
   // irréversible côté règle Firestore).
   const [pendingStatus, setPendingStatus] = useState<SinistreStatus | null>(null)
   const [residenceName, setResidenceName] = useState<string | null>(null)
+  const [contactRefs, setContactRefs] = useState<Record<string, boolean> | undefined>(undefined)
+  const [geranceRef, setGeranceRef] = useState<GeranceRef | undefined>(undefined)
+  const [schedulingIntervention, setSchedulingIntervention] = useState(false)
   const [comments, setComments] = useState<PostComment[]>([])
   const [authorNames, setAuthorNames] = useState<Record<string, string>>({})
   const [commentText, setCommentText] = useState("")
@@ -107,6 +115,8 @@ export default function SinistreDetailPage() {
     if (!residenceId) return
     getDoc(doc(db, "residences", residenceId)).then((snap) => {
       setResidenceName(snap.exists() ? ((snap.data().name as string) ?? null) : null)
+      setContactRefs(snap.exists() ? (snap.data().contactRefs as Record<string, boolean> | undefined) : undefined)
+      setGeranceRef(snap.exists() ? (snap.data().geranceRef as GeranceRef | undefined) : undefined)
     })
   }, [residenceId])
 
@@ -329,10 +339,22 @@ export default function SinistreDetailPage() {
             {sinistre ? sinistre.title || "Sans titre" : loading ? "…" : "Sinistre introuvable"}
           </h1>
           {sinistre && (
-            <Button variant="outline" size="sm" disabled={exportingPdf} onClick={handleExportPdf}>
-              <FileDown />
-              Exporter en PDF
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={sinistre.statut === "Terminé"}
+                title={sinistre.statut === "Terminé" ? "Ticket terminé : plus d'intervention à programmer" : undefined}
+                onClick={() => setSchedulingIntervention(true)}
+              >
+                <CalendarPlus />
+                Programmer une intervention
+              </Button>
+              <Button variant="outline" size="sm" disabled={exportingPdf} onClick={handleExportPdf}>
+                <FileDown />
+                Exporter en PDF
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -366,6 +388,13 @@ export default function SinistreDetailPage() {
                       <div>
                         <span className="text-muted-foreground">Date de prise en charge : </span>
                         {sinistre.inProgressDate.toLocaleDateString("fr-FR")}
+                      </div>
+                    )}
+                    {sinistre.interventionDate && (
+                      <div>
+                        <span className="text-muted-foreground">Date d'intervention : </span>
+                        {sinistre.interventionDate.toLocaleDateString("fr-FR")}{" "}
+                        {sinistre.interventionDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
                       </div>
                     )}
                   </div>
@@ -611,6 +640,29 @@ export default function SinistreDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <EventFormDialog
+        open={schedulingIntervention}
+        onOpenChange={setSchedulingIntervention}
+        title="Programmer une intervention"
+        residences={residenceName ? [{ id: residenceId, name: residenceName, contactRefs, geranceRef }] : []}
+        initialResidenceId={residenceId}
+        lockResidence
+        linkedSinistreId={postId}
+        onSubmit={async (targetResidenceId, input) => {
+          if (!user || !sinistre) return
+          await createEvent(targetResidenceId, user.uid, input)
+          await updateSinistreInterventionDate(residenceId, postId, input.eventDate)
+          // "À traiter" -> "En cours" (prend en charge dateClosed/inProgressDate
+          // via updateSinistreStatut) ; déjà "En cours" -> inchangé ; "Non
+          // envoyé" -> inchangé aussi (pas de déclaration implicite du ticket).
+          if (sinistre.statut === "Transmis") {
+            await updateSinistreStatut(residenceId, postId, "En cours")
+          }
+          toast.success("Intervention programmée")
+          setSchedulingIntervention(false)
+        }}
+      />
     </div>
   )
 }

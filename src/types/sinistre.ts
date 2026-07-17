@@ -67,6 +67,11 @@ export type Sinistre = {
   declaredDate: Date | null
   closedDate: Date | null
   inProgressDate: Date | null
+  // Champ backoffice uniquement (même précaution que priority/closedDate) :
+  // date de la dernière intervention programmée depuis ce ticket
+  // ("Programmer une intervention", SinistreDetailPage) - écrase la
+  // précédente si plusieurs interventions sont programmées dans le temps.
+  interventionDate: Date | null
   archived: boolean
   user: string
 }

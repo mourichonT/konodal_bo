@@ -2,7 +2,7 @@ import {
   addDoc,
   arrayRemove,
   collection,
-  deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -16,10 +16,11 @@ import {
   type Unsubscribe,
 } from "firebase/firestore"
 import { db } from "@/firebase"
-import { emptyAddress, type Address } from "@/types/residence"
+import { emptyAddress, type Address, type Residence } from "@/types/residence"
 import type { Contact } from "@/types/contact"
 
 const contactsCollection = collection(db, "contacts")
+const residencesCollection = collection(db, "residences")
 
 function toContact(d: DocumentSnapshot<DocumentData>): Contact {
   const data = d.data() ?? {}
@@ -32,15 +33,23 @@ function toContact(d: DocumentSnapshot<DocumentData>): Contact {
     mail: (data.mail as string) ?? "",
     address,
     web: (data.web as string) ?? "",
-    residencesIds: (data.residencesIds as string[]) ?? [],
     likelyDuplicateIds: (data.likelyDuplicateIds as string[]) ?? [],
     isApproved: (data.isApproved as boolean) ?? false,
   }
 }
 
+// Le rattachement résidence<->contact ne vit plus sur ce document (cf.
+// residences/{id}.contactRefs) - Firestore n'a pas de sécurité par champ, un
+// tableau de résidences exposé sur un contact partagé lisible par plusieurs
+// agences ferait fuiter les résidences des autres à chacune d'elles.
+// residenceIdsForContact() ci-dessous dérive le rattachement à partir des
+// résidences déjà chargées, sans requête supplémentaire.
+export function residenceIdsForContact(residences: Residence[], contactId: string): string[] {
+  return residences.filter((r) => r.contactRefs?.[contactId]).map((r) => r.id)
+}
+
 // Collection racine "contacts" (pas residences/{id}/contacts, déprécié côté
-// app) - le compte BO est isSuperAdmin, lit tout sans filtre residencesIds
-// (cf. firestore.rules:509-533).
+// app) - le compte BO est isSuperAdmin, lit tout.
 export function subscribeToContacts(
   onData: (contacts: Contact[]) => void,
   onError: (error: Error) => void
@@ -66,7 +75,7 @@ export function subscribeToContact(
 
 // Champs "fiche" (colonne gauche de ContactDetailPage) - le rattachement aux
 // résidences (colonne droite) se gère séparément via
-// updateContactResidences, écriture immédiate par case cochée plutôt que
+// setContactResidenceLink, écriture immédiate par case cochée plutôt que
 // groupée avec le formulaire de la fiche.
 export type ContactProfileInput = {
   name: string
@@ -83,18 +92,29 @@ export type ContactInput = ContactProfileInput & {
 
 // Créé par un admin = déjà validé (pas de file d'attente pour ses propres
 // créations) - contrairement à une création côté app, toujours isApproved:
-// false, cf. firestore.rules.
+// false, cf. firestore.rules. Le contact lui-même ne stocke plus
+// residencesIds : chaque résidence sélectionnée reçoit son propre
+// contactRefs.{id} = true.
 export async function createContact(input: ContactInput) {
-  await addDoc(contactsCollection, {
-    ...input,
-    nameNormalized: input.name.trim().toLowerCase(),
+  const { residencesIds, ...profile } = input
+  const docRef = await addDoc(contactsCollection, {
+    ...profile,
+    nameNormalized: profile.name.trim().toLowerCase(),
     likelyDuplicateIds: [],
     isApproved: true,
   })
+  if (residencesIds.length > 0) {
+    const batch = writeBatch(db)
+    for (const residenceId of residencesIds) {
+      batch.update(doc(residencesCollection, residenceId), { [`contactRefs.${docRef.id}`]: true })
+    }
+    await batch.commit()
+  }
 }
 
-// Réservé isSuperAdmin côté règles - un CS member ne peut toucher que
-// residencesIds, jamais les autres champs (cf. mémoire projet sur ce lot).
+// Réservé isSuperAdmin côté règles - toute correction de fiche passe
+// désormais exclusivement par le BO (le rattachement résidence, lui, se
+// fait sur residences/{id}, cf. setContactResidenceLink).
 export async function updateContact(id: string, input: ContactProfileInput) {
   await updateDoc(doc(contactsCollection, id), {
     ...input,
@@ -102,19 +122,34 @@ export async function updateContact(id: string, input: ContactProfileInput) {
   })
 }
 
-// Remplacement complet du tableau (pas arrayUnion/arrayRemove incrémental) :
-// le bypass isSuperAdmin autorise un set direct, plus simple pour la carte
-// à checkboxes qui connaît déjà l'état cible complet.
-export async function updateContactResidences(id: string, residencesIds: string[]) {
-  await updateDoc(doc(contactsCollection, id), { residencesIds })
+// Un toggle = une écriture ciblée sur LA résidence concernée, pas un set
+// complet d'un tableau sur le contact (cf. commentaire en tête de fichier).
+export async function setContactResidenceLink(
+  residenceId: string,
+  contactId: string,
+  linked: boolean
+) {
+  await updateDoc(doc(residencesCollection, residenceId), {
+    [`contactRefs.${contactId}`]: linked ? true : deleteField(),
+  })
 }
 
 export async function updateContactApproval(id: string, isApproved: boolean) {
   await updateDoc(doc(contactsCollection, id), { isApproved })
 }
 
+// Nettoie aussi les contactRefs des résidences qui référencent encore ce
+// contact - sinon elles pointeraient vers un document supprimé.
 export async function deleteContact(id: string) {
-  await deleteDoc(doc(contactsCollection, id))
+  const referencing = await getDocs(
+    query(residencesCollection, where(`contactRefs.${id}`, "==", true))
+  )
+  const batch = writeBatch(db)
+  for (const residenceDoc of referencing.docs) {
+    batch.update(residenceDoc.ref, { [`contactRefs.${id}`]: deleteField() })
+  }
+  batch.delete(doc(contactsCollection, id))
+  await batch.commit()
 }
 
 // Le flag n'est pas un vrai doublon - effacé symétriquement des deux fiches.
@@ -125,30 +160,30 @@ export async function dismissDuplicate(contactId: string, otherId: string) {
   await batch.commit()
 }
 
-// Fusionne mergeId dans keepId : union des résidences, suppression de
-// mergeId, et nettoyage de toute référence à mergeId dans
-// likelyDuplicateIds des autres contacts (remplacée par keepId) - action
-// explicite et ponctuelle depuis l'UI, pas un script en masse, donc pas
-// besoin d'une vraie transaction Firestore.
+// Fusionne mergeId dans keepId : bascule sur keepId chaque résidence dont le
+// contactRefs référence encore mergeId, supprime mergeId, et nettoie toute
+// référence à mergeId dans likelyDuplicateIds des autres contacts
+// (remplacée par keepId) - action explicite et ponctuelle depuis l'UI, pas
+// un script en masse, donc pas besoin d'une vraie transaction Firestore.
 export async function mergeContacts(keepId: string, mergeId: string) {
-  const [keepSnap, mergeSnap] = await Promise.all([
+  const [keepSnap, residencesReferencingMerge, contactsReferencingMerge] = await Promise.all([
     getDoc(doc(contactsCollection, keepId)),
-    getDoc(doc(contactsCollection, mergeId)),
+    getDocs(query(residencesCollection, where(`contactRefs.${mergeId}`, "==", true))),
+    getDocs(query(contactsCollection, where("likelyDuplicateIds", "array-contains", mergeId))),
   ])
   const keep = toContact(keepSnap)
-  const merge = toContact(mergeSnap)
-  const mergedResidencesIds = [...new Set([...keep.residencesIds, ...merge.residencesIds])]
-
-  const referencing = await getDocs(
-    query(contactsCollection, where("likelyDuplicateIds", "array-contains", mergeId))
-  )
 
   const batch = writeBatch(db)
+  for (const residenceDoc of residencesReferencingMerge.docs) {
+    batch.update(residenceDoc.ref, {
+      [`contactRefs.${keepId}`]: true,
+      [`contactRefs.${mergeId}`]: deleteField(),
+    })
+  }
   batch.update(doc(contactsCollection, keepId), {
-    residencesIds: mergedResidencesIds,
     likelyDuplicateIds: keep.likelyDuplicateIds.filter((id) => id !== mergeId),
   })
-  for (const referencingDoc of referencing.docs) {
+  for (const referencingDoc of contactsReferencingMerge.docs) {
     if (referencingDoc.id === keepId) continue
     const ids = (referencingDoc.data().likelyDuplicateIds as string[]) ?? []
     const next = [...new Set([...ids.filter((id) => id !== mergeId), keepId])]
