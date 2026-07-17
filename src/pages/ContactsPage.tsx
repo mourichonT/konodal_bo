@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { CheckCircle2, Clock3, Merge, Pencil, Plus, Search, Trash2, X } from "lucide-react"
+import { CheckCircle2, Clock3, Merge, Pencil, Plus, Search, Trash2, X, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,7 +22,6 @@ import {
   deleteContact,
   dismissDuplicate,
   mergeContacts,
-  updateContact,
   updateContactApproval,
   type ContactInput,
 } from "@/lib/contacts"
@@ -38,7 +38,6 @@ export default function ContactsPage() {
   const [search, setSearch] = useState("")
   const [pendingOnly, setPendingOnly] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [editing, setEditing] = useState<Contact | null>(null)
   const [deleting, setDeleting] = useState<Contact | null>(null)
   const [merging, setMerging] = useState<{ keep: Contact; other: Contact } | null>(null)
 
@@ -226,13 +225,15 @@ export default function ContactsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {!contact.isApproved && (
-                          <Button variant="outline" size="sm" onClick={() => handleToggleApproval(contact)}>
-                            <CheckCircle2 />
-                            Approuver
-                          </Button>
-                        )}
-                        <Button variant="outline" size="sm" onClick={() => setEditing(contact)}>
+                        <Button variant="outline" size="sm" onClick={() => handleToggleApproval(contact)}>
+                          {contact.isApproved ? <XCircle /> : <CheckCircle2 />}
+                          {contact.isApproved ? "Désapprouver" : "Approuver"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          render={<Link to={`/contacts/${contact.id}`} />}
+                        >
                           <Pencil />
                           Modifier
                         </Button>
@@ -272,20 +273,6 @@ export default function ContactsPage() {
           await createContact(input)
           toast.success("Contact créé")
           setCreating(false)
-        }}
-      />
-
-      <ContactFormDialog
-        open={editing !== null}
-        onOpenChange={(open) => !open && setEditing(null)}
-        title="Modifier le contact"
-        residences={residences}
-        initial={editing ?? undefined}
-        onSubmit={async (input: ContactInput) => {
-          if (!editing) return
-          await updateContact(editing.id, input)
-          toast.success("Contact mis à jour")
-          setEditing(null)
         }}
       />
 

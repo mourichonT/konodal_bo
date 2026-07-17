@@ -52,13 +52,32 @@ export function subscribeToContacts(
   )
 }
 
-export type ContactInput = {
+export function subscribeToContact(
+  id: string,
+  onData: (contact: Contact | null) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(contactsCollection, id),
+    (snapshot) => onData(snapshot.exists() ? toContact(snapshot) : null),
+    onError
+  )
+}
+
+// Champs "fiche" (colonne gauche de ContactDetailPage) - le rattachement aux
+// résidences (colonne droite) se gère séparément via
+// updateContactResidences, écriture immédiate par case cochée plutôt que
+// groupée avec le formulaire de la fiche.
+export type ContactProfileInput = {
   name: string
   service: string
   phone: string
   mail: string
   address: Address
   web: string
+}
+
+export type ContactInput = ContactProfileInput & {
   residencesIds: string[]
 }
 
@@ -76,11 +95,18 @@ export async function createContact(input: ContactInput) {
 
 // Réservé isSuperAdmin côté règles - un CS member ne peut toucher que
 // residencesIds, jamais les autres champs (cf. mémoire projet sur ce lot).
-export async function updateContact(id: string, input: ContactInput) {
+export async function updateContact(id: string, input: ContactProfileInput) {
   await updateDoc(doc(contactsCollection, id), {
     ...input,
     nameNormalized: input.name.trim().toLowerCase(),
   })
+}
+
+// Remplacement complet du tableau (pas arrayUnion/arrayRemove incrémental) :
+// le bypass isSuperAdmin autorise un set direct, plus simple pour la carte
+// à checkboxes qui connaît déjà l'état cible complet.
+export async function updateContactResidences(id: string, residencesIds: string[]) {
+  await updateDoc(doc(contactsCollection, id), { residencesIds })
 }
 
 export async function updateContactApproval(id: string, isApproved: boolean) {

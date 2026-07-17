@@ -18,6 +18,7 @@ import EvenementsCalendarPage from "@/pages/EvenementsCalendarPage"
 import EvenementDetailPage from "@/pages/EvenementDetailPage"
 import AgencesPage from "@/pages/AgencesPage"
 import ContactsPage from "@/pages/ContactsPage"
+import ContactDetailPage from "@/pages/ContactDetailPage"
 
 function App() {
   return (
@@ -50,6 +51,7 @@ function App() {
         <Route path="residents/:uid" element={<ResidentDetailPage />} />
         <Route path="agences" element={<AgencesPage />} />
         <Route path="contacts" element={<ContactsPage />} />
+        <Route path="contacts/:id" element={<ContactDetailPage />} />
       </Route>
     </Routes>
   )
