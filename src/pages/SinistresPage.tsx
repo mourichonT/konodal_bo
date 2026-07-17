@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { NavLink, Outlet } from "react-router-dom"
+import { NavLink, Outlet, useLocation } from "react-router-dom"
 import { toast } from "sonner"
 import { ChevronDown, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -38,6 +38,8 @@ const tabs = [
 ]
 
 export default function SinistresPage() {
+  const location = useLocation()
+  const isListeTab = location.pathname.endsWith("/liste")
   const { sinistres, loading } = useAllSinistres((message) => toast.error(message))
   // Filtres partagés entre Kanban et Liste (un seul objet, cf. décision : les
   // deux vues doivent toujours montrer le même sous-ensemble de tickets) -
@@ -147,11 +149,22 @@ export default function SinistresPage() {
           <span>au</span>
           <DateInput value={dateTo} onChange={setDateTo} />
         </div>
+        {isListeTab && (
+          <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="size-4 rounded border-input accent-primary"
+            />
+            Afficher les tickets archivés
+          </label>
+        )}
         <Button variant="outline" size="sm" onClick={handleClearFilters}>
           <X />
           Effacer les filtres
         </Button>
-        <label className="ml-[30px] flex items-center gap-1.5 text-sm text-muted-foreground">
+        <label className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
           <input
             type="checkbox"
             checked={showNonDeclares}
@@ -159,15 +172,6 @@ export default function SinistresPage() {
             className="size-4 rounded border-input accent-primary"
           />
           Afficher les tickets non déclarés
-        </label>
-        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
-            className="size-4 rounded border-input accent-primary"
-          />
-          Afficher les tickets archivés
         </label>
       </div>
 
