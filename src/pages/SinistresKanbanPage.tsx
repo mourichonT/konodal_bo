@@ -162,8 +162,8 @@ export default function SinistresKanbanPage() {
               if (effectiveStatut !== statut) return false
               if (!showArchived && s.archived) return false
               if (residenceFilter !== "all" && s.residenceId !== residenceFilter) return false
-              if (fromDate && (!s.timeStamp || s.timeStamp < fromDate)) return false
-              if (toDate && (!s.timeStamp || s.timeStamp > toDate)) return false
+              if (fromDate && (!s.creationDate || s.creationDate < fromDate)) return false
+              if (toDate && (!s.creationDate || s.creationDate > toDate)) return false
               if (!normalizedSearch) return true
               return (
                 s.title.toLowerCase().includes(normalizedSearch) ||
@@ -324,7 +324,7 @@ function KanbanCardContent({
           <span className="truncate font-medium">{sinistre.title || "Sans titre"}</span>
           <span className="truncate text-xs text-muted-foreground">{sinistre.residenceName}</span>
           <span className="truncate text-xs text-muted-foreground">
-            {sinistre.timeStamp ? sinistre.timeStamp.toLocaleDateString("fr-FR") : "—"}
+            {sinistre.creationDate ? sinistre.creationDate.toLocaleDateString("fr-FR") : "—"}
           </span>
         </div>
         <div onClick={(e) => e.stopPropagation()}>

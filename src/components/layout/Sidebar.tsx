@@ -5,7 +5,9 @@ import {
   Building2,
   Users,
   TriangleAlert,
+  Wrench,
   Briefcase,
+  BookUser,
   LogOut,
   ChevronsUpDown,
   ChevronDown,
@@ -29,12 +31,22 @@ const navItems = [
     icon: TriangleAlert,
     children: [
       { to: "/sinistres/kanban", label: "Tableau Kanban" },
-      { to: "/sinistres/liste", label: "Vue liste" },
+      { to: "/sinistres/liste", label: "Liste des sinistres" },
+    ],
+  },
+  {
+    to: "/evenements",
+    label: "Prestations",
+    icon: Wrench,
+    children: [
+      { to: "/evenements/calendrier", label: "Calendrier" },
+      { to: "/evenements/liste", label: "Liste des prestations" },
     ],
   },
   { to: "/residences", label: "Résidences", icon: Building2 },
   { to: "/residents", label: "Résidents / bailleurs", icon: Users },
   { to: "/agences", label: "Agences", icon: Briefcase },
+  { to: "/contacts", label: "Contacts", icon: BookUser },
 ]
 
 function initialsFor(name?: string | null, email?: string | null): string {
@@ -45,16 +57,46 @@ function initialsFor(name?: string | null, email?: string | null): string {
   return (email?.[0] ?? "?").toUpperCase()
 }
 
+// Section rétractable (Sinistres, Prestations...) : ouverte par défaut si
+// son chemin est actif, refermée dès qu'on navigue ailleurs - state partagé
+// par toutes les sections plutôt qu'un booléen dédié par section (pattern
+// dupliqué une première fois avec Prestations après Sinistres).
+function useOpenSections(navItems: { to: string; children?: unknown }[]) {
+  const location = useLocation()
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(
+      navItems
+        .filter((item) => item.children)
+        .map((item) => [item.to, location.pathname.startsWith(item.to)])
+    )
+  )
+
+  useEffect(() => {
+    setOpenSections((prev) => {
+      const next = { ...prev }
+      let changed = false
+      for (const item of navItems) {
+        if (!item.children) continue
+        if (!location.pathname.startsWith(item.to) && next[item.to]) {
+          next[item.to] = false
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname])
+
+  return [
+    openSections,
+    (to: string) => setOpenSections((prev) => ({ ...prev, [to]: !prev[to] })),
+  ] as const
+}
+
 export function Sidebar() {
   const { user, logout } = useAuth()
   const location = useLocation()
-  const [sinistresOpen, setSinistresOpen] = useState(location.pathname.startsWith("/sinistres"))
-
-  useEffect(() => {
-    if (!location.pathname.startsWith("/sinistres")) {
-      setSinistresOpen(false)
-    }
-  }, [location.pathname])
+  const [openSections, toggleSection] = useOpenSections(navItems)
 
   return (
     <aside className="relative flex h-full w-64 shrink-0 flex-col overflow-hidden rounded-[30px] bg-sidebar text-sidebar-foreground">
@@ -73,6 +115,7 @@ export function Sidebar() {
         {navItems.map((item) => {
           if (item.children) {
             const isParentActive = location.pathname.startsWith(item.to)
+            const isOpen = openSections[item.to] ?? false
             return (
               <div key={item.to} className="flex flex-col">
                 <div
@@ -98,22 +141,23 @@ export function Sidebar() {
                   </NavLink>
                   <button
                     type="button"
-                    aria-label={sinistresOpen ? "Réduire" : "Développer"}
-                    onClick={() => setSinistresOpen((open) => !open)}
+                    aria-label={isOpen ? "Réduire" : "Développer"}
+                    onClick={() => toggleSection(item.to)}
                     className="shrink-0 cursor-pointer"
                   >
-                    <ChevronDown className={cn("size-4 transition-transform", sinistresOpen && "rotate-180")} />
+                    <ChevronDown className={cn("size-4 transition-transform", isOpen && "rotate-180")} />
                   </button>
                 </div>
-                {sinistresOpen && (
-                  <div className="flex flex-col gap-1 py-2 pl-[37px]">
+                {isOpen && (
+                  <div className="flex flex-col gap-1 py-2 pl-[22px]">
                     {item.children.map((child) => (
                       <NavLink
                         key={child.to}
                         to={child.to}
+                        title={child.label}
                         className={({ isActive }) =>
                           cn(
-                            "flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm",
+                            "flex min-w-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm",
                             isActive
                               ? "font-medium text-white"
                               : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
@@ -129,7 +173,7 @@ export function Sidebar() {
                                 isActive ? "opacity-100" : "opacity-0"
                               )}
                             />
-                            {child.label}
+                            <span className="truncate">{child.label}</span>
                           </>
                         )}
                       </NavLink>

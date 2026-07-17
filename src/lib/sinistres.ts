@@ -21,9 +21,17 @@ function toDateOrNull(value: unknown): Date | null {
     : null
 }
 
+// Les champs date (creationDate/declaredDate/closedDate) vivent sous une
+// sous-clé `dates` côté app (Post.toMap()/fromMap(),
+// konodal_app/lib/models/pages_models/post.dart), sous ces noms depuis
+// migrate_post_dates_rename.py (anciennement timeStamp/dateClosed - fallback
+// conservé pour les documents pas encore repris). inProgressDate n'a jamais
+// existé sous un autre nom (champ backoffice ajouté directement au nouveau
+// format), pas de fallback nécessaire pour lui.
 function toSinistre(residenceId: string, d: DocumentSnapshot<DocumentData>): Sinistre {
   const data = d.data() ?? {}
   const location = (data.location as Record<string, unknown>) ?? data
+  const dates = (data.dates as Record<string, unknown>) ?? data
   return {
     id: d.id,
     residenceId,
@@ -35,9 +43,10 @@ function toSinistre(residenceId: string, d: DocumentSnapshot<DocumentData>): Sin
     isVideo: (data.isVideo as boolean) ?? false,
     locationElement: (location.locationElements as string) ?? "",
     locationFloor: (location.locationFloor as string) ?? "",
-    timeStamp: toDateOrNull(data.timeStamp),
-    declaredDate: toDateOrNull(data.declaredDate),
-    dateClosed: toDateOrNull(data.dateClosed),
+    creationDate: toDateOrNull(dates.creationDate ?? dates.timeStamp),
+    declaredDate: toDateOrNull(dates.declaredDate),
+    closedDate: toDateOrNull(dates.closedDate ?? dates.dateClosed),
+    inProgressDate: toDateOrNull(dates.inProgressDate),
     archived: (data.archived as boolean) ?? false,
     user: (data.user as string) ?? "",
   }
@@ -74,9 +83,14 @@ export function subscribeToSinistre(
 }
 
 // Réservé isCsMember/isSuperAdmin côté firestore.rules (posts/{id}.update).
-// dateClosed : posé au passage à "Terminé", effacé dès qu'on en ressort vers
+// closedDate : posé au passage à "Terminé", effacé dès qu'on en ressort vers
 // n'importe quel autre statut (même logique que côté app,
 // icon_modify_or_delette.dart) - remis à jour si le ticket revient à Terminé.
+//
+// inProgressDate : posé au passage à "En cours", effacé uniquement si le
+// ticket repasse à "Transmis" (à traiter) - contrairement à closedDate, un
+// passage par "Terminé" ne l'efface pas (on garde la trace de la première
+// prise en charge). Champ backoffice uniquement, jamais lu/écrit par l'app.
 //
 // markDeclared : à passer quand on fait sortir un ticket de "Non envoyé"
 // depuis le BO (équivalent du passage "Non envoyé -> Transmis" côté app,
@@ -90,8 +104,10 @@ export async function updateSinistreStatut(
 ) {
   await updateDoc(doc(db, "residences", residenceId, "posts", postId), {
     statut,
-    dateClosed: statut === "Terminé" ? serverTimestamp() : deleteField(),
-    ...(options?.markDeclared ? { declaredDate: serverTimestamp() } : {}),
+    "dates.closedDate": statut === "Terminé" ? serverTimestamp() : deleteField(),
+    ...(statut === "En cours" ? { "dates.inProgressDate": serverTimestamp() } : {}),
+    ...(statut === "Transmis" ? { "dates.inProgressDate": deleteField() } : {}),
+    ...(options?.markDeclared ? { "dates.declaredDate": serverTimestamp() } : {}),
   })
 }
 

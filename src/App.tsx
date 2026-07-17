@@ -12,7 +12,12 @@ import SinistresPage from "@/pages/SinistresPage"
 import SinistresKanbanPage from "@/pages/SinistresKanbanPage"
 import SinistresListPage from "@/pages/SinistresListPage"
 import SinistreDetailPage from "@/pages/SinistreDetailPage"
+import EvenementsPage from "@/pages/EvenementsPage"
+import EvenementsListPage from "@/pages/EvenementsListPage"
+import EvenementsCalendarPage from "@/pages/EvenementsCalendarPage"
+import EvenementDetailPage from "@/pages/EvenementDetailPage"
 import AgencesPage from "@/pages/AgencesPage"
+import ContactsPage from "@/pages/ContactsPage"
 
 function App() {
   return (
@@ -33,11 +38,18 @@ function App() {
           <Route path="liste" element={<SinistresListPage />} />
         </Route>
         <Route path="sinistres/:residenceId/:postId" element={<SinistreDetailPage />} />
+        <Route path="evenements" element={<EvenementsPage />}>
+          <Route index element={<Navigate to="liste" replace />} />
+          <Route path="liste" element={<EvenementsListPage />} />
+          <Route path="calendrier" element={<EvenementsCalendarPage />} />
+        </Route>
+        <Route path="evenements/:residenceId/:postId" element={<EvenementDetailPage />} />
         <Route path="residences" element={<ResidencesPage />} />
         <Route path="residences/:id" element={<ResidenceDetailPage />} />
         <Route path="residents" element={<ResidentsPage />} />
         <Route path="residents/:uid" element={<ResidentDetailPage />} />
         <Route path="agences" element={<AgencesPage />} />
+        <Route path="contacts" element={<ContactsPage />} />
       </Route>
     </Routes>
   )

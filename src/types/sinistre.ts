@@ -33,7 +33,7 @@ export const sinistreStatusDotClass: Record<SinistreStatus, string> = {
 // pas un champ Firestore dédié sur le compte, localStorage suffit ici.
 export const SHOW_NON_DECLARES_KEY = "konodal-bo:sinistres-show-non-declares"
 
-// Champ backoffice uniquement (même précaution que priority/dateClosed) :
+// Champ backoffice uniquement (même précaution que priority/closedDate) :
 // permet de sortir un ticket "Terminé" du Kanban (libère la colonne) sans
 // changer son statut réel - il reste retrouvable dans la vue Liste via le
 // filtre "Afficher les tickets archivés".
@@ -63,9 +63,10 @@ export type Sinistre = {
   isVideo: boolean
   locationElement: string
   locationFloor: string
-  timeStamp: Date | null
+  creationDate: Date | null
   declaredDate: Date | null
-  dateClosed: Date | null
+  closedDate: Date | null
+  inProgressDate: Date | null
   archived: boolean
   user: string
 }

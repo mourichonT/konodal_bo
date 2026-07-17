@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from "react"
 import { subscribeToResidences } from "@/lib/residences"
-import { subscribeToResidenceSinistres } from "@/lib/sinistres"
+import { subscribeToResidenceEvents } from "@/lib/events"
 import type { Residence } from "@/types/residence"
-import type { Sinistre } from "@/types/sinistre"
+import type { ResidenceEvent } from "@/types/event"
 
-export type SinistreWithResidence = Sinistre & { residenceName: string }
+export type EventWithResidence = ResidenceEvent & { residenceName: string }
 
-// Agrège les sinistres de toutes les résidences : pas de collectionGroup
-// disponible côté connectkasa (aucune règle/index dédiés, comme pour
-// users/*/lots), donc une souscription par résidence plutôt qu'une requête
-// globale - choix assumé tant que le nombre de résidences reste modeste.
-export function useAllSinistres(onError: (message: string) => void) {
+// Agrège les events "prestation" de toutes les résidences, même choix que
+// useAllSinistres (pas de collectionGroup disponible côté connectkasa) - on
+// expose aussi `residences` (pas seulement les résidences ayant déjà des
+// events) car le formulaire de création doit pouvoir cibler une résidence
+// qui n'a encore aucun event.
+export function useAllEvents(onError: (message: string) => void) {
   const [residences, setResidences] = useState<Residence[]>([])
-  const [byResidence, setByResidence] = useState<Record<string, Sinistre[]>>({})
+  const [byResidence, setByResidence] = useState<Record<string, ResidenceEvent[]>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -29,11 +30,11 @@ export function useAllSinistres(onError: (message: string) => void) {
 
   useEffect(() => {
     const unsubscribes = residences.map((residence) =>
-      subscribeToResidenceSinistres(
+      subscribeToResidenceEvents(
         residence.id,
         (data) => setByResidence((prev) => ({ ...prev, [residence.id]: data })),
         (error) =>
-          onError(`Impossible de charger les sinistres de ${residence.name} : ${error.message}`)
+          onError(`Impossible de charger les events de ${residence.name} : ${error.message}`)
       )
     )
     return () => unsubscribes.forEach((unsub) => unsub())
@@ -45,12 +46,12 @@ export function useAllSinistres(onError: (message: string) => void) {
     [residences]
   )
 
-  const sinistres: SinistreWithResidence[] = useMemo(() => {
+  const events: EventWithResidence[] = useMemo(() => {
     return Object.values(byResidence)
       .flat()
-      .map((s) => ({ ...s, residenceName: residenceNameById.get(s.residenceId) ?? s.residenceId }))
-      .sort((a, b) => (b.creationDate?.getTime() ?? 0) - (a.creationDate?.getTime() ?? 0))
+      .map((e) => ({ ...e, residenceName: residenceNameById.get(e.residenceId) ?? e.residenceId }))
+      .sort((a, b) => (a.eventDate?.getTime() ?? 0) - (b.eventDate?.getTime() ?? 0))
   }, [byResidence, residenceNameById])
 
-  return { sinistres, loading }
+  return { events, residences, loading }
 }

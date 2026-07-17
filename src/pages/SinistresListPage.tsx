@@ -92,8 +92,8 @@ export default function SinistresListPage() {
     if (!showNonDeclares && (s.statut || "Non envoyé") === "Non envoyé") return false
     if (statusFilter && (s.statut || "Non envoyé") !== statusFilter) return false
     if (residenceFilter !== "all" && s.residenceId !== residenceFilter) return false
-    if (fromDate && (!s.timeStamp || s.timeStamp < fromDate)) return false
-    if (toDate && (!s.timeStamp || s.timeStamp > toDate)) return false
+    if (fromDate && (!s.creationDate || s.creationDate < fromDate)) return false
+    if (toDate && (!s.creationDate || s.creationDate > toDate)) return false
     if (!normalizedSearch) return true
     return (
       s.title.toLowerCase().includes(normalizedSearch) ||
@@ -212,7 +212,7 @@ function SinistreRow({ sinistre }: { sinistre: SinistreWithResidence }) {
       </TableCell>
       <TableCell>{sinistre.residenceName}</TableCell>
       <TableCell className="text-muted-foreground">
-        {sinistre.timeStamp ? sinistre.timeStamp.toLocaleDateString("fr-FR") : "—"}
+        {sinistre.creationDate ? sinistre.creationDate.toLocaleDateString("fr-FR") : "—"}
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-1 text-sm text-muted-foreground">

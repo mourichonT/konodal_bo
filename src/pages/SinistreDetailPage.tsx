@@ -360,8 +360,14 @@ export default function SinistreDetailPage() {
                     </div>
                     <div>
                       <span className="text-muted-foreground">Date de la 1ère déclaration : </span>
-                      {sinistre.timeStamp ? sinistre.timeStamp.toLocaleDateString("fr-FR") : "—"}
+                      {sinistre.creationDate ? sinistre.creationDate.toLocaleDateString("fr-FR") : "—"}
                     </div>
+                    {sinistre.inProgressDate && (
+                      <div>
+                        <span className="text-muted-foreground">Date de prise en charge : </span>
+                        {sinistre.inProgressDate.toLocaleDateString("fr-FR")}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-3">
                     <DropdownMenu>
