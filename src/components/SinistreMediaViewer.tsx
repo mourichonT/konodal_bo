@@ -1,8 +1,8 @@
-import { ImageOff, Play } from "lucide-react"
+import { ImageOff } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSinistreMedia } from "@/hooks/useSinistreMedia"
 
-export function SinistreThumbnail({
+export function SinistreMediaViewer({
   pathImage,
   className,
 }: {
@@ -14,7 +14,7 @@ export function SinistreThumbnail({
   if (!pathImage || state.status === "error") {
     return (
       <div className={cn("flex items-center justify-center bg-muted text-muted-foreground", className)}>
-        <ImageOff className="size-4" />
+        <ImageOff className="size-6" />
       </div>
     )
   }
@@ -23,13 +23,9 @@ export function SinistreThumbnail({
     return <div className={cn("animate-pulse bg-muted", className)} />
   }
 
-  if (state.isVideo) {
-    return (
-      <div className={cn("flex items-center justify-center bg-black/80 text-white", className)}>
-        <Play className="size-4 fill-current" />
-      </div>
-    )
-  }
-
-  return <img src={state.url} alt="" className={cn("object-cover", className)} />
+  return state.isVideo ? (
+    <video src={state.url} controls className={cn("bg-black object-contain", className)} />
+  ) : (
+    <img src={state.url} alt="" className={cn("object-cover", className)} />
+  )
 }
