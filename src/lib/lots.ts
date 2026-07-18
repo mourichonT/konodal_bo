@@ -32,6 +32,7 @@ export function subscribeToLots(
           typeLot: "",
           isLinkable: false,
           idProprietaire: [],
+          idLocataire: [],
           ...(d.data() as Partial<Omit<Lot, "id">>),
         }))
       )

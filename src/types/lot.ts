@@ -42,4 +42,5 @@ export type Lot = {
   // depuis cet écran. Sert uniquement à bloquer la suppression d'un lot déjà
   // attribué.
   idProprietaire: string[]
+  idLocataire: string[]
 }

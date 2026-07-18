@@ -115,13 +115,13 @@ export default function AgencesPage() {
         </CardHeader>
         <CardContent className="flex flex-col">
           <div className="mt-[10px] mb-[50px] flex items-center justify-between gap-4">
-            <div className="relative w-full max-w-sm">
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Rechercher une agence…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="rounded-full pl-9"
+                className="pl-8"
               />
             </div>
             <Button className="rounded-full" onClick={() => setCreating(true)}>

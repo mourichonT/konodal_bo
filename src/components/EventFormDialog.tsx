@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { ChevronDown, Save } from "lucide-react"
 import { doc, getDoc } from "firebase/firestore"
+import { getDownloadURL, ref } from "firebase/storage"
 import { Button } from "@/components/ui/button"
 import { DateInput } from "@/components/DateInput"
 import { Input } from "@/components/ui/input"
@@ -15,10 +16,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
-import { db } from "@/firebase"
+import { db, storage } from "@/firebase"
 import { GERANCE_PLACEHOLDER_LOGO_URL, type EventInput } from "@/lib/events"
 import { subscribeToContacts } from "@/lib/contacts"
-import { CONTACT_SERVICE_ICON_URLS, type Contact } from "@/types/contact"
+import { CONTACT_SERVICE_ICON_FILENAMES, type Contact } from "@/types/contact"
 import type { GeranceRef } from "@/types/residence"
 import type { Agent, ServiceType } from "@/types/gerance"
 import { cn } from "@/lib/utils"
@@ -158,15 +159,26 @@ export function EventFormDialog({
       const eventDate = new Date(`${eventDateOnly}T${eventTime || "00:00"}`)
       // Photo de l'intervention résolue depuis le prestataire choisi : le
       // placeholder gérance (en attendant une vraie photo de profil par
-      // gérance), ou l'icône du service du contact - vide si aucun des deux
-      // ne matche (l'app affiche alors son placeholder générique).
+      // gérance), ou l'icône du service du contact (assets/icones_presta/
+      // dans Storage, même fichiers que _prestaIconFileName côté app
+      // mobile) - vide si aucun des deux ne matche ou si le fichier est
+      // introuvable (l'app affiche alors son placeholder générique).
       const isGeranceSelected = !!geranceAgentLabel && prestaName === geranceAgentLabel
       const selectedContact = residenceContacts.find((c) => c.name === prestaName)
-      const pathImage = isGeranceSelected
-        ? GERANCE_PLACEHOLDER_LOGO_URL
-        : selectedContact
-          ? (CONTACT_SERVICE_ICON_URLS[selectedContact.service as keyof typeof CONTACT_SERVICE_ICON_URLS] ?? "")
-          : ""
+      let pathImage = ""
+      if (isGeranceSelected) {
+        pathImage = GERANCE_PLACEHOLDER_LOGO_URL
+      } else if (selectedContact) {
+        const fileName =
+          CONTACT_SERVICE_ICON_FILENAMES[selectedContact.service as keyof typeof CONTACT_SERVICE_ICON_FILENAMES]
+        if (fileName) {
+          try {
+            pathImage = await getDownloadURL(ref(storage, `assets/icones_presta/${fileName}`))
+          } catch {
+            pathImage = ""
+          }
+        }
+      }
 
       await onSubmit(residenceId, {
         title: eventTitle,

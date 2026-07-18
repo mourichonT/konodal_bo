@@ -42,7 +42,7 @@ function App() {
         </Route>
         <Route path="sinistres/:residenceId/:postId" element={<SinistreDetailPage />} />
         <Route path="evenements" element={<EvenementsPage />}>
-          <Route index element={<Navigate to="liste" replace />} />
+          <Route index element={<Navigate to="calendrier" replace />} />
           <Route path="liste" element={<EvenementsListPage />} />
           <Route path="calendrier" element={<EvenementsCalendarPage />} />
         </Route>

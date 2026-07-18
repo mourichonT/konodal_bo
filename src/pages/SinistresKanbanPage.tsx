@@ -236,7 +236,7 @@ function KanbanColumn({
       )}
     >
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-sm font-semibold">{sinistreStatusLabels[statut]}</h2>
+        <h2 className="text-sm">{sinistreStatusLabels[statut]}</h2>
         <span className="text-xs text-muted-foreground">{sinistres.length}</span>
       </div>
 

@@ -18,24 +18,27 @@ export const CONTACT_SERVICES = [
   "Toiture / étanchéité",
 ] as const
 
-// URL d'icône Storage par service, utilisée comme pathImage des interventions
-// (events) créées depuis le BO quand le prestataire choisi est un contact
-// (plutôt que la gérance, cf. GERANCE_PLACEHOLDER_LOGO_URL dans lib/events.ts).
-// Vide tant que les assets ne sont pas uploadés - à compléter une fois les
-// 12 icônes disponibles dans Storage (ex: assets/services/{slug}.png).
-export const CONTACT_SERVICE_ICON_URLS: Record<(typeof CONTACT_SERVICES)[number], string> = {
-  Nettoyage: "",
-  "Espaces verts": "",
-  Électricité: "",
-  "Entretiens Ascenseur": "",
-  "Chauffage collectif": "",
-  Plomberie: "",
-  "Ventilation (VMC)": "",
-  "Portes et portails": "",
-  Vidéosurveillance: "",
-  "Sécurité incendie": "",
-  "Gestion administrative": "",
-  "Toiture / étanchéité": "",
+// Nom de fichier dans Storage gs://konodal-dev.firebasestorage.app/
+// assets/icones_presta/ - même convention que _prestaIconFileName côté app
+// mobile (konodal_app/lib/vues/pages_vues/event_page/event_form.dart), qui
+// résout ces mêmes fichiers via getDownloadURL() pour illustrer un event
+// "Prestation externe" créé depuis l'app. EventFormDialog fait la même
+// résolution côté BO au moment de la soumission - un nom de fichier ne
+// périme jamais, contrairement à une URL de téléchargement mise en cache
+// ici.
+export const CONTACT_SERVICE_ICON_FILENAMES: Record<(typeof CONTACT_SERVICES)[number], string> = {
+  Nettoyage: "nettoyage.png",
+  "Espaces verts": "espaces-verts.png",
+  Électricité: "electricite.png",
+  "Entretiens Ascenseur": "entretien-ascenseur.png",
+  "Chauffage collectif": "chauffage-collectif.png",
+  Plomberie: "plomberie.png",
+  "Ventilation (VMC)": "ventilation-vmc.png",
+  "Portes et portails": "portes-portails.png",
+  Vidéosurveillance: "videosurveillance.png",
+  "Sécurité incendie": "securite-incendie.png",
+  "Gestion administrative": "gestion-administrative.png",
+  "Toiture / étanchéité": "toiture-etancheite.png",
 }
 
 export type Contact = {

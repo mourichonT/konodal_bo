@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -83,6 +84,28 @@ export function subscribeToEvent(
   )
 }
 
+// Retrouve l'intervention programmée depuis un sinistre (linkedSinistreId) -
+// s'il y en a plusieurs (reprogrammations successives), on prend la plus
+// récente par eventDate. Tri fait côté client pour éviter un index composite
+// (where + orderBy sur des champs différents).
+export async function findInterventionEventId(
+  residenceId: string,
+  sinistreId: string
+): Promise<string | undefined> {
+  const q = query(
+    collection(db, "residences", residenceId, "posts"),
+    where("type", "==", "events"),
+    where("linkedSinistreId", "==", sinistreId)
+  )
+  const snapshot = await getDocs(q)
+  const candidates = snapshot.docs.map((d) => ({
+    id: d.id,
+    eventDate: toDateOrNull(((d.data().event as Record<string, unknown>) ?? {}).eventDate),
+  }))
+  candidates.sort((a, b) => (b.eventDate?.getTime() ?? 0) - (a.eventDate?.getTime() ?? 0))
+  return candidates[0]?.id
+}
+
 // Placeholder en attendant une vraie photo de profil par gérance (à
 // implémenter plus tard) - utilisé comme pathImage quand le prestataire
 // choisi est la gérance plutôt qu'un contact de la résidence.
@@ -95,9 +118,9 @@ export type EventInput = {
   eventDate: Date
   prestaName: string
   // Résolu par EventFormDialog selon le prestataire choisi (gérance ->
-  // GERANCE_PLACEHOLDER_LOGO_URL, contact -> CONTACT_SERVICE_ICON_URLS) -
-  // vide tant qu'aucune icône n'est résolue, l'app affiche alors son
-  // placeholder générique (imageAnnounced()), comme avant ce lot.
+  // GERANCE_PLACEHOLDER_LOGO_URL, contact -> CONTACT_SERVICE_ICON_FILENAMES
+  // via Storage) - vide tant qu'aucune icône n'est résolue, l'app affiche
+  // alors son placeholder générique (imageAnnounced()), comme avant ce lot.
   pathImage: string
   // Champ backoffice uniquement - renseigné seulement quand l'intervention
   // est créée depuis la fiche d'un sinistre ("Programmer une intervention"),

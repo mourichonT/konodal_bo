@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { useNavigate, useOutletContext } from "react-router-dom"
 import { Building2, CalendarCheck, CalendarClock, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import type { EvenementsOutletContext } from "@/pages/EvenementsPage"
 import type { EventWithResidence } from "@/hooks/useAllEvents"
@@ -203,14 +203,14 @@ export default function EvenementsCalendarPage() {
             </p>
           )}
           {todayByResidence.map(({ residenceName, events: residenceEvents }) => (
-            <Card
+            <div
               key={residenceEvents[0]?.residenceId ?? residenceName}
               className="overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]"
             >
-              <CardHeader>
-                <CardTitle className="text-xl">{residenceName}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col divide-y p-0">
+              <div className="border-b bg-muted/40 px-4 py-3">
+                <h2 className="text-lg">{residenceName}</h2>
+              </div>
+              <div className="flex flex-col divide-y">
                 {residenceEvents.map((event) => (
                   <button
                     key={`${event.residenceId}-${event.id}`}
@@ -220,7 +220,7 @@ export default function EvenementsCalendarPage() {
                         state: { from: "calendrier" },
                       })
                     }
-                    className="flex items-center justify-between gap-3 px-6 py-3 text-left hover:bg-muted/50"
+                    className="flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/50"
                   >
                     <div className="flex flex-col">
                       <span className="font-medium">{event.title || "Sans titre"}</span>
@@ -233,8 +233,8 @@ export default function EvenementsCalendarPage() {
                     </span>
                   </button>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       ) : viewMode === "scheduled" ? (
@@ -245,13 +245,13 @@ export default function EvenementsCalendarPage() {
             </p>
           )}
           {scheduledByDay.map(({ date, events: dayEvents }) => (
-            <Card key={date.toISOString()} className="overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-              <CardHeader>
-                <CardTitle className="text-xl capitalize">
+            <div key={date.toISOString()} className="overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+              <div className="border-b bg-muted/40 px-4 py-3">
+                <h2 className="text-lg capitalize">
                   {date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col divide-y p-0">
+                </h2>
+              </div>
+              <div className="flex flex-col divide-y">
                 {dayEvents.map((event) => (
                   <button
                     key={`${event.residenceId}-${event.id}`}
@@ -261,7 +261,7 @@ export default function EvenementsCalendarPage() {
                         state: { from: "calendrier" },
                       })
                     }
-                    className="flex items-center justify-between gap-3 px-6 py-3 text-left hover:bg-muted/50"
+                    className="flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/50"
                   >
                     <div className="flex flex-col">
                       <span className="font-medium">{event.title || "Sans titre"}</span>
@@ -275,14 +275,14 @@ export default function EvenementsCalendarPage() {
                     </span>
                   </button>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       ) : viewMode === "today" ? (
         <div className="overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
           <div className="border-b bg-muted/40 px-4 py-3">
-            <h2 className="text-lg font-semibold capitalize">
+            <h2 className="text-lg capitalize">
               {today.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             </h2>
           </div>
@@ -320,7 +320,7 @@ export default function EvenementsCalendarPage() {
       ) : (
         <>
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold capitalize">
+            <h2 className="text-lg capitalize">
               {monthStart.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}
             </h2>
             <div className="flex items-center gap-2">

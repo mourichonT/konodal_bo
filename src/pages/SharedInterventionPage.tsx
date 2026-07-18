@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { CalendarClock, CheckCircle2, Video } from "lucide-react"
+import { CalendarClock, CheckCircle2, FileText, Video } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,8 @@ const GET_SHARED_INTERVENTION_URL =
   "https://us-central1-konodal-dev.cloudfunctions.net/get_shared_intervention"
 const CREATE_SHARED_SIGNALEMENT_URL =
   "https://us-central1-konodal-dev.cloudfunctions.net/create_shared_signalement"
+const CREATE_SHARED_RAPPORT_URL =
+  "https://us-central1-konodal-dev.cloudfunctions.net/create_shared_rapport"
 const COMPLETE_SHARED_INTERVENTION_URL =
   "https://us-central1-konodal-dev.cloudfunctions.net/complete_shared_intervention"
 const RESCHEDULE_SHARED_INTERVENTION_URL =
@@ -89,6 +91,13 @@ export default function SharedInterventionPage() {
   const [rescheduleTime, setRescheduleTime] = useState("")
   const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false)
   const [rescheduleError, setRescheduleError] = useState<string | null>(null)
+
+  const [rapportTitle, setRapportTitle] = useState("")
+  const [rapportDescription, setRapportDescription] = useState("")
+  const [rapportFile, setRapportFile] = useState<File | null>(null)
+  const [rapportSubmitting, setRapportSubmitting] = useState(false)
+  const [rapportError, setRapportError] = useState<string | null>(null)
+  const [rapportSubmitted, setRapportSubmitted] = useState(false)
 
   const load = useCallback(() => {
     if (!token) return
@@ -179,6 +188,35 @@ export default function SharedInterventionPage() {
       setRescheduleError((err as Error).message)
     } finally {
       setRescheduleSubmitting(false)
+    }
+  }
+
+  async function handleSubmitRapport(event: FormEvent) {
+    event.preventDefault()
+    if (!token) return
+    setRapportSubmitting(true)
+    setRapportError(null)
+    try {
+      const formData = new FormData()
+      formData.append("token", token)
+      formData.append("title", rapportTitle)
+      formData.append("description", rapportDescription)
+      if (rapportFile) formData.append("file", rapportFile)
+
+      const response = await fetch(CREATE_SHARED_RAPPORT_URL, {
+        method: "POST",
+        body: formData,
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || "Envoi impossible.")
+      setRapportTitle("")
+      setRapportDescription("")
+      setRapportFile(null)
+      setRapportSubmitted(true)
+    } catch (err) {
+      setRapportError((err as Error).message)
+    } finally {
+      setRapportSubmitting(false)
     }
   }
 
@@ -332,61 +370,115 @@ export default function SharedInterventionPage() {
 
                 {!isTerminated && (
                   <div className="flex flex-col gap-3 border-t border-border pt-4">
-                    <span className="text-muted-foreground">Suite de l'intervention</span>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={completing}
-                        onClick={handleComplete}
-                        className="w-fit"
-                      >
-                        <CheckCircle2 />
-                        Marquer l'intervention comme terminée
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={rescheduleSubmitting}
-                        onClick={() => setRescheduling((v) => !v)}
-                        className="w-fit"
-                      >
-                        <CalendarClock />
-                        Reprogrammer un passage
-                      </Button>
-                    </div>
+                    <span className="text-muted-foreground">Suite du sinistre</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={completing}
+                      onClick={handleComplete}
+                      className="w-fit"
+                    >
+                      <CheckCircle2 />
+                      Marquer l'intervention comme terminée
+                    </Button>
                     {completeError && <p className="text-sm text-destructive">{completeError}</p>}
-
-                    {rescheduling && (
-                      <form
-                        onSubmit={handleReschedule}
-                        className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3"
-                      >
-                        <div className="flex flex-col gap-1.5">
-                          <Label>Nouvelle date</Label>
-                          <DateInput value={rescheduleDate} onChange={setRescheduleDate} />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                          <Label htmlFor="reschedule-time">Heure (optionnel)</Label>
-                          <input
-                            id="reschedule-time"
-                            type="time"
-                            value={rescheduleTime}
-                            onChange={(e) => setRescheduleTime(e.target.value)}
-                            className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                          />
-                        </div>
-                        <Button type="submit" disabled={rescheduleSubmitting || !rescheduleDate}>
-                          Confirmer
-                        </Button>
-                        {rescheduleError && <p className="w-full text-sm text-destructive">{rescheduleError}</p>}
-                      </form>
-                    )}
                   </div>
                 )}
               </CardContent>
             </Card>
           )}
+
+          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <CardHeader>
+              <CardTitle className="text-base">Suite de l'intervention</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 text-sm">
+              <div className="flex flex-col gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={rescheduleSubmitting}
+                  onClick={() => setRescheduling((v) => !v)}
+                  className="w-fit"
+                >
+                  <CalendarClock />
+                  Reprogrammer un passage
+                </Button>
+
+                {rescheduling && (
+                  <form
+                    onSubmit={handleReschedule}
+                    className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3"
+                  >
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Nouvelle date</Label>
+                      <DateInput value={rescheduleDate} onChange={setRescheduleDate} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="reschedule-time">Heure (optionnel)</Label>
+                      <input
+                        id="reschedule-time"
+                        type="time"
+                        value={rescheduleTime}
+                        onChange={(e) => setRescheduleTime(e.target.value)}
+                        className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      />
+                    </div>
+                    <Button type="submit" disabled={rescheduleSubmitting || !rescheduleDate}>
+                      Confirmer
+                    </Button>
+                    {rescheduleError && <p className="w-full text-sm text-destructive">{rescheduleError}</p>}
+                  </form>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-border pt-4">
+                <span className="text-muted-foreground">
+                  Ajouter un compte-rendu (visible uniquement par l'agence)
+                </span>
+                <form onSubmit={handleSubmitRapport} className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="rapport-title">Titre</Label>
+                    <Input
+                      id="rapport-title"
+                      required
+                      value={rapportTitle}
+                      onChange={(e) => setRapportTitle(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="rapport-desc">Description</Label>
+                    <textarea
+                      id="rapport-desc"
+                      rows={3}
+                      value={rapportDescription}
+                      onChange={(e) => setRapportDescription(e.target.value)}
+                      className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="rapport-file">Photo (optionnel)</Label>
+                    <input
+                      id="rapport-file"
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(e) => setRapportFile(e.target.files?.[0] ?? null)}
+                      className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
+                    />
+                  </div>
+                  {rapportError && <p className="text-sm text-destructive">{rapportError}</p>}
+                  {rapportSubmitted && !rapportError && (
+                    <p className="text-sm text-emerald-600">Compte-rendu envoyé, merci.</p>
+                  )}
+                  <Button type="submit" disabled={rapportSubmitting} className="w-fit">
+                    <FileText />
+                    Envoyer
+                  </Button>
+                </form>
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

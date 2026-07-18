@@ -35,14 +35,14 @@ export default function ResidentsPage() {
         setLoading(false)
       },
       (error) => {
-        toast.error("Impossible de charger les résidents : " + error.message)
+        toast.error("Impossible de charger les utilisateurs : " + error.message)
         setLoading(false)
       }
     )
   }, [])
 
   // Les comptes 'professionnel'/'superAdmin' sont créés hors app (backoffice,
-  // gérance) et n'ont pas leur place dans un annuaire résidents/bailleurs.
+  // gérance) et n'ont pas leur place dans un annuaire utilisateurs.
   const residents = useMemo(() => users.filter((u) => (u.accountType || "utilisateur") === "utilisateur"), [users])
 
   const filteredResidents = useMemo(
@@ -60,7 +60,7 @@ export default function ResidentsPage() {
       <div className="grid grid-cols-3 gap-4">
         <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
           <CardContent className="flex flex-col gap-1">
-            <span className="text-sm text-muted-foreground">Total résidents / bailleurs</span>
+            <span className="text-sm text-muted-foreground">Total utilisateurs</span>
             <span className="text-3xl font-semibold">{residents.length}</span>
           </CardContent>
         </Card>
@@ -80,20 +80,20 @@ export default function ResidentsPage() {
 
       <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
         <CardHeader>
-          <CardTitle className="text-lg">Annuaire des résidents / bailleurs</CardTitle>
+          <CardTitle className="text-lg">Annuaire des utilisateurs</CardTitle>
           <CardDescription>
             Rechercher un compte et approuver son identité (documents vérifiés côté KONODAL).
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col">
           <div className="mt-[10px] mb-[50px] flex items-center justify-between gap-4">
-            <div className="relative w-full max-w-sm">
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Rechercher un résident…"
+                placeholder="Rechercher un utilisateur…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="rounded-full pl-9"
+                className="pl-8"
               />
             </div>
           </div>
@@ -142,7 +142,7 @@ export default function ResidentsPage() {
                   <TableRow>
                     <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                       {residents.length === 0
-                        ? "Aucun résident pour l'instant."
+                        ? "Aucun utilisateur pour l'instant."
                         : "Aucun résultat pour cette recherche."}
                     </TableCell>
                   </TableRow>
@@ -152,7 +152,7 @@ export default function ResidentsPage() {
           </div>
 
           <p className="mt-4 text-sm text-muted-foreground">
-            {filteredResidents.length} résident{filteredResidents.length > 1 ? "s" : ""} affiché
+            {filteredResidents.length} utilisateur{filteredResidents.length > 1 ? "s" : ""} affiché
             {filteredResidents.length > 1 ? "s" : ""} sur {residents.length}
           </p>
         </CardContent>
