@@ -194,6 +194,10 @@ export default function SharedInterventionPage() {
   async function handleSubmitRapport(event: FormEvent) {
     event.preventDefault()
     if (!token) return
+    if (!rapportFile) {
+      setRapportError("Une photo est requise.")
+      return
+    }
     setRapportSubmitting(true)
     setRapportError(null)
     try {
@@ -201,7 +205,7 @@ export default function SharedInterventionPage() {
       formData.append("token", token)
       formData.append("title", rapportTitle)
       formData.append("description", rapportDescription)
-      if (rapportFile) formData.append("file", rapportFile)
+      formData.append("file", rapportFile)
 
       const response = await fetch(CREATE_SHARED_RAPPORT_URL, {
         method: "POST",
@@ -457,10 +461,11 @@ export default function SharedInterventionPage() {
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="rapport-file">Photo (optionnel)</Label>
+                    <Label htmlFor="rapport-file">Photo</Label>
                     <input
                       id="rapport-file"
                       type="file"
+                      required
                       accept="image/*"
                       capture="environment"
                       onChange={(e) => setRapportFile(e.target.files?.[0] ?? null)}

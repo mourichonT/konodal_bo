@@ -19,9 +19,11 @@ import { toast } from "sonner"
 import { db, storage } from "@/firebase"
 import { GERANCE_PLACEHOLDER_LOGO_URL, type EventInput } from "@/lib/events"
 import { subscribeToContacts } from "@/lib/contacts"
+import { subscribeToStructures } from "@/lib/structures"
 import { CONTACT_SERVICE_ICON_FILENAMES, type Contact } from "@/types/contact"
 import type { GeranceRef } from "@/types/residence"
 import type { Agent, ServiceType } from "@/types/gerance"
+import type { StructureResidence } from "@/types/structure"
 import { cn } from "@/lib/utils"
 
 // Seuls id/name/contactRefs/geranceRef sont utilisés ici (sélecteur de
@@ -80,8 +82,11 @@ export function EventFormDialog({
     initial?.eventDate ? dateToLocalParts(initial.eventDate).time : ""
   )
   const [prestaName, setPrestaName] = useState(initial?.prestaName ?? "")
+  const [locationElement, setLocationElement] = useState(initial?.locationElement ?? "")
+  const [locationFloor, setLocationFloor] = useState(initial?.locationFloor ?? "")
   const [submitting, setSubmitting] = useState(false)
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [structures, setStructures] = useState<StructureResidence[]>([])
   const [geranceAgentLabel, setGeranceAgentLabel] = useState<string | null>(null)
 
   useEffect(() => {
@@ -92,6 +97,8 @@ export function EventFormDialog({
       setEventDateOnly(initial?.eventDate ? dateToLocalParts(initial.eventDate).dateOnly : "")
       setEventTime(initial?.eventDate ? dateToLocalParts(initial.eventDate).time : "")
       setPrestaName(initial?.prestaName ?? "")
+      setLocationElement(initial?.locationElement ?? "")
+      setLocationFloor(initial?.locationFloor ?? "")
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial, initialResidenceId])
@@ -102,6 +109,19 @@ export function EventFormDialog({
       toast.error("Impossible de charger les contacts")
     })
   }, [open])
+
+  // Bâtiment/étage dépendent de la résidence choisie (structures propres à
+  // chaque résidence, cf. ResidenceDetailPage) - reset si on change de
+  // résidence pour ne pas garder une sélection qui n'a plus de sens.
+  useEffect(() => {
+    if (!open || !residenceId) {
+      setStructures([])
+      return
+    }
+    return subscribeToStructures(residenceId, setStructures, () => {
+      toast.error("Impossible de charger les bâtiments de la résidence")
+    })
+  }, [open, residenceId])
 
   const selectedResidence = residences.find((r) => r.id === residenceId)
   const geranceRef = selectedResidence?.geranceRef
@@ -137,6 +157,8 @@ export function EventFormDialog({
 
   const residenceName = selectedResidence?.name ?? "Choisir une résidence"
   const residenceContacts = contacts.filter((c) => selectedResidence?.contactRefs?.[c.id])
+  const selectedStructure = structures.find((s) => s.name === locationElement)
+  const floorOptions = selectedStructure?.etage ?? []
   // Tant qu'aucune résidence n'est choisie (hors édition, où elle est
   // verrouillée), le reste du formulaire n'a pas de contacts à proposer et
   // n'a pas de sens à remplir avant ce choix.
@@ -186,6 +208,8 @@ export function EventFormDialog({
         eventDate,
         prestaName,
         pathImage,
+        locationElement,
+        locationFloor,
         ...(linkedSinistreId ? { linkedSinistreId } : {}),
       })
     } catch (err) {
@@ -279,6 +303,45 @@ export function EventFormDialog({
                     ))}
                   </optgroup>
                 </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="event-batiment">Bâtiment (optionnel)</Label>
+                  <select
+                    id="event-batiment"
+                    disabled={restDisabled}
+                    value={locationElement}
+                    onChange={(e) => {
+                      setLocationElement(e.target.value)
+                      setLocationFloor("")
+                    }}
+                    className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <option value="">Non précisé</option>
+                    {structures.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="event-etage">Étage (optionnel)</Label>
+                  <select
+                    id="event-etage"
+                    disabled={restDisabled || floorOptions.length === 0}
+                    value={locationFloor}
+                    onChange={(e) => setLocationFloor(e.target.value)}
+                    className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+                  >
+                    <option value="">Non précisé</option>
+                    {floorOptions.map((etage) => (
+                      <option key={etage} value={etage}>
+                        {etage}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="event-desc">Description</Label>

@@ -31,6 +31,7 @@ function toResidenceEvent(residenceId: string, d: DocumentSnapshot<DocumentData>
   const data = d.data() ?? {}
   const event = (data.event as Record<string, unknown>) ?? data
   const dates = (data.dates as Record<string, unknown>) ?? data
+  const location = (data.location as Record<string, unknown>) ?? {}
   return {
     id: d.id,
     residenceId,
@@ -42,6 +43,8 @@ function toResidenceEvent(residenceId: string, d: DocumentSnapshot<DocumentData>
     creationDate: toDateOrNull(dates.creationDate ?? dates.timeStamp),
     user: (data.user as string) ?? "",
     linkedSinistreId: (data.linkedSinistreId as string) || undefined,
+    locationElement: (location.locationElements as string) || undefined,
+    locationFloor: (location.locationFloor as string) || undefined,
   }
 }
 
@@ -126,6 +129,11 @@ export type EventInput = {
   // est créée depuis la fiche d'un sinistre ("Programmer une intervention"),
   // jamais éditable directement dans le formulaire.
   linkedSinistreId?: string
+  // Localisation optionnelle (bâtiment/étage), résolue depuis les structures
+  // de la résidence sélectionnée (cf. types/structure.ts) - backoffice
+  // uniquement, comme linkedSinistreId.
+  locationElement?: string
+  locationFloor?: string
 }
 
 // Réservé isSuperAdmin() côté firestore.rules (posts/{id}.create) - la règle
@@ -146,6 +154,10 @@ export async function createEvent(residenceId: string, uid: string, input: Event
       eventType: [EVENT_TYPE_INTERVENTION],
       prestaName: input.prestaName,
     },
+    location: {
+      locationElements: input.locationElement ?? "",
+      locationFloor: input.locationFloor ?? "",
+    },
     ...(input.linkedSinistreId ? { linkedSinistreId: input.linkedSinistreId } : {}),
   })
 }
@@ -157,5 +169,7 @@ export async function updateEvent(residenceId: string, postId: string, input: Ev
     pathImage: input.pathImage,
     "event.eventDate": input.eventDate,
     "event.prestaName": input.prestaName,
+    "location.locationElements": input.locationElement ?? "",
+    "location.locationFloor": input.locationFloor ?? "",
   })
 }

@@ -21,4 +21,9 @@ export type ResidenceEvent = {
   // quand l'intervention est programmée depuis la fiche d'un sinistre
   // (SinistreDetailPage), pour retrouver le ticket d'origine.
   linkedSinistreId?: string
+  // Champs backoffice uniquement (même précaution que linkedSinistreId) -
+  // optionnels, renseignés depuis les structures/étages déclarés sur la
+  // résidence (cf. types/structure.ts), jamais lus/écrits par l'app mobile.
+  locationElement?: string
+  locationFloor?: string
 }
