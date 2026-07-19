@@ -68,9 +68,9 @@ function buildInterventionEmailHtml({
     <body style="font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4;">
     <table align="center" width="600" style="background-color: #ffffff; border-collapse: collapse; margin-top: 20px;">
         <tr>
-        <td style="background-color: #48775B; color: white; text-align: center; padding: 30px 20px;">
-            <img src="${KONODAL_LOGO_HORIZONTAL_URL}" alt="KONODAL-Logo" width="250" style="max-width: 100%;" />
-            <p style="margin: 5px 0 0;font-size: 16px">Intervention programmée</p>
+        <td style="background-color: rgba(72, 119, 91, 1); color: rgba(255, 255, 255, 1); text-align: center; padding: 30px 20px">
+            <img src="${KONODAL_LOGO_HORIZONTAL_URL}" alt="KONODAL-Logo" width="250" style="max-width: 25%">
+            <h2 style="margin: 30px 0 0; font-size: 20px">Intervention programmée</h2>
         </td>
         </tr>
 

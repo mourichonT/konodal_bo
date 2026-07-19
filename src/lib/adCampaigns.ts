@@ -35,6 +35,26 @@ export function campaignStatus(campaign: AdCampaign, today: string): string {
   return campaign.active ? "Active" : "En attente"
 }
 
+export type CampaignTimeConsumed = {
+  elapsedDays: number
+  totalDays: number
+  percent: number
+}
+
+// Jours écoulés depuis startDate, bornés entre 0 (pas encore démarrée) et
+// totalDays (terminée) - les deux bornes incluses dans le décompte (une
+// campagne du même jour au même jour dure 1 jour, pas 0).
+export function campaignTimeConsumed(campaign: AdCampaign, today: string): CampaignTimeConsumed | null {
+  if (!campaign.startDate || !campaign.endDate) return null
+  const msPerDay = 24 * 60 * 60 * 1000
+  const start = new Date(`${campaign.startDate}T00:00:00`).getTime()
+  const end = new Date(`${campaign.endDate}T00:00:00`).getTime()
+  const now = new Date(`${today}T00:00:00`).getTime()
+  const totalDays = Math.max(1, Math.round((end - start) / msPerDay) + 1)
+  const elapsedDays = Math.min(totalDays, Math.max(0, Math.round((now - start) / msPerDay) + 1))
+  return { elapsedDays, totalDays, percent: Math.round((elapsedDays / totalDays) * 100) }
+}
+
 function toDateOrNull(value: unknown): Date | null {
   return value && typeof (value as { toDate?: unknown }).toDate === "function"
     ? (value as { toDate: () => Date }).toDate()

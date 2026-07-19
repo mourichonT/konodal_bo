@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { CalendarClock, CheckCircle2, FileText, Video } from "lucide-react"
+import { CalendarClock, FileText, Video } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,12 +11,8 @@ import { KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
 
 const GET_SHARED_INTERVENTION_URL =
   "https://us-central1-konodal-dev.cloudfunctions.net/get_shared_intervention"
-const CREATE_SHARED_SIGNALEMENT_URL =
-  "https://us-central1-konodal-dev.cloudfunctions.net/create_shared_signalement"
 const CREATE_SHARED_RAPPORT_URL =
   "https://us-central1-konodal-dev.cloudfunctions.net/create_shared_rapport"
-const COMPLETE_SHARED_INTERVENTION_URL =
-  "https://us-central1-konodal-dev.cloudfunctions.net/complete_shared_intervention"
 const RESCHEDULE_SHARED_INTERVENTION_URL =
   "https://us-central1-konodal-dev.cloudfunctions.net/reschedule_shared_intervention"
 const REVOKE_SHARED_TOKEN_URL =
@@ -79,16 +75,6 @@ export default function SharedInterventionPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
-  const [file, setFile] = useState<File | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const [submitted, setSubmitted] = useState(false)
-
-  const [completing, setCompleting] = useState(false)
-  const [completeError, setCompleteError] = useState<string | null>(null)
-
   const [rescheduling, setRescheduling] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState("")
   const [rescheduleTime, setRescheduleTime] = useState("")
@@ -141,58 +127,6 @@ export default function SharedInterventionPage() {
       window.removeEventListener("beforeunload", revokeToken)
     }
   }, [rapportSubmitted, token])
-
-  const isTerminated = data?.sinistre?.statut === "Terminé"
-
-  async function handleSubmitSignalement(event: FormEvent) {
-    event.preventDefault()
-    if (!token) return
-    setSubmitting(true)
-    setSubmitError(null)
-    try {
-      const formData = new FormData()
-      formData.append("token", token)
-      formData.append("title", title)
-      formData.append("description", description)
-      if (file) formData.append("file", file)
-
-      const response = await fetch(CREATE_SHARED_SIGNALEMENT_URL, {
-        method: "POST",
-        body: formData,
-      })
-      const body = await response.json()
-      if (!response.ok) throw new Error(body.error || "Envoi impossible.")
-      setTitle("")
-      setDescription("")
-      setFile(null)
-      setSubmitted(true)
-      load()
-    } catch (err) {
-      setSubmitError((err as Error).message)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleComplete() {
-    if (!token) return
-    setCompleting(true)
-    setCompleteError(null)
-    try {
-      const response = await fetch(COMPLETE_SHARED_INTERVENTION_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      })
-      const body = await response.json()
-      if (!response.ok) throw new Error(body.error || "Impossible de clôturer l'intervention.")
-      load()
-    } catch (err) {
-      setCompleteError((err as Error).message)
-    } finally {
-      setCompleting(false)
-    }
-  }
 
   async function handleReschedule(event: FormEvent) {
     event.preventDefault()
@@ -252,8 +186,8 @@ export default function SharedInterventionPage() {
   return (
     <div className="mx-auto flex min-h-svh max-w-2xl flex-col gap-6 p-4 py-10">
       <div className="-mx-4 flex flex-col items-center gap-1 bg-sidebar px-4 py-6 sm:-mx-0 sm:rounded-2xl">
-        <img src={KONODAL_LOGO_HORIZONTAL_URL} alt="Konodal" className="h-8 w-auto" />
-        <p className="text-sm text-sidebar-foreground">Intervention</p>
+        <img src={KONODAL_LOGO_HORIZONTAL_URL} alt="Konodal" className="h-[86px] w-auto" />
+        <h1 className="px-5 pt-5 text-[25px] text-sidebar-foreground">Intervention</h1>
       </div>
 
       {loading && <p className="text-muted-foreground">Chargement…</p>}
@@ -358,64 +292,10 @@ export default function SharedInterventionPage() {
                   </div>
                 )}
 
-                <div className="flex flex-col gap-3 border-t border-border pt-4">
-                  <span className="text-muted-foreground">Ajouter une déclaration</span>
-                  <form onSubmit={handleSubmitSignalement} className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="signalement-title">Titre</Label>
-                      <Input
-                        id="signalement-title"
-                        required
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="signalement-desc">Description</Label>
-                      <textarea
-                        id="signalement-desc"
-                        rows={3}
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="signalement-file">Photo ou vidéo (optionnel)</Label>
-                      <input
-                        id="signalement-file"
-                        type="file"
-                        accept="image/*,video/*"
-                        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                        className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
-                      />
-                    </div>
-                    {submitError && <p className="text-sm text-destructive">{submitError}</p>}
-                    {submitted && !submitError && (
-                      <p className="text-sm text-emerald-600">Déclaration envoyée, merci.</p>
-                    )}
-                    <Button type="submit" disabled={submitting} className="w-fit">
-                      Envoyer
-                    </Button>
-                  </form>
-                </div>
-
-                {!isTerminated && (
-                  <div className="flex flex-col gap-3 border-t border-border pt-4">
-                    <span className="text-muted-foreground">Suite du sinistre</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={completing}
-                      onClick={handleComplete}
-                      className="w-fit"
-                    >
-                      <CheckCircle2 />
-                      Marquer l'intervention comme terminée
-                    </Button>
-                    {completeError && <p className="text-sm text-destructive">{completeError}</p>}
-                  </div>
-                )}
+                <p className="border-t border-border pt-4 text-xs text-muted-foreground">
+                  La déclaration et la clôture de ce ticket se font désormais via le compte-rendu
+                  ci-dessous.
+                </p>
               </CardContent>
             </Card>
           )}
@@ -471,9 +351,7 @@ export default function SharedInterventionPage() {
                   </div>
 
                   <div className="flex flex-col gap-3 border-t border-border pt-4">
-                    <span className="text-muted-foreground">
-                      Ajouter un compte-rendu (visible uniquement par l'agence)
-                    </span>
+                    <span className="text-muted-foreground">Ajouter un compte-rendu</span>
                     <form onSubmit={handleSubmitRapport} className="flex flex-col gap-3">
                       <div className="flex flex-col gap-1.5">
                         <Label htmlFor="rapport-title">Titre</Label>

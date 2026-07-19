@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, useLocation, useParams } from "react-router-dom"
 import { doc, getDoc } from "firebase/firestore"
 import { toast } from "sonner"
@@ -30,9 +30,8 @@ import { SinistreMediaViewer } from "@/components/SinistreMediaViewer"
 import { SinistrePriorityIcon } from "@/components/SinistrePriorityIcon"
 import { db } from "@/firebase"
 import { useAuth } from "@/lib/auth-context"
-import { createEvent, findInterventionEventId } from "@/lib/events"
+import { createEvent, findInterventionEventId, KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
 import {
-  fetchSinistreReportPdf,
   subscribeToSinistre,
   subscribeToSinistreSignalements,
   updateSinistreArchived,
@@ -40,6 +39,7 @@ import {
   updateSinistrePriority,
   updateSinistreStatut,
 } from "@/lib/sinistres"
+import { exportElementToPdf, waitForImagesToLoad } from "@/lib/exportPdf"
 import { subscribeToUser, subscribeToUserLots, type UserLot } from "@/lib/users"
 import { cn } from "@/lib/utils"
 import { useAllSinistres } from "@/hooks/useAllSinistres"
@@ -59,6 +59,7 @@ import type { GeranceRef } from "@/types/residence"
 
 export default function SinistreDetailPage() {
   const { residenceId, postId } = useParams<{ residenceId: string; postId: string }>()
+  const reportRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
   const backTo = `/sinistres/${(location.state as { from?: string } | null)?.from === "kanban" ? "kanban" : "liste"}`
   const { user } = useAuth()
@@ -197,18 +198,17 @@ export default function SinistreDetailPage() {
   }
 
   async function handleExportPdf() {
-    if (!residenceId || !postId) return
+    if (!postId) return
     setExportingPdf(true)
     try {
-      const blob = await fetchSinistreReportPdf(residenceId, postId)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `rapport_signalements_${postId}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      // La copie hors-écran (ref) ne se monte qu'une fois exportingPdf à
+      // true - attend qu'elle existe avant de continuer, la mise en page
+      // visible (carrousel) n'est jamais touchée.
+      while (!reportRef.current) {
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+      }
+      await waitForImagesToLoad(reportRef.current, mediaItems.length)
+      await exportElementToPdf(reportRef.current, `rapport_sinistre_${postId}.pdf`)
     } catch (err) {
       toast.error("Échec de l'export PDF : " + (err as Error).message)
     } finally {
@@ -506,6 +506,109 @@ export default function SinistreDetailPage() {
               <PostCommentsCard residenceId={residenceId} postId={postId} />
             </div>
           </div>
+      )}
+
+      {/* Copie hors-écran dédiée à l'export PDF - la mise en page visible ne
+          bouge jamais (pas de carrousel qui "casse" pendant l'export) ; seule
+          cette copie affiche les photos en liste, capturée par html2canvas
+          puis démontée une fois l'export terminé. */}
+      {exportingPdf && sinistre && (
+        <div
+          ref={reportRef}
+          style={{ position: "fixed", top: 0, left: "-10000px", width: "900px" }}
+          className="flex flex-col gap-6 bg-white"
+        >
+          <div data-pdf-block className="flex flex-col items-center gap-5 bg-sidebar px-6 py-6">
+            <img src={KONODAL_LOGO_HORIZONTAL_URL} alt="Konodal" className="h-[109px] w-auto" />
+            <p className="text-2xl text-sidebar-foreground">Déclaration de sinistre</p>
+          </div>
+
+          <div className="flex flex-col gap-6 px-6">
+            <Card data-pdf-block className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+              <CardHeader>
+                <CardTitle className="text-base">Ticket</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <span className="text-muted-foreground">N° ticket : </span>
+                    #{sinistre.id.slice(-6).toUpperCase()}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Résidence : </span>
+                    {residenceName ?? "—"}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Date de la 1ère déclaration : </span>
+                    {sinistre.creationDate ? sinistre.creationDate.toLocaleDateString("fr-FR") : "—"}
+                  </div>
+                  {sinistre.inProgressDate && (
+                    <div>
+                      <span className="text-muted-foreground">Date de prise en charge : </span>
+                      {sinistre.inProgressDate.toLocaleDateString("fr-FR")}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Statut :</span>
+                    <span className={cn("font-medium", sinistreStatusTextClass[sinistre.statut as SinistreStatus])}>
+                      {sinistreStatusLabels[sinistre.statut as SinistreStatus] ?? sinistre.statut}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Priorité :</span>
+                    <SinistrePriorityIcon priority={sinistre.priority} className="size-3.5" />
+                    {sinistrePriorityLabels[sinistre.priority]}
+                  </div>
+                  {sinistre.archived && <span className="text-muted-foreground">Archivé</span>}
+                </div>
+
+                {sinistre.interventionDate && (
+                  <div className="col-span-2 border-t pt-3">
+                    <span className="text-muted-foreground">Date d'intervention : </span>
+                    {sinistre.interventionDate.toLocaleDateString("fr-FR")}{" "}
+                    {sinistre.interventionDate.toLocaleTimeString("fr-FR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div data-pdf-block>
+              <DeclarantCard
+                title="Déclarant"
+                uid={sinistre.user}
+                residenceId={residenceId}
+                description={sinistre.description}
+              />
+            </div>
+
+            {signalements.map((signalement, i) => (
+              <div key={signalement.id} data-pdf-block>
+                <DeclarantCard
+                  title={`Déclarant ${i + 2}`}
+                  uid={signalement.user}
+                  residenceId={residenceId}
+                  description={signalement.description}
+                />
+              </div>
+            ))}
+
+            {mediaItems.map((item) => (
+              <div key={item.key} data-pdf-block className="flex flex-col gap-1.5 rounded-2xl bg-white p-4 shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+                <span className="text-sm font-medium">{item.label}</span>
+                <SinistreMediaViewer pathImage={item.pathImage} className="aspect-video w-full rounded-lg" />
+              </div>
+            ))}
+
+            <div data-pdf-block>
+              <PostCommentsCard residenceId={residenceId} postId={postId} />
+            </div>
+          </div>
+        </div>
       )}
 
       <Dialog open={!!pendingStatus} onOpenChange={(open) => !open && setPendingStatus(null)}>

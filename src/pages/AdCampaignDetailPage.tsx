@@ -1,19 +1,21 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Eye, ImagePlus, MousePointerClick, Save, Trash2 } from "lucide-react"
+import { ArrowLeft, Eye, FileDown, ImagePlus, MousePointerClick, Save, Trash2 } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DateInput } from "@/components/DateInput"
 import { subscribeToResidences } from "@/lib/residences"
 import { departmentCodeFromZip, departmentLabel, groupResidencesByDepartment } from "@/lib/departments"
+import { exportElementToPdf } from "@/lib/exportPdf"
 import {
   campaignStatus,
+  campaignTimeConsumed,
   CAMPAIGN_STATUS_BADGE_CLASS,
   deleteAdCampaign,
   subscribeToAdCampaign,
@@ -89,11 +91,19 @@ const STATUT_COLOR: Record<string, string> = {
 // Répartition par profil résident (propriétaire/locataire) - dérivé du lot
 // préféré côté app au moment de l'événement, pas d'un champ de compte
 // unique (un même uid peut être propriétaire d'un lot et locataire d'un
-// autre selon la résidence).
+// autre selon la résidence). Compte les UTILISATEURS DISTINCTS, pas les
+// événements bruts : un même résident qui scrolle plusieurs fois devant la
+// pub génère plusieurs impressions (cf. adv_widget.dart, pas de
+// déduplication au niveau du compteur global) - ici on ne veut compter
+// chaque personne qu'une fois par campagne, pas gonfler son profil.
 function aggregateByStatut(events: AdCampaignEvent[]) {
-  const totals = new Map<string, number>()
+  const statutByUid = new Map<string, string>()
   for (const event of events) {
-    totals.set(event.statutResident, (totals.get(event.statutResident) ?? 0) + 1)
+    if (!statutByUid.has(event.uid)) statutByUid.set(event.uid, event.statutResident)
+  }
+  const totals = new Map<string, number>()
+  for (const statut of statutByUid.values()) {
+    totals.set(statut, (totals.get(statut) ?? 0) + 1)
   }
   return STATUT_ORDER.filter((statut) => totals.has(statut)).map((statut) => ({
     statut,
@@ -104,11 +114,13 @@ function aggregateByStatut(events: AdCampaignEvent[]) {
 export default function AdCampaignDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const reportRef = useRef<HTMLDivElement>(null)
   const [campaign, setCampaign] = useState<AdCampaign | null>(null)
   const [loading, setLoading] = useState(true)
   const [residences, setResidences] = useState<Residence[]>([])
   const [initialized, setInitialized] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const [name, setName] = useState("")
@@ -234,9 +246,22 @@ export default function AdCampaignDetailPage() {
     }
   }
 
+  async function handleExportPdf() {
+    if (!reportRef.current || !campaign) return
+    setExportingPdf(true)
+    try {
+      await exportElementToPdf(reportRef.current, `rapport_campagne_${campaign.name || campaign.id}.pdf`)
+    } catch (err) {
+      toast.error("Échec de l'export PDF : " + (err as Error).message)
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
   if (!id) return null
 
   const today = new Date().toISOString().slice(0, 10)
+  const timeConsumed = campaign ? campaignTimeConsumed(campaign, today) : null
   const impressionsByDepartment = campaign
     ? aggregateByDepartment(campaign.impressionsByResidence, residences)
     : []
@@ -416,11 +441,41 @@ export default function AdCampaignDetailPage() {
             </Card>
           </div>
 
+          <div ref={reportRef}>
           <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
             <CardHeader>
               <CardTitle className="text-base">Rapport de campagne</CardTitle>
+              <CardAction data-pdf-ignore>
+                <Button
+                  size="sm"
+                  disabled={exportingPdf}
+                  onClick={handleExportPdf}
+                  className="bg-slate-200 text-slate-800 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-100 dark:hover:bg-slate-500"
+                >
+                  <FileDown />
+                  Exporter en PDF
+                </Button>
+              </CardAction>
             </CardHeader>
             <CardContent>
+              {timeConsumed && (
+                <div className="mb-6 flex flex-col gap-2 rounded-xl bg-muted/40 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium">Temps de campagne consommé</span>
+                    <span className="text-sm text-muted-foreground">
+                      {timeConsumed.elapsedDays} / {timeConsumed.totalDays} jour
+                      {timeConsumed.totalDays > 1 ? "s" : ""} · {timeConsumed.percent}%
+                    </span>
+                  </div>
+                  <div className="h-4 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${timeConsumed.percent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-3 rounded-xl bg-muted/40 p-4">
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
@@ -634,9 +689,12 @@ export default function AdCampaignDetailPage() {
               </div>
 
               <h3 className="mt-6 text-sm font-medium">Engagement par profil résident</h3>
+              <p className="text-xs text-muted-foreground">
+                Utilisateurs uniques (chaque personne comptée une seule fois sur cette campagne).
+              </p>
               <div className="mt-2 grid gap-6 lg:grid-cols-2">
                 <div className="flex flex-col gap-2">
-                  <h4 className="text-xs text-muted-foreground">Impressions</h4>
+                  <h4 className="text-xs text-muted-foreground">A vu la pub</h4>
                   <div className="h-52">
                     {impressionsByStatut.length === 0 ? (
                       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -679,7 +737,7 @@ export default function AdCampaignDetailPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <h4 className="text-xs text-muted-foreground">Clics</h4>
+                  <h4 className="text-xs text-muted-foreground">A cliqué</h4>
                   <div className="h-52">
                     {clicksByStatut.length === 0 ? (
                       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -723,6 +781,7 @@ export default function AdCampaignDetailPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
         </div>
       )}
 
