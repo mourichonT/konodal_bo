@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { EventFormDialog } from "@/components/EventFormDialog"
 import { PostCommentsCard } from "@/components/PostCommentsCard"
 import { db } from "@/firebase"
-import { subscribeToEvent, updateEvent, GERANCE_PLACEHOLDER_LOGO_URL } from "@/lib/events"
+import { subscribeToEvent, updateEvent, KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
 import { subscribeToRapportsForEvent, type Rapport } from "@/lib/rapports"
 import type { ResidenceEvent } from "@/types/event"
 import { emptyAddress, type Address, type GeranceRef } from "@/types/residence"
@@ -69,7 +69,7 @@ function buildInterventionEmailHtml({
     <table align="center" width="600" style="background-color: #ffffff; border-collapse: collapse; margin-top: 20px;">
         <tr>
         <td style="background-color: #48775B; color: white; text-align: center; padding: 30px 20px;">
-            <img src="${GERANCE_PLACEHOLDER_LOGO_URL}" alt="KONODAL-Logo" width="250" style="max-width: 100%;" />
+            <img src="${KONODAL_LOGO_HORIZONTAL_URL}" alt="KONODAL-Logo" width="250" style="max-width: 100%;" />
             <p style="margin: 5px 0 0;font-size: 16px">Intervention programmée</p>
         </td>
         </tr>

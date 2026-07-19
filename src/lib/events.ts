@@ -116,6 +116,12 @@ export async function findInterventionEventId(
 export const GERANCE_PLACEHOLDER_LOGO_URL =
   "https://firebasestorage.googleapis.com/v0/b/konodal-dev.firebasestorage.app/o/assets%2Flogo%2Flogo-blanc_vertical.png?alt=media&token=91bc28f2-cca4-49f3-90bf-5e859d8d270c"
 
+// Logo blanc horizontal - utilisé dans les en-têtes (email d'intervention,
+// page de partage prestataire) sur fond de couleur (vert marque), jamais
+// directement sur fond blanc.
+export const KONODAL_LOGO_HORIZONTAL_URL =
+  "https://firebasestorage.googleapis.com/v0/b/konodal-dev.firebasestorage.app/o/assets%2Flogo%2Flogo-blanc_horizontal.png?alt=media&token=624034b5-1f72-41b6-9cd6-2a77515ebb45"
+
 export type EventInput = {
   title: string
   description: string

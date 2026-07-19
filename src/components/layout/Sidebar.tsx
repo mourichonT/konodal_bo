@@ -8,11 +8,13 @@ import {
   Wrench,
   Briefcase,
   BookUser,
+  Megaphone,
   LogOut,
   ChevronsUpDown,
   ChevronDown,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { cn } from "@/lib/utils"
 import logoKWhite from "@/assets/logo-k-white.png"
 import logoHorizontal from "@/assets/logo-horizontal.png"
@@ -23,7 +25,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-const navItems = [
+type NavItem = {
+  to: string
+  label: string
+  icon: typeof LayoutDashboard
+  end?: boolean
+  children?: { to: string; label: string }[]
+}
+
+const navItems: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   {
     to: "/sinistres",
@@ -47,6 +57,10 @@ const navItems = [
   { to: "/residents", label: "Utilisateurs", icon: Users },
   { to: "/agences", label: "Agences", icon: Briefcase },
   { to: "/contacts", label: "Contacts", icon: BookUser },
+]
+
+const superAdminNavItems: NavItem[] = [
+  { to: "/publicites", label: "Publicités", icon: Megaphone, end: true },
 ]
 
 function initialsFor(name?: string | null, email?: string | null): string {
@@ -95,8 +109,10 @@ function useOpenSections(navItems: { to: string; children?: unknown }[]) {
 
 export function Sidebar() {
   const { user, logout } = useAuth()
+  const { isSuperAdmin } = useIsSuperAdmin()
   const location = useLocation()
-  const [openSections, toggleSection] = useOpenSections(navItems)
+  const allNavItems: NavItem[] = isSuperAdmin ? [...navItems, ...superAdminNavItems] : navItems
+  const [openSections, toggleSection] = useOpenSections(allNavItems)
 
   return (
     <aside className="relative flex h-full w-[226px] shrink-0 flex-col overflow-hidden rounded-[30px] bg-sidebar text-sidebar-foreground">
@@ -112,7 +128,7 @@ export function Sidebar() {
       </div>
 
       <nav className="mt-[50px] flex flex-1 flex-col gap-0 py-1 pr-[52px]">
-        {navItems.map((item) => {
+        {allNavItems.map((item) => {
           if (item.children) {
             const isParentActive = location.pathname.startsWith(item.to)
             const isOpen = openSections[item.to] ?? false

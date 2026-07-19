@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { DateInput } from "@/components/DateInput"
+import { KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
 
 const GET_SHARED_INTERVENTION_URL =
   "https://us-central1-konodal-dev.cloudfunctions.net/get_shared_intervention"
@@ -250,7 +251,10 @@ export default function SharedInterventionPage() {
 
   return (
     <div className="mx-auto flex min-h-svh max-w-2xl flex-col gap-6 p-4 py-10">
-      <h1 className="text-xl font-semibold">Konodal — Intervention</h1>
+      <div className="-mx-4 flex flex-col items-center gap-1 bg-sidebar px-4 py-6 sm:-mx-0 sm:rounded-2xl">
+        <img src={KONODAL_LOGO_HORIZONTAL_URL} alt="Konodal" className="h-8 w-auto" />
+        <p className="text-sm text-sidebar-foreground">Intervention</p>
+      </div>
 
       {loading && <p className="text-muted-foreground">Chargement…</p>}
       {error && <p className="text-destructive">{error}</p>}

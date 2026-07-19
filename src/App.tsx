@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import { RequireSuperAdmin } from "@/components/RequireSuperAdmin"
 import LoginPage from "@/pages/LoginPage"
 import RegisterPage from "@/pages/RegisterPage"
 import DashboardPage from "@/pages/DashboardPage"
@@ -20,6 +21,8 @@ import AgencesPage from "@/pages/AgencesPage"
 import ContactsPage from "@/pages/ContactsPage"
 import ContactDetailPage from "@/pages/ContactDetailPage"
 import SharedInterventionPage from "@/pages/SharedInterventionPage"
+import PublicitesPage from "@/pages/PublicitesPage"
+import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
 
 function App() {
   return (
@@ -54,6 +57,22 @@ function App() {
         <Route path="agences" element={<AgencesPage />} />
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="contacts/:id" element={<ContactDetailPage />} />
+        <Route
+          path="publicites"
+          element={
+            <RequireSuperAdmin>
+              <PublicitesPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="publicites/:id"
+          element={
+            <RequireSuperAdmin>
+              <AdCampaignDetailPage />
+            </RequireSuperAdmin>
+          }
+        />
       </Route>
     </Routes>
   )

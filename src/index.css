@@ -129,5 +129,6 @@
   h2 {
     font-family: var(--font-heading);
     font-weight: 400;
+    padding: 20px;
   }
 }

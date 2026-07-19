@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { toast } from "sonner"
-import { Briefcase, Pencil, Plus, Save, Search, X } from "lucide-react"
+import { Briefcase, Home, Landmark, Pencil, Plus, Save, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -21,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { FilterKpiCard } from "@/components/FilterKpiCard"
 import {
   createGerance,
   subscribeToGerances,
@@ -60,6 +60,7 @@ export default function AgencesPage() {
   const [editing, setEditing] = useState<Gerance | null>(null)
   const [creating, setCreating] = useState(false)
   const [search, setSearch] = useState("")
+  const [serviceFilter, setServiceFilter] = useState<ServiceType | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -76,8 +77,12 @@ export default function AgencesPage() {
   }, [])
 
   const filteredGerances = useMemo(
-    () => gerances.filter((gerance) => matchesSearch(gerance, search)),
-    [gerances, search]
+    () =>
+      gerances.filter((gerance) => {
+        if (serviceFilter && !gerance.services[serviceFilter]) return false
+        return matchesSearch(gerance, search)
+      }),
+    [gerances, search, serviceFilter]
   )
 
   const totalSyndics = gerances.filter((gerance) => gerance.services.serviceSyndic).length
@@ -88,24 +93,30 @@ export default function AgencesPage() {
       <h1 className="text-2xl font-semibold">Agences</h1>
 
       <div className="grid grid-cols-3 gap-4">
-        <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-          <CardContent className="flex flex-col gap-1">
-            <span className="text-sm text-muted-foreground">Total des professionnels de l'immo</span>
-            <span className="text-3xl font-semibold">{gerances.length}</span>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-          <CardContent className="flex flex-col gap-1">
-            <span className="text-sm text-muted-foreground">Total des syndics</span>
-            <span className="text-3xl font-semibold">{totalSyndics}</span>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-          <CardContent className="flex flex-col gap-1">
-            <span className="text-sm text-muted-foreground">Total des agences</span>
-            <span className="text-3xl font-semibold">{totalAgencies}</span>
-          </CardContent>
-        </Card>
+        <FilterKpiCard
+          label="Total des professionnels de l'immo"
+          value={gerances.length}
+          icon={Briefcase}
+          colorClass="bg-slate-100 text-slate-600"
+          active={serviceFilter === null}
+          onClick={() => setServiceFilter(null)}
+        />
+        <FilterKpiCard
+          label="Total des syndics"
+          value={totalSyndics}
+          icon={Landmark}
+          colorClass="bg-sky-100 text-sky-600"
+          active={serviceFilter === "serviceSyndic"}
+          onClick={() => setServiceFilter((prev) => (prev === "serviceSyndic" ? null : "serviceSyndic"))}
+        />
+        <FilterKpiCard
+          label="Total des agences"
+          value={totalAgencies}
+          icon={Home}
+          colorClass="bg-emerald-100 text-emerald-600"
+          active={serviceFilter === "geranceLocative"}
+          onClick={() => setServiceFilter((prev) => (prev === "geranceLocative" ? null : "geranceLocative"))}
+        />
       </div>
 
       <div className="flex flex-col gap-1">
