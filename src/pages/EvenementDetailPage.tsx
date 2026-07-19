@@ -4,6 +4,7 @@ import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc } from "fireba
 import { toast } from "sonner"
 import { ArrowLeft, Eye, Mail, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { EventFormDialog } from "@/components/EventFormDialog"
 import { PostCommentsCard } from "@/components/PostCommentsCard"
@@ -234,9 +235,16 @@ export default function EvenementDetailPage() {
           Interventions
         </Link>
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold">
-            {event ? event.title || "Sans titre" : loading ? "…" : "Intervention introuvable"}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold">
+              {event ? event.title || "Sans titre" : loading ? "…" : "Intervention introuvable"}
+            </h1>
+            {event?.termine && (
+              <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-700">
+                Terminé
+              </Badge>
+            )}
+          </div>
           {event && (
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={handleSend} disabled={sending}>

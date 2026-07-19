@@ -388,7 +388,12 @@ export default function EvenementsCalendarPage() {
                               state: { from: "calendrier" },
                             })
                           }
-                          className="truncate rounded bg-accent px-1.5 py-0.5 text-left text-xs text-accent-foreground hover:opacity-80"
+                          className={cn(
+                            "truncate rounded px-1.5 py-0.5 text-left text-xs hover:opacity-80",
+                            event.termine
+                              ? "bg-muted text-muted-foreground"
+                              : "bg-accent text-accent-foreground"
+                          )}
                           title={event.title}
                         >
                           {event.eventDate?.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}{" "}

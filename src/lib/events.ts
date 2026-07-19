@@ -45,6 +45,7 @@ function toResidenceEvent(residenceId: string, d: DocumentSnapshot<DocumentData>
     linkedSinistreId: (data.linkedSinistreId as string) || undefined,
     locationElement: (location.locationElements as string) || undefined,
     locationFloor: (location.locationFloor as string) || undefined,
+    termine: (data.termine as boolean) || false,
   }
 }
 

@@ -18,6 +18,8 @@ const COMPLETE_SHARED_INTERVENTION_URL =
   "https://us-central1-konodal-dev.cloudfunctions.net/complete_shared_intervention"
 const RESCHEDULE_SHARED_INTERVENTION_URL =
   "https://us-central1-konodal-dev.cloudfunctions.net/reschedule_shared_intervention"
+const REVOKE_SHARED_TOKEN_URL =
+  "https://us-central1-konodal-dev.cloudfunctions.net/revoke_shared_token"
 
 type SharedIntervention = {
   title: string
@@ -116,6 +118,28 @@ export default function SharedInterventionPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  // Une fois le rapport transmis, il n'y a plus rien à faire sur cette page
+  // - on révoque le lien dès sa fermeture pour qu'il ne soit pas réutilisable
+  // ensuite. sendBeacon (pas fetch) : seul moyen fiable d'envoyer une requête
+  // depuis un handler pagehide/beforeunload (un fetch normal peut être
+  // annulé avant d'aboutir si la page se ferme entre-temps). Le token est
+  // envoyé en texte brut (pas un Blob JSON) : "text/plain" fait partie des
+  // content-types CORS "simples", donc pas de préflight OPTIONS - un Blob
+  // "application/json" en déclenche un, peu fiable dans la fenêtre de temps
+  // très courte d'un beacon envoyé pendant la fermeture de la page.
+  useEffect(() => {
+    if (!rapportSubmitted || !token) return
+    function revokeToken() {
+      navigator.sendBeacon(REVOKE_SHARED_TOKEN_URL, token)
+    }
+    window.addEventListener("pagehide", revokeToken)
+    window.addEventListener("beforeunload", revokeToken)
+    return () => {
+      window.removeEventListener("pagehide", revokeToken)
+      window.removeEventListener("beforeunload", revokeToken)
+    }
+  }, [rapportSubmitted, token])
 
   const isTerminated = data?.sinistre?.statut === "Terminé"
 
@@ -397,91 +421,96 @@ export default function SharedInterventionPage() {
               <CardTitle className="text-base">Suite de l'intervention</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4 text-sm">
-              <div className="flex flex-col gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={rescheduleSubmitting}
-                  onClick={() => setRescheduling((v) => !v)}
-                  className="w-fit"
-                >
-                  <CalendarClock />
-                  Reprogrammer un passage
-                </Button>
-
-                {rescheduling && (
-                  <form
-                    onSubmit={handleReschedule}
-                    className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3"
-                  >
-                    <div className="flex flex-col gap-1.5">
-                      <Label>Nouvelle date</Label>
-                      <DateInput value={rescheduleDate} onChange={setRescheduleDate} />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="reschedule-time">Heure (optionnel)</Label>
-                      <input
-                        id="reschedule-time"
-                        type="time"
-                        value={rescheduleTime}
-                        onChange={(e) => setRescheduleTime(e.target.value)}
-                        className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                      />
-                    </div>
-                    <Button type="submit" disabled={rescheduleSubmitting || !rescheduleDate}>
-                      Confirmer
+              {rapportSubmitted ? (
+                <p className="text-muted-foreground">Compte-rendu transmis, merci.</p>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={rescheduleSubmitting}
+                      onClick={() => setRescheduling((v) => !v)}
+                      className="w-fit"
+                    >
+                      <CalendarClock />
+                      Reprogrammer un passage
                     </Button>
-                    {rescheduleError && <p className="w-full text-sm text-destructive">{rescheduleError}</p>}
-                  </form>
-                )}
-              </div>
 
-              <div className="flex flex-col gap-3 border-t border-border pt-4">
-                <span className="text-muted-foreground">
-                  Ajouter un compte-rendu (visible uniquement par l'agence)
-                </span>
-                <form onSubmit={handleSubmitRapport} className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="rapport-title">Titre</Label>
-                    <Input
-                      id="rapport-title"
-                      required
-                      value={rapportTitle}
-                      onChange={(e) => setRapportTitle(e.target.value)}
-                    />
+                    {rescheduling && (
+                      <form
+                        onSubmit={handleReschedule}
+                        className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3"
+                      >
+                        <div className="flex flex-col gap-1.5">
+                          <Label>Nouvelle date</Label>
+                          <DateInput value={rescheduleDate} onChange={setRescheduleDate} />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor="reschedule-time">Heure (optionnel)</Label>
+                          <input
+                            id="reschedule-time"
+                            type="time"
+                            value={rescheduleTime}
+                            onChange={(e) => setRescheduleTime(e.target.value)}
+                            className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                          />
+                        </div>
+                        <Button type="submit" disabled={rescheduleSubmitting || !rescheduleDate}>
+                          Confirmer
+                        </Button>
+                        {rescheduleError && (
+                          <p className="w-full text-sm text-destructive">{rescheduleError}</p>
+                        )}
+                      </form>
+                    )}
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="rapport-desc">Description</Label>
-                    <textarea
-                      id="rapport-desc"
-                      rows={3}
-                      value={rapportDescription}
-                      onChange={(e) => setRapportDescription(e.target.value)}
-                      className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    />
+
+                  <div className="flex flex-col gap-3 border-t border-border pt-4">
+                    <span className="text-muted-foreground">
+                      Ajouter un compte-rendu (visible uniquement par l'agence)
+                    </span>
+                    <form onSubmit={handleSubmitRapport} className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="rapport-title">Titre</Label>
+                        <Input
+                          id="rapport-title"
+                          required
+                          value={rapportTitle}
+                          onChange={(e) => setRapportTitle(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="rapport-desc">Description</Label>
+                        <textarea
+                          id="rapport-desc"
+                          rows={3}
+                          value={rapportDescription}
+                          onChange={(e) => setRapportDescription(e.target.value)}
+                          className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="rapport-file">Photo</Label>
+                        <input
+                          id="rapport-file"
+                          type="file"
+                          required
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => setRapportFile(e.target.files?.[0] ?? null)}
+                          className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
+                        />
+                      </div>
+                      {rapportError && <p className="text-sm text-destructive">{rapportError}</p>}
+                      <Button type="submit" disabled={rapportSubmitting} className="w-fit">
+                        <FileText />
+                        Envoyer
+                      </Button>
+                    </form>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="rapport-file">Photo</Label>
-                    <input
-                      id="rapport-file"
-                      type="file"
-                      required
-                      accept="image/*"
-                      capture="environment"
-                      onChange={(e) => setRapportFile(e.target.files?.[0] ?? null)}
-                      className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
-                    />
-                  </div>
-                  {rapportError && <p className="text-sm text-destructive">{rapportError}</p>}
-                  {rapportSubmitted && !rapportError && (
-                    <p className="text-sm text-emerald-600">Compte-rendu envoyé, merci.</p>
-                  )}
-                  <Button type="submit" disabled={rapportSubmitting} className="w-fit">
-                    <FileText />
-                    Envoyer
-                  </Button>
-                </form>
-              </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </>

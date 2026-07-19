@@ -1,6 +1,7 @@
 import { Link, useOutletContext } from "react-router-dom"
 import { Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   Table,
@@ -46,6 +47,7 @@ export default function EvenementsListPage() {
                 <TableHead>Heure</TableHead>
                 <TableHead>Prestataire</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead>Statut</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -55,7 +57,7 @@ export default function EvenementsListPage() {
               ))}
               {!loading && filteredEvents.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                     Aucune intervention pour l'instant.
                   </TableCell>
                 </TableRow>
@@ -88,6 +90,15 @@ function EventRow({ event }: { event: EventWithResidence }) {
       <TableCell>{event.prestaName || "—"}</TableCell>
       <TableCell className="max-w-xs truncate text-muted-foreground">
         {event.description || "—"}
+      </TableCell>
+      <TableCell>
+        {event.termine ? (
+          <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-700">
+            Terminé
+          </Badge>
+        ) : (
+          "—"
+        )}
       </TableCell>
       <TableCell className="text-right">
         <Button

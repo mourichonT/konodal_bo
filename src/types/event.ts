@@ -26,4 +26,8 @@ export type ResidenceEvent = {
   // résidence (cf. types/structure.ts), jamais lus/écrits par l'app mobile.
   locationElement?: string
   locationFloor?: string
+  // Champ backoffice uniquement - posé par create_shared_rapport
+  // (functions_python/main.py) dès qu'un compte-rendu de fin d'intervention
+  // est soumis via le lien de partage prestataire.
+  termine?: boolean
 }
