@@ -10,11 +10,9 @@ import {
   ListChecks,
   Send,
   TriangleAlert,
-  type LucideIcon,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -23,12 +21,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { SinistreThumbnail } from "@/components/SinistreThumbnail"
 import { SinistrePriorityIcon } from "@/components/SinistrePriorityIcon"
 import { useSignalementCount } from "@/hooks/useSignalementCount"
 import { updateSinistreArchived } from "@/lib/sinistres"
 import { sinistrePriorityLabels, sinistreStatusLabels, type SinistreStatus } from "@/types/sinistre"
-import { cn } from "@/lib/utils"
 import type { SinistresOutletContext } from "@/pages/SinistresPage"
 import type { SinistreWithResidence } from "@/hooks/useAllSinistres"
 
@@ -41,41 +39,6 @@ const statusBadgeClass: Record<SinistreStatus, string> = {
 
 function countByStatus(sinistres: SinistreWithResidence[], statut: SinistreStatus) {
   return sinistres.filter((s) => (s.statut || "Non envoyé") === statut).length
-}
-
-function KpiCard({
-  label,
-  value,
-  icon: Icon,
-  colorClass,
-  active,
-  onClick,
-}: {
-  label: string
-  value: number
-  icon: LucideIcon
-  colorClass: string
-  active: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-6 rounded-2xl bg-white p-4 text-left shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-shadow",
-        active ? "ring-2 ring-primary" : "hover:shadow-[0_8px_30px_rgb(0,0,0,0.1)]"
-      )}
-    >
-      <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-full", colorClass)}>
-        <Icon className="size-5" />
-      </div>
-      <div className="flex flex-col gap-0.5">
-        <span className="text-sm text-muted-foreground">{label}</span>
-        <span className="text-2xl font-semibold">{value}</span>
-      </div>
-    </button>
-  )
 }
 
 export default function SinistresListPage() {
@@ -105,7 +68,7 @@ export default function SinistresListPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="mb-[25px] grid grid-cols-4 gap-4">
-        <KpiCard
+        <FilterKpiCard
           label="Total tickets"
           value={sinistres.length}
           icon={ListChecks}
@@ -113,7 +76,7 @@ export default function SinistresListPage() {
           active={statusFilter === null}
           onClick={() => setStatusFilter(null)}
         />
-        <KpiCard
+        <FilterKpiCard
           label={sinistreStatusLabels.Transmis}
           value={countByStatus(sinistres, "Transmis")}
           icon={Send}
@@ -121,7 +84,7 @@ export default function SinistresListPage() {
           active={statusFilter === "Transmis"}
           onClick={() => setStatusFilter((prev) => (prev === "Transmis" ? null : "Transmis"))}
         />
-        <KpiCard
+        <FilterKpiCard
           label={sinistreStatusLabels["En cours"]}
           value={countByStatus(sinistres, "En cours")}
           icon={Clock3}
@@ -129,7 +92,7 @@ export default function SinistresListPage() {
           active={statusFilter === "En cours"}
           onClick={() => setStatusFilter((prev) => (prev === "En cours" ? null : "En cours"))}
         />
-        <KpiCard
+        <FilterKpiCard
           label={sinistreStatusLabels.Terminé}
           value={countByStatus(sinistres, "Terminé")}
           icon={CheckCircle2}
@@ -139,43 +102,37 @@ export default function SinistresListPage() {
         />
       </div>
 
-      <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-        <CardContent className="flex flex-col">
-          <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-            <Table>
-              <TableHeader className="bg-muted/40">
+      <div className="flex flex-col">
+        <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+          <Table>
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead>N° ticket</TableHead>
+                <TableHead>Photo</TableHead>
+                <TableHead>Titre</TableHead>
+                <TableHead>Résidence</TableHead>
+                <TableHead>Déclaré le</TableHead>
+                <TableHead>Signalements</TableHead>
+                <TableHead>Statut</TableHead>
+                <TableHead>Priorité</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="bg-white">
+              {filteredSinistres.map((sinistre) => (
+                <SinistreRow key={`${sinistre.residenceId}-${sinistre.id}`} sinistre={sinistre} />
+              ))}
+              {!loading && filteredSinistres.length === 0 && (
                 <TableRow>
-                  <TableHead>N° ticket</TableHead>
-                  <TableHead>Photo</TableHead>
-                  <TableHead>Titre</TableHead>
-                  <TableHead>Résidence</TableHead>
-                  <TableHead>Déclaré le</TableHead>
-                  <TableHead>Signalements</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Priorité</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                    Aucun sinistre pour l'instant.
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSinistres.map((sinistre) => (
-                  <SinistreRow key={`${sinistre.residenceId}-${sinistre.id}`} sinistre={sinistre} />
-                ))}
-                {!loading && filteredSinistres.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                      Aucun sinistre pour l'instant.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          <p className="mt-4 text-sm text-muted-foreground">
-            {filteredSinistres.length} sinistre{filteredSinistres.length > 1 ? "s" : ""} au total
-          </p>
-        </CardContent>
-      </Card>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
     </div>
   )
 }

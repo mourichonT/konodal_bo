@@ -240,7 +240,7 @@ export default function EvenementDetailPage() {
               {event ? event.title || "Sans titre" : loading ? "…" : "Intervention introuvable"}
             </h1>
             {event?.termine && (
-              <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-700">
+              <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-800">
                 Terminé
               </Badge>
             )}

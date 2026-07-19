@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { CheckCircle2, Clock3, Merge, Pencil, Plus, Search, Trash2, X } from "lucide-react"
+import { CheckCircle2, Clock3, Merge, Pencil, Plus, Search, Trash2, Users, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ContactFormDialog } from "@/components/ContactFormDialog"
+import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { useAllContacts } from "@/hooks/useAllContacts"
 import {
   createContact,
@@ -27,7 +28,8 @@ import {
   type ContactInput,
 } from "@/lib/contacts"
 import type { Contact } from "@/types/contact"
-import { cn } from "@/lib/utils"
+
+type ApprovalFilter = "pending" | "approved" | null
 
 function matchesSearch(contact: Contact, search: string): boolean {
   const haystack = [contact.name, contact.service, contact.phone, contact.mail].join(" ").toLowerCase()
@@ -37,7 +39,7 @@ function matchesSearch(contact: Contact, search: string): boolean {
 export default function ContactsPage() {
   const { contacts, residences, loading } = useAllContacts((message) => toast.error(message))
   const [search, setSearch] = useState("")
-  const [pendingOnly, setPendingOnly] = useState(false)
+  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>(null)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<Contact | null>(null)
   const [merging, setMerging] = useState<{ keep: Contact; other: Contact } | null>(null)
@@ -49,9 +51,11 @@ export default function ContactsPage() {
   const contactById = useMemo(() => new Map(contacts.map((c) => [c.id, c])), [contacts])
 
   const pendingCount = contacts.filter((c) => !c.isApproved).length
+  const approvedCount = contacts.filter((c) => c.isApproved).length
 
   const filteredContacts = contacts.filter((c) => {
-    if (pendingOnly && c.isApproved) return false
+    if (approvalFilter === "pending" && c.isApproved) return false
+    if (approvalFilter === "approved" && !c.isApproved) return false
     if (!search.trim()) return true
     return matchesSearch(c, search)
   })
@@ -156,116 +160,123 @@ export default function ContactsPage() {
         </Card>
       )}
 
-      <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-        <CardContent className="flex flex-col">
-          <div className="mt-[10px] mb-[30px] flex items-center justify-between gap-4">
-            <div className="relative max-w-sm flex-1">
-              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher un contact…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setPendingOnly((prev) => !prev)}
-              className={cn(
-                "flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors",
-                pendingOnly ? "border-amber-300 bg-amber-50 text-amber-800" : "border-input text-muted-foreground"
-              )}
-            >
-              <Clock3 className="size-4" />
-              {pendingCount} en attente d'approbation
-            </button>
-          </div>
+      <div className="grid grid-cols-3 gap-4">
+        <FilterKpiCard
+          label="Total contacts"
+          value={contacts.length}
+          icon={Users}
+          colorClass="bg-slate-100 text-slate-600"
+          active={approvalFilter === null}
+          onClick={() => setApprovalFilter(null)}
+        />
+        <FilterKpiCard
+          label="En attente d'approbation"
+          value={pendingCount}
+          icon={Clock3}
+          colorClass="bg-amber-100 text-amber-600"
+          active={approvalFilter === "pending"}
+          onClick={() => setApprovalFilter((prev) => (prev === "pending" ? null : "pending"))}
+        />
+        <FilterKpiCard
+          label="Comptes approuvés"
+          value={approvedCount}
+          icon={CheckCircle2}
+          colorClass="bg-emerald-100 text-emerald-600"
+          active={approvalFilter === "approved"}
+          onClick={() => setApprovalFilter((prev) => (prev === "approved" ? null : "approved"))}
+        />
+      </div>
 
-          <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-            <Table>
-              <TableHeader className="bg-muted/40">
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Téléphone</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Résidences</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredContacts.map((contact) => {
-                  const contactResidenceIds = residenceIdsForContact(residences, contact.id)
-                  return (
-                  <TableRow key={contact.id}>
-                    <TableCell className="font-medium">{contact.name || "Sans nom"}</TableCell>
-                    <TableCell>{contact.service}</TableCell>
-                    <TableCell>{contact.phone}</TableCell>
-                    <TableCell>{contact.mail}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {contactResidenceIds.length === 0 && (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        )}
-                        {contactResidenceIds.map((id) => (
-                          <Badge key={id} variant="secondary">
-                            {residenceNameById.get(id) ?? id}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={contact.isApproved ? "default" : "outline"}
-                        className={!contact.isApproved ? "border-transparent bg-amber-100 text-amber-800" : undefined}
+      <div className="relative max-w-sm flex-1">
+        <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Rechercher un contact…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-8"
+        />
+      </div>
+
+      <div className="flex flex-col">
+        <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+          <Table>
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead>Nom</TableHead>
+                <TableHead>Service</TableHead>
+                <TableHead>Téléphone</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Résidences</TableHead>
+                <TableHead>Statut</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="bg-white">
+              {filteredContacts.map((contact) => {
+                const contactResidenceIds = residenceIdsForContact(residences, contact.id)
+                return (
+                <TableRow key={contact.id}>
+                  <TableCell className="font-medium">{contact.name || "Sans nom"}</TableCell>
+                  <TableCell>{contact.service}</TableCell>
+                  <TableCell>{contact.phone}</TableCell>
+                  <TableCell>{contact.mail}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {contactResidenceIds.length === 0 && (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                      {contactResidenceIds.map((id) => (
+                        <Badge key={id} variant="secondary">
+                          {residenceNameById.get(id) ?? id}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={contact.isApproved ? "default" : "outline"}
+                      className={!contact.isApproved ? "border-transparent bg-amber-100 text-amber-800" : undefined}
+                    >
+                      {contact.isApproved ? "Approuvé" : "En attente"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      {!contact.isApproved && (
+                        <Button variant="outline" size="sm" onClick={() => handleToggleApproval(contact)}>
+                          <CheckCircle2 />
+                          Approuver
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        render={<Link to={`/contacts/${contact.id}`} />}
                       >
-                        {contact.isApproved ? "Approuvé" : "En attente"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {!contact.isApproved && (
-                          <Button variant="outline" size="sm" onClick={() => handleToggleApproval(contact)}>
-                            <CheckCircle2 />
-                            Approuver
-                          </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          render={<Link to={`/contacts/${contact.id}`} />}
-                        >
-                          <Pencil />
-                          Modifier
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setDeleting(contact)}>
-                          <Trash2 />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  )
-                })}
-                {!loading && filteredContacts.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                      {contacts.length === 0
-                        ? "Aucun contact pour l'instant."
-                        : "Aucun résultat pour cette recherche."}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          <p className="mt-4 text-sm text-muted-foreground">
-            {filteredContacts.length} contact{filteredContacts.length > 1 ? "s" : ""} affiché
-            {filteredContacts.length > 1 ? "s" : ""} sur {contacts.length}
-          </p>
-        </CardContent>
-      </Card>
+                        <Pencil />
+                        Modifier
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setDeleting(contact)}>
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+                )
+              })}
+              {!loading && filteredContacts.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                    {contacts.length === 0
+                      ? "Aucun contact pour l'instant."
+                      : "Aucun résultat pour cette recherche."}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
 
       <ContactFormDialog
         open={creating}

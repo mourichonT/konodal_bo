@@ -192,84 +192,78 @@ export default function ResidencesPage() {
         </Card>
       </div>
 
-      <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-        <CardHeader>
-          <CardTitle className="text-lg">Répertoire des résidences</CardTitle>
-          <CardDescription>Rechercher, filtrer et gérer toutes les résidences.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col">
-          <div className="mt-[10px] mb-[50px] flex items-center justify-between gap-4">
-            <div className="relative max-w-sm flex-1">
-              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher une résidence…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <Button className="rounded-full" onClick={() => setCreating(true)}>
-              <Plus />
-              Ajouter une résidence
-            </Button>
-          </div>
+      <div className="flex flex-col gap-1">
+        <h2 className="text-lg">Répertoire des résidences</h2>
+        <p className="text-sm text-muted-foreground">Rechercher, filtrer et gérer toutes les résidences.</p>
+      </div>
 
-          <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-            <Table>
-              <TableHeader className="bg-muted/40">
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Adresse</TableHead>
-                  <TableHead>Code postal</TableHead>
-                  <TableHead>Ville</TableHead>
-                  <TableHead>Lots</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredResidences.map((residence) => (
-                  <TableRow key={residence.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-                          <Building2 className="size-4" />
-                        </div>
-                        {residence.name}
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher une résidence…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <Button className="rounded-full" onClick={() => setCreating(true)}>
+          <Plus />
+          Ajouter une résidence
+        </Button>
+      </div>
+
+      <div className="flex flex-col">
+        <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+          <Table>
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead>Nom</TableHead>
+                <TableHead>Adresse</TableHead>
+                <TableHead>Code postal</TableHead>
+                <TableHead>Ville</TableHead>
+                <TableHead>Lots</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="bg-white">
+              {filteredResidences.map((residence) => (
+                <TableRow key={residence.id}>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                        <Building2 className="size-4" />
                       </div>
-                    </TableCell>
-                    <TableCell>{residence.address.street}</TableCell>
-                    <TableCell>{residence.address.zipCode}</TableCell>
-                    <TableCell>{residence.address.city}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{residence.totalLot} lots</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="outline" size="sm" render={<Link to={`/residences/${residence.id}`} />}>
-                        <Pencil />
-                        Gérer
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {!loading && filteredResidences.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                      {residences.length === 0
-                        ? "Aucune résidence pour l'instant."
-                        : "Aucun résultat pour cette recherche."}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          <p className="mt-4 text-sm text-muted-foreground">
-            {filteredResidences.length} résidence{filteredResidences.length > 1 ? "s" : ""} affichée
-            {filteredResidences.length > 1 ? "s" : ""} sur {residences.length}
-          </p>
-        </CardContent>
-      </Card>
+                      {residence.name}
+                    </div>
+                  </TableCell>
+                  <TableCell>{residence.address.street}</TableCell>
+                  <TableCell>{residence.address.zipCode}</TableCell>
+                  <TableCell>{residence.address.city}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{residence.totalLot} lots</Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="outline" size="sm" render={<Link to={`/residences/${residence.id}`} />}>
+                      <Pencil />
+                      Gérer
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!loading && filteredResidences.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                    {residences.length === 0
+                      ? "Aucune résidence pour l'instant."
+                      : "Aucun résultat pour cette recherche."}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
 
       <ResidenceFormDialog
         open={creating}

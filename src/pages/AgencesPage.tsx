@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -108,99 +108,93 @@ export default function AgencesPage() {
         </Card>
       </div>
 
-      <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-        <CardHeader>
-          <CardTitle className="text-lg">Répertoire des agences</CardTitle>
-          <CardDescription>Rechercher, filtrer et gérer toutes les agences.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col">
-          <div className="mt-[10px] mb-[50px] flex items-center justify-between gap-4">
-            <div className="relative max-w-sm flex-1">
-              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher une agence…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <Button className="rounded-full" onClick={() => setCreating(true)}>
-              <Plus />
-              Ajouter une agence
-            </Button>
-          </div>
+      <div className="flex flex-col gap-1">
+        <h2 className="text-lg">Répertoire des agences</h2>
+        <p className="text-sm text-muted-foreground">Rechercher, filtrer et gérer toutes les agences.</p>
+      </div>
 
-          <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-            <Table>
-              <TableHeader className="bg-muted/40">
-                <TableRow>
-                  <TableHead>Agence</TableHead>
-                  <TableHead>Adresse</TableHead>
-                  <TableHead>Ville</TableHead>
-                  <TableHead>Services</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredGerances.map((gerance) => {
-                  const activeServices = serviceTypes.filter((type) => gerance.services[type])
-                  const primaryContact = activeServices
-                    .map((type) => gerance.services[type]?.mail)
-                    .find((mail) => mail)
-                  return (
-                    <TableRow key={gerance.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-3">
-                          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-                            <Briefcase className="size-4" />
-                          </div>
-                          {gerance.name}
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher une agence…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <Button className="rounded-full" onClick={() => setCreating(true)}>
+          <Plus />
+          Ajouter une agence
+        </Button>
+      </div>
+
+      <div className="flex flex-col">
+        <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+          <Table>
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead>Agence</TableHead>
+                <TableHead>Adresse</TableHead>
+                <TableHead>Ville</TableHead>
+                <TableHead>Services</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="bg-white">
+              {filteredGerances.map((gerance) => {
+                const activeServices = serviceTypes.filter((type) => gerance.services[type])
+                const primaryContact = activeServices
+                  .map((type) => gerance.services[type]?.mail)
+                  .find((mail) => mail)
+                return (
+                  <TableRow key={gerance.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                          <Briefcase className="size-4" />
                         </div>
-                      </TableCell>
-                      <TableCell>{gerance.address.street}</TableCell>
-                      <TableCell>{gerance.address.city}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {activeServices.length === 0 && (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                          {activeServices.map((type) => (
-                            <Badge key={type} variant="secondary">
-                              {serviceTypeLabels[type]}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>{primaryContact || "—"}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => setEditing(gerance)}>
-                          <Pencil />
-                          Modifier
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-                {!loading && filteredGerances.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                      {gerances.length === 0
-                        ? "Aucune agence pour l'instant."
-                        : "Aucun résultat pour cette recherche."}
+                        {gerance.name}
+                      </div>
+                    </TableCell>
+                    <TableCell>{gerance.address.street}</TableCell>
+                    <TableCell>{gerance.address.city}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {activeServices.length === 0 && (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                        {activeServices.map((type) => (
+                          <Badge key={type} variant="secondary">
+                            {serviceTypeLabels[type]}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>{primaryContact || "—"}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" onClick={() => setEditing(gerance)}>
+                        <Pencil />
+                        Modifier
+                      </Button>
                     </TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          <p className="mt-4 text-sm text-muted-foreground">
-            {filteredGerances.length} agence{filteredGerances.length > 1 ? "s" : ""} affichée
-            {filteredGerances.length > 1 ? "s" : ""} sur {gerances.length}
-          </p>
-        </CardContent>
-      </Card>
+                )
+              })}
+              {!loading && filteredGerances.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                    {gerances.length === 0
+                      ? "Aucune agence pour l'instant."
+                      : "Aucun résultat pour cette recherche."}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
 
       <GeranceFormDialog
         open={creating}
