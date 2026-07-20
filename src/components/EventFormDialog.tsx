@@ -48,17 +48,28 @@ function dateToLocalParts(date: Date): { dateOnly: string; time: string } {
   }
 }
 
-export function EventFormDialog({
-  open,
-  onOpenChange,
-  title,
-  residences,
-  initialResidenceId,
-  lockResidence,
-  initial,
-  linkedSinistreId,
-  onSubmit,
-}: {
+// Libellé complet d'un bâtiment/structure : "type + espace + name" (ex:
+// "Bâtiment B"), même format que ResidenceDetailPage.tsx et que ce qui est
+// stocké tel quel dans location.locationElements côté app mobile (le
+// résident choisit directement ce libellé complet, pas juste `name`) -
+// utiliser `s.name` seul ici ferait que ce champ ne matche jamais la valeur
+// réellement enregistrée sur un sinistre/event.
+function structureLabel(s: StructureResidence): string {
+  return `${s.type} ${s.name}`.trim()
+}
+
+// Pré-remplissage partiel (titre/localisation) lors de la création d'une
+// intervention depuis "Programmer une intervention" sur une fiche sinistre -
+// distinct de `initial` (édition complète, avec date et prestataire déjà
+// connus) : ici la date, le prestataire et la description restent à
+// choisir/saisir, jamais déduits du sinistre.
+type PrefillFromSinistre = {
+  title: string
+  locationElement: string
+  locationFloor: string
+}
+
+type EventFormDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   title: string
@@ -66,14 +77,41 @@ export function EventFormDialog({
   initialResidenceId?: string
   lockResidence?: boolean
   initial?: EventInput
+  prefillFromSinistre?: PrefillFromSinistre
   // Non éditable dans ce formulaire - fourni uniquement par le CTA "Programmer
   // une intervention" de SinistreDetailPage, pour lier l'intervention créée
   // au ticket d'origine.
   linkedSinistreId?: string
   onSubmit: (residenceId: string, input: EventInput) => Promise<void>
-}) {
+}
+
+// Le contenu (et son état) n'est monté QUE quand la modale est ouverte : un
+// nouveau montage à chaque ouverture lit `initial`/`prefillFromSinistre`
+// directement dans les initialiseurs useState, sans dépendre d'un useEffect
+// de réinitialisation sur `open` (source d'un bug de pré-remplissage qui ne
+// se déclenchait pas de façon fiable).
+export function EventFormDialog({ open, onOpenChange, ...formProps }: EventFormDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        {open && <EventFormDialogContent {...formProps} />}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function EventFormDialogContent({
+  title,
+  residences,
+  initialResidenceId,
+  lockResidence,
+  initial,
+  prefillFromSinistre,
+  linkedSinistreId,
+  onSubmit,
+}: Omit<EventFormDialogProps, "open" | "onOpenChange">) {
   const [residenceId, setResidenceId] = useState(initialResidenceId ?? "")
-  const [eventTitle, setEventTitle] = useState(initial?.title ?? "")
+  const [eventTitle, setEventTitle] = useState(initial?.title ?? prefillFromSinistre?.title ?? "")
   const [description, setDescription] = useState(initial?.description ?? "")
   const [eventDateOnly, setEventDateOnly] = useState(
     initial?.eventDate ? dateToLocalParts(initial.eventDate).dateOnly : ""
@@ -82,46 +120,35 @@ export function EventFormDialog({
     initial?.eventDate ? dateToLocalParts(initial.eventDate).time : ""
   )
   const [prestaName, setPrestaName] = useState(initial?.prestaName ?? "")
-  const [locationElement, setLocationElement] = useState(initial?.locationElement ?? "")
-  const [locationFloor, setLocationFloor] = useState(initial?.locationFloor ?? "")
+  const [locationElement, setLocationElement] = useState(
+    initial?.locationElement ?? prefillFromSinistre?.locationElement ?? ""
+  )
+  const [locationFloor, setLocationFloor] = useState(
+    initial?.locationFloor ?? prefillFromSinistre?.locationFloor ?? ""
+  )
   const [submitting, setSubmitting] = useState(false)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [structures, setStructures] = useState<StructureResidence[]>([])
   const [geranceAgentLabel, setGeranceAgentLabel] = useState<string | null>(null)
 
   useEffect(() => {
-    if (open) {
-      setResidenceId(initialResidenceId ?? "")
-      setEventTitle(initial?.title ?? "")
-      setDescription(initial?.description ?? "")
-      setEventDateOnly(initial?.eventDate ? dateToLocalParts(initial.eventDate).dateOnly : "")
-      setEventTime(initial?.eventDate ? dateToLocalParts(initial.eventDate).time : "")
-      setPrestaName(initial?.prestaName ?? "")
-      setLocationElement(initial?.locationElement ?? "")
-      setLocationFloor(initial?.locationFloor ?? "")
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial, initialResidenceId])
-
-  useEffect(() => {
-    if (!open) return
     return subscribeToContacts(setContacts, () => {
       toast.error("Impossible de charger les contacts")
     })
-  }, [open])
+  }, [])
 
   // Bâtiment/étage dépendent de la résidence choisie (structures propres à
   // chaque résidence, cf. ResidenceDetailPage) - reset si on change de
   // résidence pour ne pas garder une sélection qui n'a plus de sens.
   useEffect(() => {
-    if (!open || !residenceId) {
+    if (!residenceId) {
       setStructures([])
       return
     }
     return subscribeToStructures(residenceId, setStructures, () => {
       toast.error("Impossible de charger les bâtiments de la résidence")
     })
-  }, [open, residenceId])
+  }, [residenceId])
 
   const selectedResidence = residences.find((r) => r.id === residenceId)
   const geranceRef = selectedResidence?.geranceRef
@@ -157,7 +184,7 @@ export function EventFormDialog({
 
   const residenceName = selectedResidence?.name ?? "Choisir une résidence"
   const residenceContacts = contacts.filter((c) => selectedResidence?.contactRefs?.[c.id])
-  const selectedStructure = structures.find((s) => s.name === locationElement)
+  const selectedStructure = structures.find((s) => structureLabel(s) === locationElement)
   const floorOptions = selectedStructure?.etage ?? []
   // Tant qu'aucune résidence n'est choisie (hors édition, où elle est
   // verrouillée), le reste du formulaire n'a pas de contacts à proposer et
@@ -174,6 +201,10 @@ export function EventFormDialog({
       toast.error("Choisissez une date")
       return
     }
+    if (!prestaName) {
+      toast.error("Choisissez un prestataire")
+      return
+    }
     setSubmitting(true)
     try {
       // L'heure est optionnelle - minuit par défaut si non renseignée,
@@ -183,11 +214,13 @@ export function EventFormDialog({
       // placeholder gérance (en attendant une vraie photo de profil par
       // gérance), ou l'icône du service du contact (assets/icones_presta/
       // dans Storage, même fichiers que _prestaIconFileName côté app
-      // mobile) - vide si aucun des deux ne matche ou si le fichier est
-      // introuvable (l'app affiche alors son placeholder générique).
+      // mobile). Si aucun des deux ne matche ou si le fichier est
+      // introuvable, on garde la photo déjà présente (édition) plutôt que de
+      // l'écraser par du vide - sinon rechoisir/reconfirmer un prestataire
+      // sur une intervention existante effaçait sa photo réelle.
       const isGeranceSelected = !!geranceAgentLabel && prestaName === geranceAgentLabel
       const selectedContact = residenceContacts.find((c) => c.name === prestaName)
-      let pathImage = ""
+      let pathImage = initial?.pathImage ?? ""
       if (isGeranceSelected) {
         pathImage = GERANCE_PLACEHOLDER_LOGO_URL
       } else if (selectedContact) {
@@ -197,7 +230,9 @@ export function EventFormDialog({
           try {
             pathImage = await getDownloadURL(ref(storage, `assets/icones_presta/${fileName}`))
           } catch {
-            pathImage = ""
+            // Échec de résolution (fichier introuvable, etc.) : on garde la
+            // valeur de départ (photo existante en édition, "" en création)
+            // plutôt que d'écraser explicitement.
           }
         }
       }
@@ -220,151 +255,160 @@ export function EventFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4 p-[3px]">
-          <DialogHeader className="pb-4">
-            <DialogTitle>{title}</DialogTitle>
-          </DialogHeader>
+    <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4 p-[3px]">
+      <DialogHeader className="pb-4">
+        <DialogTitle>{title}</DialogTitle>
+      </DialogHeader>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overflow-x-hidden pr-4 pl-1">
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overflow-x-hidden pr-4 pl-1">
+        <div className="flex flex-col gap-2">
+          <Label>Résidence</Label>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              disabled={lockResidence}
+              className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-2.5 text-left text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+            >
+              {residenceName}
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72">
+              <DropdownMenuRadioGroup value={residenceId} onValueChange={setResidenceId}>
+                <DropdownMenuLabel>Résidence</DropdownMenuLabel>
+                {residences.map((r) => (
+                  <DropdownMenuRadioItem key={r.id} value={r.id}>
+                    {r.name}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className={cn("flex flex-col gap-6", restDisabled && "pointer-events-none opacity-50")}>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="event-title">Titre</Label>
+            <Input
+              id="event-title"
+              required
+              disabled={restDisabled}
+              value={eventTitle}
+              onChange={(e) => setEventTitle(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-2">
-              <Label>Résidence</Label>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  disabled={lockResidence}
-                  className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-2.5 text-left text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
-                >
-                  {residenceName}
-                  <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-72">
-                  <DropdownMenuRadioGroup value={residenceId} onValueChange={setResidenceId}>
-                    <DropdownMenuLabel>Résidence</DropdownMenuLabel>
-                    {residences.map((r) => (
-                      <DropdownMenuRadioItem key={r.id} value={r.id}>
-                        {r.name}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Label htmlFor="event-date">Date</Label>
+              <DateInput value={eventDateOnly} onChange={setEventDateOnly} className="w-full" />
             </div>
-            <div className={cn("flex flex-col gap-6", restDisabled && "pointer-events-none opacity-50")}>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="event-title">Titre</Label>
-                <Input
-                  id="event-title"
-                  required
-                  disabled={restDisabled}
-                  value={eventTitle}
-                  onChange={(e) => setEventTitle(e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="event-date">Date</Label>
-                  <DateInput value={eventDateOnly} onChange={setEventDateOnly} className="w-full" />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="event-time">Heure (optionnel)</Label>
-                  <Input
-                    id="event-time"
-                    type="time"
-                    disabled={restDisabled}
-                    value={eventTime}
-                    onChange={(e) => setEventTime(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="event-presta">Prestataire</Label>
-                <select
-                  id="event-presta"
-                  disabled={restDisabled}
-                  value={prestaName}
-                  onChange={(e) => setPrestaName(e.target.value)}
-                  className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  <option value="">Aucun prestataire</option>
-                  {geranceAgentLabel && (
-                    <optgroup label="Gérance">
-                      <option value={geranceAgentLabel}>{geranceAgentLabel}</option>
-                    </optgroup>
-                  )}
-                  <optgroup label="Contacts de la résidence">
-                    {residenceContacts.length === 0 && (
-                      <option disabled>Aucun contact pour cette résidence</option>
-                    )}
-                    {residenceContacts.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="event-batiment">Bâtiment (optionnel)</Label>
-                  <select
-                    id="event-batiment"
-                    disabled={restDisabled}
-                    value={locationElement}
-                    onChange={(e) => {
-                      setLocationElement(e.target.value)
-                      setLocationFloor("")
-                    }}
-                    className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                  >
-                    <option value="">Non précisé</option>
-                    {structures.map((s) => (
-                      <option key={s.id} value={s.name}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="event-etage">Étage (optionnel)</Label>
-                  <select
-                    id="event-etage"
-                    disabled={restDisabled || floorOptions.length === 0}
-                    value={locationFloor}
-                    onChange={(e) => setLocationFloor(e.target.value)}
-                    className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
-                  >
-                    <option value="">Non précisé</option>
-                    {floorOptions.map((etage) => (
-                      <option key={etage} value={etage}>
-                        {etage}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="event-desc">Description</Label>
-                <textarea
-                  id="event-desc"
-                  rows={4}
-                  disabled={restDisabled}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                />
-              </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="event-time">Heure (optionnel)</Label>
+              <Input
+                id="event-time"
+                type="time"
+                disabled={restDisabled}
+                value={eventTime}
+                onChange={(e) => setEventTime(e.target.value)}
+              />
             </div>
           </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="event-presta">Prestataire</Label>
+            <select
+              id="event-presta"
+              required
+              disabled={restDisabled}
+              value={prestaName}
+              onChange={(e) => setPrestaName(e.target.value)}
+              className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="" disabled>
+                Choisir un prestataire
+              </option>
+              {geranceAgentLabel && (
+                <optgroup label="Gérance">
+                  <option value={geranceAgentLabel}>{geranceAgentLabel}</option>
+                </optgroup>
+              )}
+              <optgroup label="Contacts de la résidence">
+                {residenceContacts.length === 0 && (
+                  <option disabled>Aucun contact pour cette résidence</option>
+                )}
+                {residenceContacts.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="event-batiment">Bâtiment (optionnel)</Label>
+              <select
+                // Force un remontage à chaque fois que l'ensemble d'options
+                // change réellement (structures chargées après coup depuis
+                // Firestore, ou changement de résidence) : sans ça, un
+                // <select> dont la defaultValue ne correspond encore à
+                // aucune <option> au premier rendu ne se resélectionne pas
+                // tout seul une fois l'option disponible.
+                key={structures.map((s) => s.id).join(",")}
+                id="event-batiment"
+                disabled={restDisabled}
+                defaultValue={locationElement}
+                onChange={(e) => {
+                  setLocationElement(e.target.value)
+                  setLocationFloor("")
+                }}
+                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">Non précisé</option>
+                {structures.map((s) => (
+                  <option key={s.id} value={structureLabel(s)}>
+                    {structureLabel(s)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="event-etage">Étage (optionnel)</Label>
+              <select
+                // Idem : remonte à chaque changement de bâtiment (donc de
+                // liste d'étages) pour resélectionner correctement.
+                key={`${locationElement}|${floorOptions.join(",")}`}
+                id="event-etage"
+                disabled={restDisabled || floorOptions.length === 0}
+                defaultValue={locationFloor}
+                onChange={(e) => setLocationFloor(e.target.value)}
+                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+              >
+                <option value="">Non précisé</option>
+                {floorOptions.map((etage) => (
+                  <option key={etage} value={etage}>
+                    {etage}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="event-desc">Description</Label>
+            <textarea
+              id="event-desc"
+              rows={4}
+              disabled={restDisabled}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            />
+          </div>
+        </div>
+      </div>
 
-          <DialogFooter>
-            <Button type="submit" disabled={submitting}>
-              <Save />
-              Enregistrer
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+      <DialogFooter>
+        <Button type="submit" disabled={submitting}>
+          <Save />
+          Enregistrer
+        </Button>
+      </DialogFooter>
+    </form>
   )
 }

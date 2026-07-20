@@ -637,6 +637,15 @@ export default function SinistreDetailPage() {
         initialResidenceId={residenceId}
         lockResidence
         linkedSinistreId={postId}
+        prefillFromSinistre={
+          sinistre
+            ? {
+                title: `Intervention - ${sinistre.title || "Sans titre"}`,
+                locationElement: sinistre.locationElement,
+                locationFloor: sinistre.locationFloor,
+              }
+            : undefined
+        }
         onSubmit={async (targetResidenceId, input) => {
           if (!user || !sinistre) return
           await createEvent(targetResidenceId, user.uid, input)
