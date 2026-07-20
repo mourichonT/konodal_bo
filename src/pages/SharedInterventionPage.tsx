@@ -22,8 +22,13 @@ type SharedIntervention = {
   title: string
   description: string
   eventDate: string | null
+  previousEventDate: string | null
   prestaName: string
   pathImage: string
+}
+
+function formatEventDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })
 }
 
 type SharedAddress = {
@@ -53,6 +58,8 @@ type SharedSinistre = {
   locationElement: string
   locationFloor: string
   pathImage: string
+  isVideo: boolean
+  creationDate: string | null
   signalements: SharedSignalement[]
 }
 
@@ -210,12 +217,12 @@ export default function SharedInterventionPage() {
               </div>
               <div>
                 <span className="text-muted-foreground">Date : </span>
-                {data.intervention.eventDate
-                  ? new Date(data.intervention.eventDate).toLocaleString("fr-FR", {
-                      dateStyle: "long",
-                      timeStyle: "short",
-                    })
-                  : "—"}
+                {data.intervention.previousEventDate && (
+                  <span className="mr-1 text-muted-foreground line-through">
+                    {formatEventDateTime(data.intervention.previousEventDate)}
+                  </span>
+                )}
+                {data.intervention.eventDate ? formatEventDateTime(data.intervention.eventDate) : "—"}
               </div>
               <div className="flex flex-col sm:col-span-2">
                 <span className="text-muted-foreground">Description :</span>
@@ -261,9 +268,32 @@ export default function SharedInterventionPage() {
                   </div>
                 </div>
 
+                {(data.sinistre.pathImage || data.sinistre.creationDate) && (
+                  <div className="flex flex-col gap-3 border-t border-border pt-4">
+                    <span className="text-muted-foreground">Déclaration principale</span>
+                    <div className="rounded-lg border border-border p-3">
+                      {data.sinistre.pathImage &&
+                        (data.sinistre.isVideo ? (
+                          <video src={data.sinistre.pathImage} controls className="max-h-64 rounded-lg" />
+                        ) : (
+                          <img
+                            src={data.sinistre.pathImage}
+                            alt={data.sinistre.title}
+                            className="max-h-64 rounded-lg object-cover"
+                          />
+                        ))}
+                      {data.sinistre.creationDate && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {new Date(data.sinistre.creationDate).toLocaleDateString("fr-FR")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {data.sinistre.signalements.length > 0 && (
                   <div className="flex flex-col gap-3 border-t border-border pt-4">
-                    <span className="text-muted-foreground">Déclarations</span>
+                    <span className="text-muted-foreground">Autres déclarations</span>
                     {data.sinistre.signalements.map((s, i) => (
                       <div key={i} className="rounded-lg border border-border p-3">
                         <div className="flex items-center justify-between gap-2">
@@ -309,6 +339,23 @@ export default function SharedInterventionPage() {
                 <p className="text-muted-foreground">Compte-rendu transmis, merci.</p>
               ) : (
                 <>
+                  {data.intervention.previousEventDate && (
+                    <div className="rounded-lg border border-border bg-muted/40 p-3">
+                      <p>
+                        <span className="mr-1 text-muted-foreground line-through">
+                          {formatEventDateTime(data.intervention.previousEventDate)}
+                        </span>
+                        {data.intervention.eventDate && (
+                          <span className="font-medium">{formatEventDateTime(data.intervention.eventDate)}</span>
+                        )}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Ce lien correspond à cette nouvelle date : conservez-le, c'est celui à
+                        utiliser pour la suite (compte-rendu, nouvelle reprogrammation).
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex flex-col gap-3">
                     <Button
                       type="button"
@@ -318,7 +365,7 @@ export default function SharedInterventionPage() {
                       className="w-fit"
                     >
                       <CalendarClock />
-                      Reprogrammer un passage
+                      {data.intervention.previousEventDate ? "Modifier le nouvel horaire" : "Reprogrammer un passage"}
                     </Button>
 
                     {rescheduling && (
