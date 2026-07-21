@@ -2,12 +2,14 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
   where,
+  writeBatch,
   type DocumentData,
   type DocumentSnapshot,
   type Unsubscribe,
@@ -46,6 +48,9 @@ function toResidenceEvent(residenceId: string, d: DocumentSnapshot<DocumentData>
     locationElement: (location.locationElements as string) || undefined,
     locationFloor: (location.locationFloor as string) || undefined,
     termine: (data.termine as boolean) || false,
+    previousEventId: (data.previousEventId as string) || undefined,
+    reporte: (data.reporte as boolean) || false,
+    annule: (data.annule as boolean) || false,
   }
 }
 
@@ -179,4 +184,56 @@ export async function updateEvent(residenceId: string, postId: string, input: Ev
     "location.locationElements": input.locationElement ?? "",
     "location.locationFloor": input.locationFloor ?? "",
   })
+}
+
+// Remonte/descend la chaîne de reprogrammations (previousEventId) à partir
+// de n'importe quel maillon - permet d'annuler soit une seule intervention,
+// soit toute la chaîne (ex: le client annule complètement l'intervention
+// alors qu'elle a déjà été reprogrammée plusieurs fois). Pas de champ
+// "next" stocké (seul previousEventId existe, posé sur le nouveau maillon) -
+// la remontée avant se fait donc par requête (previousEventId == id
+// courant) plutôt que par lecture directe.
+async function collectEventChain(residenceId: string, postId: string): Promise<string[]> {
+  const postsRef = collection(db, "residences", residenceId, "posts")
+  const ids = new Set<string>([postId])
+
+  let currentId = postId
+  while (true) {
+    const snap = await getDoc(doc(postsRef, currentId))
+    const prevId = snap.exists() ? (snap.data().previousEventId as string | undefined) : undefined
+    if (!prevId || ids.has(prevId)) break
+    ids.add(prevId)
+    currentId = prevId
+  }
+
+  currentId = postId
+  while (true) {
+    const q = query(postsRef, where("type", "==", "events"), where("previousEventId", "==", currentId))
+    const snapshot = await getDocs(q)
+    const next = snapshot.docs[0]
+    if (!next || ids.has(next.id)) break
+    ids.add(next.id)
+    currentId = next.id
+  }
+
+  return [...ids]
+}
+
+// Annulation depuis le BO (EventFormDialog, mode édition) - contrairement à
+// reporte (posé côté reschedule_shared_intervention quand le prestataire
+// reprogramme), annule est une décision prise directement dans le BO.
+// scope "chain" annule aussi toutes les interventions liées par
+// reprogrammations successives (cf. collectEventChain), pas seulement celle
+// affichée.
+export async function cancelEvent(
+  residenceId: string,
+  postId: string,
+  scope: "single" | "chain" = "single"
+) {
+  const ids = scope === "chain" ? await collectEventChain(residenceId, postId) : [postId]
+  const batch = writeBatch(db)
+  for (const id of ids) {
+    batch.update(doc(db, "residences", residenceId, "posts", id), { annule: true })
+  }
+  await batch.commit()
 }

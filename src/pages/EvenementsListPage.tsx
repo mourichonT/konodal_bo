@@ -122,12 +122,22 @@ function EventRow({ event }: { event: EventWithResidence }) {
         {event.description || "—"}
       </TableCell>
       <TableCell>
-        {event.termine ? (
+        {event.annule ? (
+          <Badge variant="outline" className="border-transparent bg-red-100 text-red-800">
+            Annulé
+          </Badge>
+        ) : event.reporte ? (
+          <Badge variant="outline" className="border-transparent bg-amber-100 text-amber-800">
+            Reporté
+          </Badge>
+        ) : event.termine ? (
           <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-800">
             Terminé
           </Badge>
         ) : (
-          "—"
+          <Badge variant="outline" className="border-transparent bg-sky-100 text-sky-800">
+            Programmé
+          </Badge>
         )}
       </TableCell>
       <TableCell className="text-right">

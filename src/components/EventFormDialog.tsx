@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react"
-import { ChevronDown, Save } from "lucide-react"
+import { Ban, ChevronDown, Save } from "lucide-react"
 import { doc, getDoc } from "firebase/firestore"
 import { getDownloadURL, ref } from "firebase/storage"
 import { Button } from "@/components/ui/button"
@@ -83,6 +83,15 @@ type EventFormDialogProps = {
   // au ticket d'origine.
   linkedSinistreId?: string
   onSubmit: (residenceId: string, input: EventInput) => Promise<void>
+  // Fourni uniquement en mode édition (EvenementDetailPage) - absent en
+  // création (EvenementsPage/SinistreDetailPage), où annuler n'a pas de sens.
+  // scope "chain" annule aussi toutes les interventions liées par
+  // reprogrammations successives (cf. collectEventChain dans lib/events.ts).
+  onCancel?: (scope: "single" | "chain") => Promise<void>
+  // Intervention déjà reportée (remplacée par une reprogrammation) : les
+  // champs n'ont plus de sens à modifier (la date/le prestataire affichés
+  // sont obsolètes), seule l'annulation reste possible - cf. onCancel.
+  readOnly?: boolean
 }
 
 // Le contenu (et son état) n'est monté QUE quand la modale est ouverte : un
@@ -109,6 +118,8 @@ function EventFormDialogContent({
   prefillFromSinistre,
   linkedSinistreId,
   onSubmit,
+  onCancel,
+  readOnly,
 }: Omit<EventFormDialogProps, "open" | "onOpenChange">) {
   const [residenceId, setResidenceId] = useState(initialResidenceId ?? "")
   const [eventTitle, setEventTitle] = useState(initial?.title ?? prefillFromSinistre?.title ?? "")
@@ -127,6 +138,8 @@ function EventFormDialogContent({
     initial?.locationFloor ?? prefillFromSinistre?.locationFloor ?? ""
   )
   const [submitting, setSubmitting] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [structures, setStructures] = useState<StructureResidence[]>([])
   const [geranceAgentLabel, setGeranceAgentLabel] = useState<string | null>(null)
@@ -188,8 +201,10 @@ function EventFormDialogContent({
   const floorOptions = selectedStructure?.etage ?? []
   // Tant qu'aucune résidence n'est choisie (hors édition, où elle est
   // verrouillée), le reste du formulaire n'a pas de contacts à proposer et
-  // n'a pas de sens à remplir avant ce choix.
-  const restDisabled = !lockResidence && !residenceId
+  // n'a pas de sens à remplir avant ce choix. readOnly (intervention déjà
+  // reportée) verrouille les mêmes champs, pour la raison inverse : ils ont
+  // une valeur mais elle est obsolète.
+  const restDisabled = (!lockResidence && !residenceId) || readOnly
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -251,6 +266,19 @@ function EventFormDialogContent({
       toast.error("Échec de l'enregistrement : " + (err as Error).message)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleCancel(scope: "single" | "chain") {
+    if (!onCancel) return
+    setCancelling(true)
+    try {
+      await onCancel(scope)
+    } catch (err) {
+      toast.error("Échec de l'annulation : " + (err as Error).message)
+    } finally {
+      setCancelling(false)
+      setConfirmingCancel(false)
     }
   }
 
@@ -403,12 +431,65 @@ function EventFormDialogContent({
         </div>
       </div>
 
-      <DialogFooter>
-        <Button type="submit" disabled={submitting}>
-          <Save />
-          Enregistrer
-        </Button>
-      </DialogFooter>
+      {confirmingCancel ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+          <p>
+            Souhaitez-vous annuler cette intervention, ou toutes les interventions liées
+            (reprogrammations précédentes) ?
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={cancelling}
+              onClick={() => setConfirmingCancel(false)}
+            >
+              Retour
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={cancelling}
+              onClick={() => handleCancel("single")}
+              className="border-red-200 text-red-700 hover:bg-red-50"
+            >
+              Cette intervention
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={cancelling}
+              onClick={() => handleCancel("chain")}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Toutes les interventions liées
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <DialogFooter>
+          {onCancel && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={submitting || cancelling}
+              onClick={() => setConfirmingCancel(true)}
+              className="mr-auto border-red-200 text-red-700 hover:bg-red-50"
+            >
+              <Ban />
+              Annuler l'intervention
+            </Button>
+          )}
+          {!readOnly && (
+            <Button type="submit" disabled={submitting || cancelling}>
+              <Save />
+              Enregistrer
+            </Button>
+          )}
+        </DialogFooter>
+      )}
     </form>
   )
 }

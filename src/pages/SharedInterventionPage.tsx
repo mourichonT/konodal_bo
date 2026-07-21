@@ -204,13 +204,12 @@ export default function SharedInterventionPage() {
         <>
           <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
             <CardHeader>
-              <CardTitle className="text-base">Intervention</CardTitle>
+              <CardTitle className="text-base">{data.intervention.title || "Sans titre"}</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {data.residence.name || "—"} — {formatAddress(data.residence.address)}
+              </p>
             </CardHeader>
             <CardContent className="grid gap-4 text-sm sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <span className="text-muted-foreground">Titre : </span>
-                {data.intervention.title || "Sans titre"}
-              </div>
               <div>
                 <span className="text-muted-foreground">Prestataire : </span>
                 {data.intervention.prestaName || "—"}
@@ -228,16 +227,6 @@ export default function SharedInterventionPage() {
                 <span className="text-muted-foreground">Description :</span>
                 <span className="mt-[10px]">{data.intervention.description || "Aucune description."}</span>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-            <CardHeader>
-              <CardTitle className="text-base">Résidence</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2 text-sm">
-              <div>{data.residence.name || "—"}</div>
-              <div className="text-muted-foreground">{formatAddress(data.residence.address)}</div>
             </CardContent>
           </Card>
 
@@ -269,60 +258,53 @@ export default function SharedInterventionPage() {
                 </div>
 
                 {(data.sinistre.pathImage || data.sinistre.creationDate) && (
-                  <div className="flex flex-col gap-3 border-t border-border pt-4">
-                    <span className="text-muted-foreground">Déclaration principale</span>
-                    <div className="rounded-lg border border-border p-3">
-                      {data.sinistre.pathImage &&
-                        (data.sinistre.isVideo ? (
-                          <video src={data.sinistre.pathImage} controls className="max-h-64 rounded-lg" />
-                        ) : (
-                          <img
-                            src={data.sinistre.pathImage}
-                            alt={data.sinistre.title}
-                            className="max-h-64 rounded-lg object-cover"
-                          />
-                        ))}
-                      {data.sinistre.creationDate && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {new Date(data.sinistre.creationDate).toLocaleDateString("fr-FR")}
-                        </p>
+                  <div className="rounded-lg border border-border p-3">
+                    <span className="text-xs text-muted-foreground">Déclaration principale</span>
+                    {data.sinistre.pathImage &&
+                      (data.sinistre.isVideo ? (
+                        <video src={data.sinistre.pathImage} controls className="mt-2 max-h-64 rounded-lg" />
+                      ) : (
+                        <img
+                          src={data.sinistre.pathImage}
+                          alt={data.sinistre.title}
+                          className="mt-2 max-h-64 rounded-lg object-cover"
+                        />
+                      ))}
+                    {data.sinistre.creationDate && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(data.sinistre.creationDate).toLocaleDateString("fr-FR")}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {data.sinistre.signalements.map((s, i) => (
+                  <div key={i} className="rounded-lg border border-border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{s.title || "Sans titre"}</span>
+                      {s.isVideo && (
+                        <Badge variant="outline">
+                          <Video />
+                          Vidéo
+                        </Badge>
                       )}
                     </div>
+                    {s.description && <p className="mt-1 text-muted-foreground">{s.description}</p>}
+                    {s.pathImage &&
+                      (s.isVideo ? (
+                        <video src={s.pathImage} controls className="mt-2 max-h-64 rounded-lg" />
+                      ) : (
+                        <img src={s.pathImage} alt={s.title} className="mt-2 max-h-64 rounded-lg object-cover" />
+                      ))}
+                    {s.creationDate && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(s.creationDate).toLocaleDateString("fr-FR")}
+                      </p>
+                    )}
                   </div>
-                )}
+                ))}
 
-                {data.sinistre.signalements.length > 0 && (
-                  <div className="flex flex-col gap-3 border-t border-border pt-4">
-                    <span className="text-muted-foreground">Autres déclarations</span>
-                    {data.sinistre.signalements.map((s, i) => (
-                      <div key={i} className="rounded-lg border border-border p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium">{s.title || "Sans titre"}</span>
-                          {s.isVideo && (
-                            <Badge variant="outline">
-                              <Video />
-                              Vidéo
-                            </Badge>
-                          )}
-                        </div>
-                        {s.description && <p className="mt-1 text-muted-foreground">{s.description}</p>}
-                        {s.pathImage &&
-                          (s.isVideo ? (
-                            <video src={s.pathImage} controls className="mt-2 max-h-64 rounded-lg" />
-                          ) : (
-                            <img src={s.pathImage} alt={s.title} className="mt-2 max-h-64 rounded-lg object-cover" />
-                          ))}
-                        {s.creationDate && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {new Date(s.creationDate).toLocaleDateString("fr-FR")}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <p className="border-t border-border pt-4 text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   La déclaration et la clôture de ce ticket se font désormais via le compte-rendu
                   ci-dessous.
                 </p>
@@ -330,15 +312,19 @@ export default function SharedInterventionPage() {
             </Card>
           )}
 
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-            <CardHeader>
-              <CardTitle className="text-base">Suite de l'intervention</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4 text-sm">
-              {rapportSubmitted ? (
-                <p className="text-muted-foreground">Compte-rendu transmis, merci.</p>
-              ) : (
-                <>
+          {rapportSubmitted ? (
+            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+              <CardContent className="pt-6 text-sm text-muted-foreground">
+                Compte-rendu transmis, merci.
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+                <CardHeader>
+                  <CardTitle className="text-base">Suite de l'intervention</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4 text-sm">
                   {data.intervention.previousEventDate && (
                     <div className="rounded-lg border border-border bg-muted/40 p-3">
                       <p>
@@ -396,52 +382,56 @@ export default function SharedInterventionPage() {
                       </form>
                     )}
                   </div>
+                </CardContent>
+              </Card>
 
-                  <div className="flex flex-col gap-3 border-t border-border pt-4">
-                    <span className="text-muted-foreground">Ajouter un compte-rendu</span>
-                    <form onSubmit={handleSubmitRapport} className="flex flex-col gap-3">
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="rapport-title">Titre</Label>
-                        <Input
-                          id="rapport-title"
-                          required
-                          value={rapportTitle}
-                          onChange={(e) => setRapportTitle(e.target.value)}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="rapport-desc">Description</Label>
-                        <textarea
-                          id="rapport-desc"
-                          rows={3}
-                          value={rapportDescription}
-                          onChange={(e) => setRapportDescription(e.target.value)}
-                          className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="rapport-file">Photo</Label>
-                        <input
-                          id="rapport-file"
-                          type="file"
-                          required
-                          accept="image/*"
-                          capture="environment"
-                          onChange={(e) => setRapportFile(e.target.files?.[0] ?? null)}
-                          className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
-                        />
-                      </div>
-                      {rapportError && <p className="text-sm text-destructive">{rapportError}</p>}
-                      <Button type="submit" disabled={rapportSubmitting} className="w-fit">
-                        <FileText />
-                        Envoyer
-                      </Button>
-                    </form>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+              <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+                <CardHeader>
+                  <CardTitle className="text-base">Ajouter un compte-rendu</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSubmitRapport} className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="rapport-title">Titre</Label>
+                      <Input
+                        id="rapport-title"
+                        required
+                        value={rapportTitle}
+                        onChange={(e) => setRapportTitle(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="rapport-desc">Description</Label>
+                      <textarea
+                        id="rapport-desc"
+                        rows={3}
+                        value={rapportDescription}
+                        onChange={(e) => setRapportDescription(e.target.value)}
+                        className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="rapport-file">Photo</Label>
+                      <input
+                        id="rapport-file"
+                        type="file"
+                        required
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(e) => setRapportFile(e.target.files?.[0] ?? null)}
+                        className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
+                      />
+                    </div>
+                    {rapportError && <p className="text-sm text-destructive">{rapportError}</p>}
+                    <Button type="submit" disabled={rapportSubmitting} className="w-fit">
+                      <FileText />
+                      Envoyer
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </>
       )}
     </div>

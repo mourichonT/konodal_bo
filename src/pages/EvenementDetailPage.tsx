@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { EventFormDialog } from "@/components/EventFormDialog"
 import { PostCommentsCard } from "@/components/PostCommentsCard"
 import { db } from "@/firebase"
-import { subscribeToEvent, updateEvent, KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
+import { subscribeToEvent, updateEvent, cancelEvent, KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
 import { subscribeToRapportsForEvent, type Rapport } from "@/lib/rapports"
 import type { ResidenceEvent } from "@/types/event"
 import { emptyAddress, type Address, type GeranceRef } from "@/types/residence"
@@ -182,6 +182,7 @@ export default function EvenementDetailPage() {
 
   async function handleSend() {
     if (!event || !residenceId || !postId) return
+    if (event.reporte || event.annule) return
     setSending(true)
     try {
       const prestataireMail = await findPrestataireMail(contactRefs, event.prestaName)
@@ -239,19 +240,41 @@ export default function EvenementDetailPage() {
             <h1 className="text-2xl font-semibold">
               {event ? event.title || "Sans titre" : loading ? "…" : "Intervention introuvable"}
             </h1>
-            {event?.termine && (
+            {event?.annule ? (
+              <Badge variant="outline" className="border-transparent bg-red-100 text-red-800">
+                Annulé
+              </Badge>
+            ) : event?.reporte ? (
+              <Badge variant="outline" className="border-transparent bg-amber-100 text-amber-800">
+                Reporté
+              </Badge>
+            ) : event?.termine ? (
               <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-800">
                 Terminé
               </Badge>
-            )}
+            ) : event ? (
+              <Badge variant="outline" className="border-transparent bg-sky-100 text-sky-800">
+                Programmé
+              </Badge>
+            ) : null}
           </div>
           {event && (
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleSend} disabled={sending}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSend}
+                disabled={sending || event.reporte || event.annule}
+              >
                 <Mail />
                 Envoyer
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditing(true)}
+                disabled={event.annule}
+              >
                 <Pencil />
                 Modifier
               </Button>
@@ -371,6 +394,14 @@ export default function EvenementDetailPage() {
           toast.success("Intervention mise à jour")
           setEditing(false)
         }}
+        onCancel={async (scope) => {
+          await cancelEvent(residenceId, postId, scope)
+          toast.success(
+            scope === "chain" ? "Interventions liées annulées" : "Intervention annulée"
+          )
+          setEditing(false)
+        }}
+        readOnly={!!event?.reporte}
       />
     </div>
   )
