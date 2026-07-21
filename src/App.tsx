@@ -20,6 +20,7 @@ import EvenementDetailPage from "@/pages/EvenementDetailPage"
 import AgencesPage from "@/pages/AgencesPage"
 import ContactsPage from "@/pages/ContactsPage"
 import ContactDetailPage from "@/pages/ContactDetailPage"
+import DocumentsPage from "@/pages/DocumentsPage"
 import SharedInterventionPage from "@/pages/SharedInterventionPage"
 import PublicitesPage from "@/pages/PublicitesPage"
 import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
@@ -57,6 +58,7 @@ function App() {
         <Route path="agences" element={<AgencesPage />} />
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="contacts/:id" element={<ContactDetailPage />} />
+        <Route path="documents" element={<DocumentsPage />} />
         <Route
           path="publicites"
           element={

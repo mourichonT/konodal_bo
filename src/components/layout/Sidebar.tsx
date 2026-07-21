@@ -8,6 +8,7 @@ import {
   Wrench,
   Briefcase,
   BookUser,
+  FileText,
   Megaphone,
   LogOut,
   ChevronsUpDown,
@@ -57,6 +58,7 @@ const navItems: NavItem[] = [
   { to: "/residents", label: "Utilisateurs", icon: Users },
   { to: "/agences", label: "Agences", icon: Briefcase },
   { to: "/contacts", label: "Contacts", icon: BookUser },
+  { to: "/documents", label: "Documents", icon: FileText },
 ]
 
 const superAdminNavItems: NavItem[] = [

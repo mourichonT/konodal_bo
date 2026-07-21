@@ -228,6 +228,23 @@ export function subscribeToUserLots(
   )
 }
 
+// Résout uid -> "Prénom Nom" (ou email/uid à défaut) pour l'affichage - ex:
+// destinataires d'un document de lot (DocumentsPage). uids dédupliqués
+// avant lecture (un même destinataire peut apparaître comme propriétaire
+// ET locataire).
+export async function resolveUserLabels(uids: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(uids)]
+  const snapshots = await Promise.all(unique.map((uid) => getDoc(doc(usersCollection, uid))))
+  return new Map(
+    snapshots.map((snap, i) => {
+      const data = snap.data()
+      const userGroup = (data?.user as Record<string, unknown>) ?? {}
+      const name = [userGroup.name, userGroup.surname].filter(Boolean).join(" ").trim()
+      return [unique[i], name || (data?.email as string) || unique[i]]
+    })
+  )
+}
+
 // Idempotent à dessein : ré-écrire `true` alors que c'est déjà `true` reste
 // utile - ça redéclenche la Cloud Function sync_lot_approval si elle avait
 // échoué la première fois faute de users/{uid}.isApproved (cf. mémoire du
