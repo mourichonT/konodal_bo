@@ -30,6 +30,8 @@ import {
   FileCheck2,
   Copy,
   HelpCircle,
+  PlusCircle,
+  Repeat,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { Card, CardContent } from "@/components/ui/card"
@@ -293,6 +295,41 @@ export default function DashboardPage() {
       ),
     [filteredEvents]
   )
+
+  // "Clôturée" = compte-rendu prestataire soumis (termine), même définition
+  // que le badge "Terminé" affiché sur les interventions (EvenementDetailPage/
+  // EvenementsListPage) - posé par create_shared_rapport.
+  const eventsClosedCount = useMemo(
+    () => filteredEvents.filter((e) => e.termine).length,
+    [filteredEvents]
+  )
+  // reporte : posé sur l'ANCIENNE intervention par reschedule_shared_intervention
+  // (ou le backfill) quand le prestataire reprogramme depuis la page de partage -
+  // cf. types/event.ts.
+  const eventsReprogrammedCount = useMemo(
+    () => filteredEvents.filter((e) => e.reporte).length,
+    [filteredEvents]
+  )
+  // Top 5 des prestataires par nombre d'interventions reportées (donc
+  // reprogrammées) - prestaName est recopié tel quel sur la nouvelle
+  // intervention par reschedule_shared_intervention, donc stable d'un
+  // maillon de la chaîne à l'autre.
+  const prestaReprogrammedCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const e of filteredEvents) {
+      if (!e.reporte) continue
+      const name = e.prestaName || "—"
+      counts.set(name, (counts.get(name) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .map(([prestaName, count]) => ({ prestaName, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
+  }, [filteredEvents])
+  const eventsClosedRate =
+    filteredEvents.length > 0 ? Math.round((eventsClosedCount / filteredEvents.length) * 100) : 0
+  const eventsReprogrammedRate =
+    filteredEvents.length > 0 ? Math.round((eventsReprogrammedCount / filteredEvents.length) * 100) : 0
 
   const contactsPending = filteredContactsForResidence.filter((c) => !c.isApproved).length
 
@@ -713,30 +750,113 @@ export default function DashboardPage() {
             </div>
 
             <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-              <CardContent className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-medium">Nombre d'interventions créées / clôturées</h3>
-                {/* À finir : reste à définir ce qui fait qu'une intervention est "clôturée" */}
-                <Badge variant="secondary">À finaliser</Badge>
+              <CardContent className="flex flex-col gap-4">
+                <h3 className="text-sm font-medium">Interventions créées / clôturées</h3>
+                <div className="flex items-stretch gap-4">
+                  <div className="flex flex-1 items-center gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
+                      <PlusCircle className="size-5" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-2xl font-semibold tabular-nums">
+                        {loading ? "…" : filteredEvents.length}
+                      </span>
+                      <span className="text-xs text-muted-foreground">Créées</span>
+                    </div>
+                  </div>
+                  <div aria-hidden className="w-px shrink-0 bg-border" />
+                  <div className="flex flex-1 items-center gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+                      <CheckCircle2 className="size-5" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-2xl font-semibold tabular-nums">
+                        {loading ? "…" : eventsClosedCount}
+                      </span>
+                      <span className="text-xs text-muted-foreground">Clôturées</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-emerald-500"
+                      style={{ width: `${eventsClosedRate}%` }}
+                    />
+                  </div>
+                  <span className="w-10 shrink-0 text-right text-xs font-medium text-muted-foreground">
+                    {eventsClosedRate}%
+                  </span>
+                </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-              <CardContent className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-medium">Nombre d'interventions reprogrammées</h3>
-                {/* À finir : ResidenceEvent n'a pas d'historique de eventDate,
-                    updateEvent écrase la date sans garder de trace du
-                    changement - il faudra ajouter ce suivi côté modèle. */}
-                <Badge variant="secondary">À finaliser</Badge>
+              <CardContent className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+                    <Repeat className="size-5" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-2xl font-semibold tabular-nums">
+                      {loading ? "…" : eventsReprogrammedCount}
+                    </span>
+                    <span className="text-xs text-muted-foreground">Interventions reprogrammées</span>
+                  </div>
+                </div>
+                {!loading && filteredEvents.length > 0 && (
+                  <Badge variant="outline" className="border-transparent bg-amber-100 text-amber-800">
+                    {eventsReprogrammedRate}% du total
+                  </Badge>
+                )}
               </CardContent>
             </Card>
 
             <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-              <CardContent className="flex items-center justify-between gap-3">
+              <CardContent className="flex flex-col gap-3">
                 <h3 className="text-sm font-medium">Prestataires qui reprogramment le plus</h3>
-                {/* À finir : dépend du même suivi que la card précédente
-                    (compteur de reprogrammations par intervention), agrégé
-                    ensuite par prestaName - diagramme en barres verticales. */}
-                <Badge variant="secondary">À finaliser</Badge>
+                {prestaReprogrammedCounts.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    Aucune intervention reprogrammée.
+                  </p>
+                ) : (
+                  <div className="h-40">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={prestaReprogrammedCounts}
+                        layout="vertical"
+                        margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                        <XAxis
+                          type="number"
+                          allowDecimals={false}
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
+                        />
+                        <YAxis
+                          dataKey="prestaName"
+                          type="category"
+                          width={100}
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
+                        />
+                        <Tooltip
+                          cursor={{ fill: "var(--muted)" }}
+                          contentStyle={{
+                            background: "var(--popover)",
+                            border: "1px solid var(--border)",
+                            borderRadius: "var(--radius-md)",
+                            fontSize: 12,
+                          }}
+                        />
+                        <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={16} fill="var(--chart-4)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </CardContent>
