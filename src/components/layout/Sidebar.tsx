@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
+import { useAccountRole } from "@/hooks/useAccountRole"
 import { cn } from "@/lib/utils"
 import logoKWhite from "@/assets/logo-k-white.png"
 import logoHorizontal from "@/assets/logo-horizontal.png"
@@ -112,8 +113,15 @@ function useOpenSections(navItems: { to: string; children?: unknown }[]) {
 export function Sidebar() {
   const { user, logout } = useAuth()
   const { isSuperAdmin } = useIsSuperAdmin()
+  const { isAgence, isAgent } = useAccountRole()
   const location = useLocation()
-  const allNavItems: NavItem[] = isSuperAdmin ? [...navItems, ...superAdminNavItems] : navItems
+  // "Agences" (répertoire, Superadmin) devient "Agence" au singulier pour
+  // un compte agence/agent - la page pointe alors sur sa propre fiche, pas
+  // un annuaire (cf. AgencesPage.tsx, OwnAgencyPage).
+  const baseNavItems: NavItem[] = (isAgence || isAgent)
+    ? navItems.map((item) => (item.to === "/agences" ? { ...item, label: "Agence" } : item))
+    : navItems
+  const allNavItems: NavItem[] = isSuperAdmin ? [...baseNavItems, ...superAdminNavItems] : baseNavItems
   const [openSections, toggleSection] = useOpenSections(allNavItems)
 
   return (

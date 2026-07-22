@@ -115,150 +115,161 @@ export default function AgencesPage() {
   const totalSyndics = gerances.filter((gerance) => gerance.services.serviceSyndic).length
   const totalAgencies = gerances.filter((gerance) => gerance.services.geranceLocative).length
 
-  // Un Agent n'a ni vue agrégée (KPI sur TOUTES les agences n'a pas de sens
-  // pour un compte scopé à la sienne) ni répertoire à parcourir (une seule
-  // fiche possible) : page dédiée, détaillée, sur le modèle des pages
-  // détail du BO (ResidenceDetailPage, SinistreDetailPage...) plutôt que la
-  // liste/table pensée pour Superadmin.
-  if (isAgent) {
-    return <AgentOwnAgencyPage gerance={gerances[0] ?? null} loading={loading} />
-  }
+  // Une Agence/un Agent n'a ni vue agrégée (KPI sur TOUTES les agences n'a
+  // pas de sens pour un compte scopé à la sienne) ni répertoire à parcourir
+  // (une seule fiche possible) : page dédiée, détaillée, sur le modèle des
+  // pages détail du BO (ResidenceDetailPage, SinistreDetailPage...) plutôt
+  // que la liste/table pensée pour Superadmin. Agence peut la modifier
+  // (matrice de droits BO), Agent est en lecture seule.
+  const isOwnAgencyView = isAgence || isAgent
+  const ownGerance = isOwnAgencyView ? (gerances[0] ?? null) : null
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Agences</h1>
-
-      <div className="grid grid-cols-3 gap-4">
-        <FilterKpiCard
-          label="Total des professionnels de l'immo"
-          value={gerances.length}
-          icon={Briefcase}
-          colorClass="bg-slate-100 text-slate-600"
-          active={serviceFilter === null}
-          onClick={() => setServiceFilter(null)}
+      {isOwnAgencyView ? (
+        <OwnAgencyPage
+          gerance={ownGerance}
+          loading={loading}
+          canEdit={isAgence}
+          onEdit={() => ownGerance && setEditingId(ownGerance.id)}
         />
-        <FilterKpiCard
-          label="Total des syndics"
-          value={totalSyndics}
-          icon={Landmark}
-          colorClass="bg-sky-100 text-sky-600"
-          active={serviceFilter === "serviceSyndic"}
-          onClick={() => setServiceFilter((prev) => (prev === "serviceSyndic" ? null : "serviceSyndic"))}
-        />
-        <FilterKpiCard
-          label="Total des agences"
-          value={totalAgencies}
-          icon={Home}
-          colorClass="bg-emerald-100 text-emerald-600"
-          active={serviceFilter === "geranceLocative"}
-          onClick={() => setServiceFilter((prev) => (prev === "geranceLocative" ? null : "geranceLocative"))}
-        />
-      </div>
+      ) : (
+        <>
+          <h1 className="text-2xl font-semibold">Agences</h1>
 
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg">Répertoire des agences</h2>
-        <p className="text-sm text-muted-foreground">Rechercher, filtrer et gérer toutes les agences.</p>
-      </div>
+          <div className="grid grid-cols-3 gap-4">
+            <FilterKpiCard
+              label="Total des professionnels de l'immo"
+              value={gerances.length}
+              icon={Briefcase}
+              colorClass="bg-slate-100 text-slate-600"
+              active={serviceFilter === null}
+              onClick={() => setServiceFilter(null)}
+            />
+            <FilterKpiCard
+              label="Total des syndics"
+              value={totalSyndics}
+              icon={Landmark}
+              colorClass="bg-sky-100 text-sky-600"
+              active={serviceFilter === "serviceSyndic"}
+              onClick={() => setServiceFilter((prev) => (prev === "serviceSyndic" ? null : "serviceSyndic"))}
+            />
+            <FilterKpiCard
+              label="Total des agences"
+              value={totalAgencies}
+              icon={Home}
+              colorClass="bg-emerald-100 text-emerald-600"
+              active={serviceFilter === "geranceLocative"}
+              onClick={() => setServiceFilter((prev) => (prev === "geranceLocative" ? null : "geranceLocative"))}
+            />
+          </div>
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Rechercher une agence…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        {isSuperAdmin && (
-          <Button className="rounded-full" onClick={() => setCreating(true)}>
-            <Plus />
-            Ajouter une agence
-          </Button>
-        )}
-      </div>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg">Répertoire des agences</h2>
+            <p className="text-sm text-muted-foreground">Rechercher, filtrer et gérer toutes les agences.</p>
+          </div>
 
-      <div className="flex flex-col">
-        <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
-          <Table>
-            <TableHeader className="bg-muted/40">
-              <TableRow>
-                <TableHead>Agence</TableHead>
-                <TableHead>Adresse</TableHead>
-                <TableHead>Ville</TableHead>
-                <TableHead>Services</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="bg-white">
-              {filteredGerances.map((gerance) => {
-                const activeServices = serviceTypes.filter((type) => gerance.services[type])
-                const primaryContact = activeServices
-                  .map((type) => gerance.services[type]?.mail)
-                  .find((mail) => mail)
-                return (
-                  <TableRow key={gerance.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-                          <Briefcase className="size-4" />
-                        </div>
-                        {gerance.name}
-                      </div>
-                    </TableCell>
-                    <TableCell>{gerance.address.street}</TableCell>
-                    <TableCell>{gerance.address.city}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {activeServices.length === 0 && (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                        {activeServices.map((type) => (
-                          <Badge key={type} variant="secondary">
-                            {serviceTypeLabels[type]}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>{primaryContact || "—"}</TableCell>
-                    <TableCell className="text-right">
-                      {/* Un Agent n'atteint jamais cette liste (early return
-                          plus haut vers AgentOwnAgencyPage) - pas besoin de
-                          gater ce bouton ici. */}
-                      <Button variant="outline" size="sm" onClick={() => setEditingId(gerance.id)}>
-                        <Pencil />
-                        Modifier
-                      </Button>
-                    </TableCell>
+          <div className="flex items-center justify-between gap-4">
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher une agence…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            {isSuperAdmin && (
+              <Button className="rounded-full" onClick={() => setCreating(true)}>
+                <Plus />
+                Ajouter une agence
+              </Button>
+            )}
+          </div>
+
+          <div className="flex flex-col">
+            <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+              <Table>
+                <TableHeader className="bg-muted/40">
+                  <TableRow>
+                    <TableHead>Agence</TableHead>
+                    <TableHead>Adresse</TableHead>
+                    <TableHead>Ville</TableHead>
+                    <TableHead>Services</TableHead>
+                    <TableHead>Contact</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                )
-              })}
-              {!loading && filteredGerances.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                    {gerances.length === 0
-                      ? "Aucune agence pour l'instant."
-                      : "Aucun résultat pour cette recherche."}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+                </TableHeader>
+                <TableBody className="bg-white">
+                  {filteredGerances.map((gerance) => {
+                    const activeServices = serviceTypes.filter((type) => gerance.services[type])
+                    const primaryContact = activeServices
+                      .map((type) => gerance.services[type]?.mail)
+                      .find((mail) => mail)
+                    return (
+                      <TableRow key={gerance.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-3">
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                              <Briefcase className="size-4" />
+                            </div>
+                            {gerance.name}
+                          </div>
+                        </TableCell>
+                        <TableCell>{gerance.address.street}</TableCell>
+                        <TableCell>{gerance.address.city}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {activeServices.length === 0 && (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                            {activeServices.map((type) => (
+                              <Badge key={type} variant="secondary">
+                                {serviceTypeLabels[type]}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>{primaryContact || "—"}</TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="outline" size="sm" onClick={() => setEditingId(gerance.id)}>
+                            <Pencil />
+                            Modifier
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                  {!loading && filteredGerances.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                        {gerances.length === 0
+                          ? "Aucune agence pour l'instant."
+                          : "Aucun résultat pour cette recherche."}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
 
-      <GeranceFormDialog
-        open={creating}
-        onOpenChange={setCreating}
-        title="Ajouter une agence"
-        onSubmit={async (input) => {
-          await createGerance(input)
-          toast.success("Agence créée")
-          setCreating(false)
-        }}
-      />
+          <GeranceFormDialog
+            open={creating}
+            onOpenChange={setCreating}
+            title="Ajouter une agence"
+            onSubmit={async (input) => {
+              await createGerance(input)
+              toast.success("Agence créée")
+              setCreating(false)
+            }}
+          />
+        </>
+      )}
 
+      {/* Dialog d'édition partagé entre les deux vues (répertoire Superadmin
+          et fiche unique Agence) - setEditingId est déclenché depuis l'une
+          ou l'autre selon le rôle connecté. */}
       <GeranceFormDialog
         open={editingId !== null}
         onOpenChange={(open) => !open && setEditingId(null)}
@@ -677,18 +688,37 @@ function AccountControl({
   )
 }
 
-// Page détaillée de l'agence à laquelle un compte Agent est rattaché - même
-// gabarit (titre + Cards empilées) que les autres pages détail du BO
-// (ResidenceDetailPage, SinistreDetailPage, EvenementDetailPage), plutôt
-// que la liste/répertoire pensée pour Superadmin qui n'a pas de sens pour
-// un compte scopé à une seule fiche. Lecture seule : un Agent consulte,
-// il ne modifie pas (cf. matrice de droits BO).
-function AgentOwnAgencyPage({ gerance, loading }: { gerance: Gerance | null; loading: boolean }) {
+// Page détaillée de l'agence à laquelle un compte Agence/Agent est
+// rattaché - même gabarit (titre + Cards empilées) que les autres pages
+// détail du BO (ResidenceDetailPage, SinistreDetailPage,
+// EvenementDetailPage), plutôt que la liste/répertoire pensée pour
+// Superadmin qui n'a pas de sens pour un compte scopé à une seule fiche.
+// canEdit=false (Agent) = pure consultation ; canEdit=true (Agence) ajoute
+// le bouton "Modifier" ouvrant le même dialog que le répertoire Superadmin.
+function OwnAgencyPage({
+  gerance,
+  loading,
+  canEdit,
+  onEdit,
+}: {
+  gerance: Gerance | null
+  loading: boolean
+  canEdit: boolean
+  onEdit: () => void
+}) {
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-semibold">
-        {gerance ? gerance.name : loading ? "…" : "Agence introuvable"}
-      </h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">
+          {gerance ? gerance.name : loading ? "…" : "Agence introuvable"}
+        </h1>
+        {canEdit && gerance && (
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            <Pencil />
+            Modifier
+          </Button>
+        )}
+      </div>
 
       {!loading && !gerance && (
         <p className="text-muted-foreground">
