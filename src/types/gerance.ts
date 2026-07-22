@@ -36,6 +36,12 @@ export type Gerance = {
   // isSyndicAgent/isGeranceLocativeAgent côté firestore.rules).
   serviceSyndicAgentUids?: string[]
   geranceLocativeAgentUids?: string[]
+  // Identité légale de la société (pas d'un compte individuel) - un compte
+  // agence n'a pas de "nom/prénom" personnel qui ait du sens sur son profil,
+  // c'est le responsable légal de l'agence qui est pertinent. Peut être
+  // rempli à la main ou via recherche-entreprises.api.gouv.fr (SIRET/SIREN).
+  siret?: string
+  responsableLegal?: string
 }
 
 export const emptyAgencyDept: AgencyDept = {

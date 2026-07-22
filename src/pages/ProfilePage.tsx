@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { Briefcase, Building2, Mail, Phone, Save } from "lucide-react"
+import { Briefcase, Building2, Mail, Phone, Save, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { subscribeToUser, updateOwnProfile, uploadOwnProfilePic } from "@/lib/users"
-import { subscribeToGerance } from "@/lib/gerances"
+import { applyCompanySearchResult, subscribeToGerance, updateGeranceLegalInfo } from "@/lib/gerances"
 import { subscribeToResidencesForGerance } from "@/lib/residences"
 import { departmentCodeFromZip, departmentLabel, groupResidencesByDepartment } from "@/lib/departments"
+import { searchCompanies, type CompanySearchResult } from "@/lib/companySearch"
 import { serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
 import type { Residence } from "@/types/residence"
 import type { KonodalUser } from "@/types/user"
@@ -86,7 +87,7 @@ export default function ProfilePage() {
       {loading ? (
         <p className="text-muted-foreground">Chargement…</p>
       ) : (
-        profile && <ProfileForm profile={profile} />
+        profile && <ProfileForm profile={profile} isAgence={isAgence} gerance={gerance} />
       )}
 
       {(isAgence || isAgent) && (
@@ -186,12 +187,30 @@ function initials(name: string, surname: string, email: string): string {
   return fromNames || (email[0] ?? "?").toUpperCase()
 }
 
-function ProfileForm({ profile }: { profile: KonodalUser }) {
+function ProfileForm({
+  profile,
+  isAgence,
+  gerance,
+}: {
+  profile: KonodalUser
+  isAgence: boolean
+  gerance: Gerance | null
+}) {
   const [name, setName] = useState(profile.name)
   const [surname, setSurname] = useState(profile.surname)
   const [phone, setPhone] = useState(profile.phone)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Une agence n'a pas de nom/prénom personnel pertinent sur son profil -
+  // c'est le responsable légal de la société qui compte, porté par la
+  // gérance (pas ce compte précis) - cf. demande explicite.
+  const [responsableLegal, setResponsableLegal] = useState(gerance?.responsableLegal ?? "")
+  const [siret, setSiret] = useState(gerance?.siret ?? "")
+  const [companyQuery, setCompanyQuery] = useState("")
+  const [companyResults, setCompanyResults] = useState<CompanySearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [applyingResult, setApplyingResult] = useState(false)
 
   useEffect(() => {
     setName(profile.name)
@@ -200,6 +219,40 @@ function ProfileForm({ profile }: { profile: KonodalUser }) {
     setPhotoFile(null)
   }, [profile.uid])
 
+  useEffect(() => {
+    setResponsableLegal(gerance?.responsableLegal ?? "")
+    setSiret(gerance?.siret ?? "")
+  }, [gerance?.id, gerance?.responsableLegal, gerance?.siret])
+
+  async function handleSearchCompany() {
+    if (!companyQuery.trim()) return
+    setSearching(true)
+    try {
+      const results = await searchCompanies(companyQuery)
+      setCompanyResults(results)
+      if (results.length === 0) toast.error("Aucun résultat pour cette recherche")
+    } catch (err) {
+      toast.error("Recherche impossible : " + (err as Error).message)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  async function handleApplyCompanyResult(result: CompanySearchResult) {
+    if (!gerance) return
+    setApplyingResult(true)
+    try {
+      await applyCompanySearchResult(gerance.id, result)
+      setCompanyResults([])
+      setCompanyQuery("")
+      toast.success("Informations de l'agence mises à jour")
+    } catch (err) {
+      toast.error("Échec de la mise à jour : " + (err as Error).message)
+    } finally {
+      setApplyingResult(false)
+    }
+  }
+
   async function handleSave() {
     setSaving(true)
     try {
@@ -207,7 +260,10 @@ function ProfileForm({ profile }: { profile: KonodalUser }) {
         await uploadOwnProfilePic(profile.uid, photoFile)
         setPhotoFile(null)
       }
-      await updateOwnProfile(profile.uid, { name, surname, phone })
+      await updateOwnProfile(profile.uid, isAgence ? { phone } : { name, surname, phone })
+      if (isAgence && gerance) {
+        await updateGeranceLegalInfo(gerance.id, { siret, responsableLegal })
+      }
       toast.success("Profil mis à jour")
     } catch (err) {
       toast.error("Échec de l'enregistrement : " + (err as Error).message)
@@ -260,15 +316,86 @@ function ProfileForm({ profile }: { profile: KonodalUser }) {
             <Label htmlFor="profile-phone">Téléphone</Label>
             <Input id="profile-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="profile-name">Prénom</Label>
-            <Input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="profile-surname">Nom</Label>
-            <Input id="profile-surname" value={surname} onChange={(e) => setSurname(e.target.value)} />
-          </div>
+          {isAgence ? (
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="profile-responsable">Responsable légal</Label>
+              <Input
+                id="profile-responsable"
+                value={responsableLegal}
+                onChange={(e) => setResponsableLegal(e.target.value)}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="profile-name">Prénom</Label>
+                <Input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="profile-surname">Nom</Label>
+                <Input id="profile-surname" value={surname} onChange={(e) => setSurname(e.target.value)} />
+              </div>
+            </>
+          )}
         </div>
+
+        {isAgence && (
+          <div className="flex flex-col gap-2 border-t pt-4">
+            <Label htmlFor="profile-siret">SIRET / SIREN</Label>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                id="profile-siret"
+                className="max-w-48"
+                placeholder="123 456 789 00012"
+                value={siret}
+                onChange={(e) => setSiret(e.target.value)}
+              />
+              <Input
+                placeholder="Rechercher (nom, SIRET, SIREN)…"
+                className="max-w-xs"
+                value={companyQuery}
+                onChange={(e) => setCompanyQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSearchCompany())}
+              />
+              <Button type="button" variant="outline" size="sm" onClick={handleSearchCompany} disabled={searching}>
+                <Search />
+                Rechercher
+              </Button>
+            </div>
+            {companyResults.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {companyResults.map((result) => (
+                  <div
+                    key={result.siret || result.siren}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 p-2 text-sm"
+                  >
+                    <div>
+                      <span className="font-medium">{result.name}</span>
+                      <span className="text-muted-foreground">
+                        {" — "}
+                        {[result.address.street, [result.address.zipCode, result.address.city].join(" ")]
+                          .filter(Boolean)
+                          .join(" — ") || "—"}
+                        {result.responsableLegal ? ` · ${result.responsableLegal}` : ""}
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={applyingResult}
+                      onClick={() => handleApplyCompanyResult(result)}
+                    >
+                      Utiliser ces informations
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              La recherche remplit automatiquement le nom, l'adresse et le responsable légal de l'agence.
+            </p>
+          </div>
+        )}
 
         <Button className="w-fit" onClick={handleSave} disabled={saving}>
           <Save />

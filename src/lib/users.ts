@@ -143,22 +143,26 @@ export async function updateUserIdentity(uid: string, input: UserIdentityInput) 
 }
 
 export type OwnProfileInput = {
-  name: string
-  surname: string
-  phone: string
+  name?: string
+  surname?: string
+  phone?: string
 }
 
 // Auto-édition de son propre profil BO (page /profil, tous rôles) - à ne
 // pas confondre avec updateUserIdentity (correction d'un résident PAR un
 // admin) : ici l'appelant modifie son propre compte, déjà couvert par
 // firestore.rules (users/{uid}.update autorise isOwner(uid) tant
-// qu'isApproved/accountType ne bougent pas).
+// qu'isApproved/accountType ne bougent pas). Champs optionnels : un compte
+// agence n'a pas de name/surname personnel pertinent (cf. ProfilePage,
+// responsable légal de la gérance à la place) - on n'écrit que ce qui est
+// fourni.
 export async function updateOwnProfile(uid: string, input: OwnProfileInput) {
-  await updateDoc(doc(usersCollection, uid), {
-    "user.name": input.name,
-    "user.surname": input.surname,
-    "profil.phone": input.phone,
-  })
+  const update: Record<string, unknown> = {}
+  if (input.name !== undefined) update["user.name"] = input.name
+  if (input.surname !== undefined) update["user.surname"] = input.surname
+  if (input.phone !== undefined) update["profil.phone"] = input.phone
+  if (Object.keys(update).length === 0) return
+  await updateDoc(doc(usersCollection, uid), update)
 }
 
 // Storage path identique à FirestoreStorageRepository.uploadImg côté app

@@ -12,6 +12,7 @@ import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
 import { emptyAddress, type Address } from "@/types/residence"
 import { emptyAgencyDept, type AgencyDept, type Gerance, type ServiceType } from "@/types/gerance"
+import type { CompanySearchResult } from "@/lib/companySearch"
 
 const gerancesCollection = collection(db, "gerances")
 
@@ -105,6 +106,29 @@ export async function updateGerance(id: string, input: GeranceInput) {
 // Services/Agents, plus complexes) : demande explicite de l'utilisateur.
 export async function updateGeranceAddress(id: string, address: Address) {
   await updateDoc(doc(db, "gerances", id), { address })
+}
+
+// Édition manuelle du SIRET/responsable légal, sans passer par la
+// recherche - un utilisateur peut vouloir corriger le résultat auto ou le
+// saisir directement.
+export async function updateGeranceLegalInfo(
+  id: string,
+  info: { siret: string; responsableLegal: string }
+) {
+  await updateDoc(doc(db, "gerances", id), info)
+}
+
+// Reporte un résultat de recherche-entreprises.api.gouv.fr (cf.
+// lib/companySearch.ts) directement sur la fiche - écrase nom/adresse en
+// plus de siret/responsableLegal, l'utilisateur ayant explicitement choisi
+// ce résultat pour représenter son agence.
+export async function applyCompanySearchResult(id: string, result: CompanySearchResult) {
+  await updateDoc(doc(db, "gerances", id), {
+    name: result.name,
+    address: result.address,
+    siret: result.siret,
+    responsableLegal: result.responsableLegal,
+  })
 }
 
 export type AgencyAccountRole = "agence" | "agent"
