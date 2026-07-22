@@ -496,6 +496,12 @@ function ServiceSection({
                 id={`${type}-mail`}
                 type="email"
                 value={dept.mail}
+                // Verrouillé dès qu'une adresse est déjà persistée (rattachée
+                // à une licence, cf. AccountControl ci-dessous) - modifiable
+                // uniquement tant que le service vient d'être activé et n'a
+                // encore jamais été enregistré avec un email.
+                disabled={!!gerance?.services[type]?.mail}
+                title={gerance?.services[type]?.mail ? "Rattaché à une licence, non modifiable" : undefined}
                 onChange={(e) => onChange({ ...dept, mail: e.target.value })}
               />
             </div>
@@ -552,6 +558,10 @@ function ServiceSection({
                       placeholder="Email (optionnel)"
                       type="email"
                       value={agent.mail ?? ""}
+                      // Même verrou que l'email de service ci-dessus, une
+                      // fois un compte déjà invité sur cette adresse.
+                      disabled={!!persistedAgent?.uid}
+                      title={persistedAgent?.uid ? "Rattaché à une licence, non modifiable" : undefined}
                       onChange={(e) => updateAgent(index, { ...agent, mail: e.target.value })}
                     />
                     <Input
@@ -824,7 +834,6 @@ function AgencyServiceCard({
   canEdit: boolean
 }) {
   const dept = gerance.services[type]
-  const [mail, setMail] = useState(dept?.mail ?? "")
   const [phone, setPhone] = useState(dept?.phone ?? "")
   const [savingContact, setSavingContact] = useState(false)
   const [addingAgent, setAddingAgent] = useState(false)
@@ -832,18 +841,22 @@ function AgencyServiceCard({
   const [savingAgent, setSavingAgent] = useState(false)
 
   useEffect(() => {
-    setMail(dept?.mail ?? "")
     setPhone(dept?.phone ?? "")
-  }, [gerance.id, type, dept?.mail, dept?.phone])
+  }, [gerance.id, type, dept?.phone])
 
   if (!dept) return null
 
   const uidField = AGENT_UID_FIELD[type]
 
+  // Email du service jamais modifiable ici (contrairement au téléphone) :
+  // c'est l'identifiant de la licence (une adresse mail = un compte
+  // agence/agent invité via invite_agency_account) - le changer désynchro-
+  // niserait l'email affiché du compte Firebase Auth réellement rattaché
+  // (dept.uid), qui continuerait de pointer sur l'ancienne adresse.
   async function handleSaveContact() {
     setSavingContact(true)
     try {
-      await updateGeranceDeptContact(gerance.id, type, { mail, phone })
+      await updateGeranceDeptContact(gerance.id, type, { mail: dept.mail, phone })
       toast.success("Service mis à jour")
     } catch (err) {
       toast.error("Échec de l'enregistrement : " + (err as Error).message)
@@ -887,7 +900,12 @@ function AgencyServiceCard({
             <div className="grid flex-1 gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`${type}-svc-mail`}>Email du service</Label>
-                <Input id={`${type}-svc-mail`} type="email" value={mail} onChange={(e) => setMail(e.target.value)} />
+                <Input
+                  id={`${type}-svc-mail`}
+                  value={dept.mail}
+                  disabled
+                  title="Rattaché à une licence, non modifiable"
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`${type}-svc-phone`}>Téléphone</Label>
