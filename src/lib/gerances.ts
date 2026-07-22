@@ -11,17 +11,31 @@ import {
 import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
 import { emptyAddress, type Address } from "@/types/residence"
-import type { Agent, AgencyDept, Gerance, ServiceType } from "@/types/gerance"
+import { emptyAgencyDept, type Agent, type AgencyDept, type Gerance, type ServiceType } from "@/types/gerance"
 
 const gerancesCollection = collection(db, "gerances")
 
+// Merge superficiel volontaire pour name/address/services (une gérance sans
+// agents pré-1re-invitation reste `agents: undefined` en base sur certains
+// documents plus anciens, créés avant que la saisie du formulaire ne pose
+// systématiquement `agents: []`) - chaque dept est donc renormalisé
+// individuellement pour garantir `agents` toujours défini, sans quoi
+// dept.agents.length plante partout où une fiche Agence est affichée.
 function toGerance(id: string, data: unknown): Gerance {
+  const raw = (data as Partial<Omit<Gerance, "id">>) ?? {}
+  const rawServices = raw.services ?? {}
+  const services: Partial<Record<ServiceType, AgencyDept>> = {}
+  for (const type of Object.keys(rawServices) as ServiceType[]) {
+    const dept = rawServices[type]
+    if (!dept) continue
+    services[type] = { ...emptyAgencyDept, ...dept, agents: dept.agents ?? [] }
+  }
   return {
     id,
     name: "",
     address: emptyAddress,
-    services: {},
-    ...(data as Partial<Omit<Gerance, "id">>),
+    ...raw,
+    services,
   }
 }
 
