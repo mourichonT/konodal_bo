@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -23,13 +23,17 @@ import {
 } from "@/components/ui/table"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import {
+  addGeranceAgent,
   createGerance,
   inviteAgencyAccount,
+  removeGeranceAgent,
   revokeAgencyAccount,
   setAgentAccountUid,
   setDeptAccountUid,
   subscribeToGerances,
   updateGerance,
+  updateGeranceAddress,
+  updateGeranceDeptContact,
   type AgencyAccountRole,
   type GeranceInput,
 } from "@/lib/gerances"
@@ -127,12 +131,7 @@ export default function AgencesPage() {
   return (
     <div className="flex flex-col gap-6">
       {isOwnAgencyView ? (
-        <OwnAgencyPage
-          gerance={ownGerance}
-          loading={loading}
-          canEdit={isAgence}
-          onEdit={() => ownGerance && setEditingId(ownGerance.id)}
-        />
+        <OwnAgencyPage gerance={ownGerance} loading={loading} canEdit={isAgence} />
       ) : (
         <>
           <h1 className="text-2xl font-semibold">Agences</h1>
@@ -700,18 +699,18 @@ function AccountControl({
 // détail du BO (ResidenceDetailPage, SinistreDetailPage,
 // EvenementDetailPage), plutôt que la liste/répertoire pensée pour
 // Superadmin qui n'a pas de sens pour un compte scopé à une seule fiche.
-// canEdit=false (Agent) = pure consultation ; canEdit=true (Agence) ajoute
-// le bouton "Modifier" ouvrant le même dialog que le répertoire Superadmin.
+// canEdit=false (Agent) = pure consultation ; canEdit=true (Agence) = champs
+// directement modifiables sur la page (pas de bouton "Modifier"/dialog -
+// demande explicite : les infos doivent être visibles ET éditables tout de
+// suite, y compris inviter/révoquer/retirer un agent).
 function OwnAgencyPage({
   gerance,
   loading,
   canEdit,
-  onEdit,
 }: {
   gerance: Gerance | null
   loading: boolean
   canEdit: boolean
-  onEdit: () => void
 }) {
   return (
     <div className="flex flex-col gap-8">
@@ -727,83 +726,297 @@ function OwnAgencyPage({
 
       {gerance && (
         <>
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-            <CardHeader>
-              <CardTitle className="text-base">Informations</CardTitle>
-              {canEdit && (
-                <CardAction>
-                  <Button variant="outline" size="sm" onClick={onEdit}>
-                    <Pencil />
-                    Modifier
-                  </Button>
-                </CardAction>
-              )}
-            </CardHeader>
-            <CardContent className="grid gap-4 text-sm sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <span className="text-muted-foreground">Adresse : </span>
-                {[gerance.address.street, [gerance.address.zipCode, gerance.address.city].join(" ")]
-                  .filter(Boolean)
-                  .join(" — ") || "—"}
-              </div>
-            </CardContent>
-          </Card>
-
+          <AgencyInfoCard gerance={gerance} canEdit={canEdit} />
           {serviceTypes
             .filter((type) => gerance.services[type])
-            .map((type) => {
-              const dept = gerance.services[type]
-              if (!dept) return null
-              return (
-                <Card key={type} className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-                  <CardHeader>
-                    <CardTitle className="text-base">{serviceTypeLabels[type]}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-4">
-                    <div className="grid gap-4 text-sm sm:grid-cols-2">
-                      <div>
-                        <span className="text-muted-foreground">Email du service : </span>
-                        {dept.mail || "—"}
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Téléphone : </span>
-                        {dept.phone || "—"}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2 border-t pt-4">
-                      <span className="text-sm text-muted-foreground">Agents</span>
-                      {dept.agents.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Aucun agent nommé pour ce service.</p>
-                      ) : (
-                        <Table>
-                          <TableHeader className="bg-muted/40">
-                            <TableRow>
-                              <TableHead>Nom</TableHead>
-                              <TableHead>Email</TableHead>
-                              <TableHead>Téléphone</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody className="bg-white">
-                            {dept.agents.map((agent, i) => (
-                              <TableRow key={i}>
-                                <TableCell className="font-medium">
-                                  {`${agent.name_agent} ${agent.surname_agent}`.trim() || "—"}
-                                </TableCell>
-                                <TableCell>{agent.mail || "—"}</TableCell>
-                                <TableCell>{agent.phone || "—"}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
+            .map((type) => (
+              <AgencyServiceCard key={type} gerance={gerance} type={type} canEdit={canEdit} />
+            ))}
         </>
       )}
     </div>
+  )
+}
+
+function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boolean }) {
+  const [street, setStreet] = useState(gerance.address.street)
+  const [zipCode, setZipCode] = useState(gerance.address.zipCode)
+  const [city, setCity] = useState(gerance.address.city)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setStreet(gerance.address.street)
+    setZipCode(gerance.address.zipCode)
+    setCity(gerance.address.city)
+  }, [gerance.id, gerance.address.street, gerance.address.zipCode, gerance.address.city])
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await updateGeranceAddress(gerance.id, { ...emptyAddress, street, zipCode, city })
+      toast.success("Adresse mise à jour")
+    } catch (err) {
+      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+      <CardHeader>
+        <CardTitle className="text-base">Informations</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {canEdit ? (
+          <div className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <Label htmlFor="agency-street">Adresse</Label>
+                <Input id="agency-street" value={street} onChange={(e) => setStreet(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="agency-zip">Code postal</Label>
+                <Input id="agency-zip" value={zipCode} onChange={(e) => setZipCode(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="agency-city">Ville</Label>
+                <Input id="agency-city" value={city} onChange={(e) => setCity(e.target.value)} />
+              </div>
+            </div>
+            <Button className="w-fit" size="sm" onClick={handleSave} disabled={saving}>
+              <Save />
+              Enregistrer
+            </Button>
+          </div>
+        ) : (
+          <div className="text-sm">
+            <span className="text-muted-foreground">Adresse : </span>
+            {[street, [zipCode, city].join(" ")].filter(Boolean).join(" — ") || "—"}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function AgencyServiceCard({
+  gerance,
+  type,
+  canEdit,
+}: {
+  gerance: Gerance
+  type: ServiceType
+  canEdit: boolean
+}) {
+  const dept = gerance.services[type]
+  const [mail, setMail] = useState(dept?.mail ?? "")
+  const [phone, setPhone] = useState(dept?.phone ?? "")
+  const [savingContact, setSavingContact] = useState(false)
+  const [addingAgent, setAddingAgent] = useState(false)
+  const [newAgent, setNewAgent] = useState<Agent>({ name_agent: "", surname_agent: "" })
+  const [savingAgent, setSavingAgent] = useState(false)
+
+  useEffect(() => {
+    setMail(dept?.mail ?? "")
+    setPhone(dept?.phone ?? "")
+  }, [gerance.id, type, dept?.mail, dept?.phone])
+
+  if (!dept) return null
+
+  const uidField = AGENT_UID_FIELD[type]
+
+  async function handleSaveContact() {
+    setSavingContact(true)
+    try {
+      await updateGeranceDeptContact(gerance.id, type, { mail, phone })
+      toast.success("Service mis à jour")
+    } catch (err) {
+      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+    } finally {
+      setSavingContact(false)
+    }
+  }
+
+  async function handleAddAgent() {
+    if (!newAgent.name_agent && !newAgent.surname_agent && !newAgent.mail) return
+    setSavingAgent(true)
+    try {
+      await addGeranceAgent(gerance, type, newAgent)
+      setNewAgent({ name_agent: "", surname_agent: "" })
+      setAddingAgent(false)
+      toast.success("Agent ajouté")
+    } catch (err) {
+      toast.error("Échec de l'ajout : " + (err as Error).message)
+    } finally {
+      setSavingAgent(false)
+    }
+  }
+
+  async function handleRemoveAgent(index: number) {
+    try {
+      await removeGeranceAgent(gerance, type, index)
+      toast.success("Agent retiré")
+    } catch (err) {
+      toast.error("Échec de la suppression : " + (err as Error).message)
+    }
+  }
+
+  return (
+    <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+      <CardHeader>
+        <CardTitle className="text-base">{serviceTypeLabels[type]}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {canEdit ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="grid flex-1 gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${type}-svc-mail`}>Email du service</Label>
+                <Input id={`${type}-svc-mail`} type="email" value={mail} onChange={(e) => setMail(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${type}-svc-phone`}>Téléphone</Label>
+                <Input id={`${type}-svc-phone`} value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </div>
+            </div>
+            <Button size="sm" onClick={handleSaveContact} disabled={savingContact}>
+              <Save />
+              Enregistrer
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-4 text-sm sm:grid-cols-2">
+            <div>
+              <span className="text-muted-foreground">Email du service : </span>
+              {dept.mail || "—"}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Téléphone : </span>
+              {dept.phone || "—"}
+            </div>
+          </div>
+        )}
+
+        {canEdit && dept.mail && (
+          <AccountControl
+            gerance={gerance}
+            serviceType={type}
+            mail={dept.mail}
+            role="agence"
+            persistedUid={dept.uid}
+            onLinkUid={(uid) => setDeptAccountUid(gerance, type, uid)}
+          />
+        )}
+
+        <div className="flex flex-col gap-2 border-t pt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Agents</span>
+            {canEdit && !addingAgent && (
+              <Button type="button" variant="outline" size="sm" onClick={() => setAddingAgent(true)}>
+                <Plus />
+                Ajouter un agent
+              </Button>
+            )}
+          </div>
+
+          {dept.agents.length === 0 && !addingAgent ? (
+            <p className="text-sm text-muted-foreground">Aucun agent nommé pour ce service.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {dept.agents.map((agent, i) => {
+                const agentHasActiveAccount = !!agent.uid && !!gerance[uidField]?.includes(agent.uid)
+                return (
+                  <div key={i} className="flex flex-col gap-2 rounded-md bg-muted/50 p-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm">
+                        <span className="font-medium">
+                          {`${agent.name_agent} ${agent.surname_agent}`.trim() || "—"}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {" — "}
+                          {[agent.mail, agent.phone].filter(Boolean).join(" · ") || "—"}
+                        </span>
+                      </div>
+                      {canEdit && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={agentHasActiveAccount}
+                          title={
+                            agentHasActiveAccount
+                              ? "Révoquez l'accès de cet agent avant de le supprimer"
+                              : undefined
+                          }
+                          onClick={() => handleRemoveAgent(i)}
+                        >
+                          <X />
+                        </Button>
+                      )}
+                    </div>
+                    {canEdit && agent.mail && (
+                      <AccountControl
+                        gerance={gerance}
+                        serviceType={type}
+                        mail={agent.mail}
+                        role="agent"
+                        persistedUid={agent.uid}
+                        onLinkUid={(uid) => setAgentAccountUid(gerance, type, agent.mail!, uid)}
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {canEdit && addingAgent && (
+            <div className="flex flex-col gap-2 rounded-md border p-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="Prénom"
+                  value={newAgent.name_agent}
+                  onChange={(e) => setNewAgent({ ...newAgent, name_agent: e.target.value })}
+                />
+                <Input
+                  placeholder="Nom"
+                  value={newAgent.surname_agent}
+                  onChange={(e) => setNewAgent({ ...newAgent, surname_agent: e.target.value })}
+                />
+                <Input
+                  placeholder="Email (optionnel)"
+                  type="email"
+                  value={newAgent.mail ?? ""}
+                  onChange={(e) => setNewAgent({ ...newAgent, mail: e.target.value })}
+                />
+                <Input
+                  placeholder="Téléphone (optionnel)"
+                  value={newAgent.phone ?? ""}
+                  onChange={(e) => setNewAgent({ ...newAgent, phone: e.target.value })}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" onClick={handleAddAgent} disabled={savingAgent}>
+                  <Save />
+                  Enregistrer
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setAddingAgent(false)
+                    setNewAgent({ name_agent: "", surname_agent: "" })
+                  }}
+                >
+                  Annuler
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }

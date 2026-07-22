@@ -104,6 +104,14 @@ export async function updateGerance(id: string, input: GeranceInput) {
   })
 }
 
+// Édition ciblée de l'adresse seule, exposée en champs directement
+// modifiables sur la fiche Agence (OwnAgencyPage) - pas de dialog/bouton
+// "Modifier" pour ce champ précis (celui-ci reste réservé à
+// Services/Agents, plus complexes) : demande explicite de l'utilisateur.
+export async function updateGeranceAddress(id: string, address: Address) {
+  await updateDoc(doc(db, "gerances", id), { address })
+}
+
 export type AgencyAccountRole = "agence" | "agent"
 
 // Cloud Functions Admin SDK (functions_python/main.py) - seul chemin pour
@@ -163,5 +171,41 @@ export async function setAgentAccountUid(
 export async function setDeptAccountUid(gerance: Gerance, serviceType: ServiceType, uid: string) {
   await updateDoc(doc(db, "gerances", gerance.id), {
     [`services.${serviceType}.uid`]: uid,
+  })
+}
+
+// Retrait direct d'un agent (fiche Agence, hors dialog) - l'appelant
+// garantit déjà côté UI qu'aucun compte actif n'y est rattaché (même garde
+// que dans GeranceFormDialog/ServiceSection : révoquer avant de supprimer).
+export async function removeGeranceAgent(gerance: Gerance, serviceType: ServiceType, index: number) {
+  const dept = gerance.services[serviceType]
+  if (!dept) return
+  const agents = dept.agents.filter((_, i) => i !== index)
+  await updateDoc(doc(db, "gerances", gerance.id), {
+    [`services.${serviceType}.agents`]: agents.map(sanitizeAgent),
+  })
+}
+
+// Ajout direct d'un agent (fiche Agence, hors dialog) - même contrepartie de
+// removeGeranceAgent ci-dessus.
+export async function addGeranceAgent(gerance: Gerance, serviceType: ServiceType, agent: Agent) {
+  const dept = gerance.services[serviceType]
+  if (!dept) return
+  const agents = [...dept.agents, agent]
+  await updateDoc(doc(db, "gerances", gerance.id), {
+    [`services.${serviceType}.agents`]: agents.map(sanitizeAgent),
+  })
+}
+
+// Édition ciblée du contact d'un service (mail/téléphone), même logique que
+// updateGeranceAddress - fiche Agence directement modifiable, sans dialog.
+export async function updateGeranceDeptContact(
+  id: string,
+  serviceType: ServiceType,
+  contact: { mail: string; phone: string }
+) {
+  await updateDoc(doc(db, "gerances", id), {
+    [`services.${serviceType}.mail`]: contact.mail,
+    [`services.${serviceType}.phone`]: contact.phone,
   })
 }
