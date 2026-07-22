@@ -188,7 +188,12 @@ export default function ResidentDetailPage() {
                   {user.rejectionReason}
                 </div>
               )}
-              <IdentityFields user={user} canEdit={isSuperAdmin || isAgence} />
+              {/* Identité (nom/prénom/date de naissance/pièce...) réservée
+                  superAdmin - une Agence reste en lecture seule ici, même
+                  traitement qu'un Agent (correction d'une identité mal
+                  reconnue = action superAdmin, distincte de la gestion de
+                  ses propres lots/agents). */}
+              <IdentityFields user={user} canEdit={isSuperAdmin} />
 
               <div className="pr-[20px] flex flex-col gap-2 pt-[22px] pb-[20px]">
                 <Label className="mb-[20px]">Document(s)</Label>
