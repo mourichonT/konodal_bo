@@ -1,25 +1,17 @@
 import type { Address } from "@/types/residence"
 
-export type Agent = {
-  name_agent: string
-  surname_agent: string
-  mail?: string
-  phone?: string
-  // Posé par inviteAgencyAccount une fois le compte BO créé/lié (uid
-  // Firebase Auth) - absent tant que cet agent n'a jamais été invité. Le
-  // statut "actif" réel se lit en croisant ce uid avec
-  // serviceSyndicAgentUids/geranceLocativeAgentUids (uid présent mais pas
-  // dans le tableau = accès révoqué, pas "jamais invité").
-  uid?: string
-}
-
+// Un "agent" n'est plus un objet saisi à la main (nom/prénom/email/
+// téléphone) stocké séparément - il n'existe QUE s'il a déjà un compte BO
+// invité, et son identité (nom/prénom/téléphone) se lit directement sur
+// users/{uid} via serviceSyndicAgentUids/geranceLocativeAgentUids
+// (resolveUsersByUids, cf. lib/users.ts). Pas de état intermédiaire "pas
+// encore invité" à représenter ici : inviter EST l'action qui le crée.
 export type AgencyDept = {
   mail: string
   phone: string
-  agents: Agent[]
   // Compte BO lié à l'adresse GÉNÉRIQUE du service (cas "une adresse
-  // globale par service", sans agent nommé individuel) - même mécanique que
-  // Agent.uid, posée par inviteAgencyAccount, jamais saisie à la main.
+  // globale par service", sans agent nommé individuel) - posé par
+  // inviteAgencyAccount, jamais saisi à la main.
   uid?: string
 }
 
@@ -49,5 +41,12 @@ export type Gerance = {
 export const emptyAgencyDept: AgencyDept = {
   mail: "",
   phone: "",
-  agents: [],
+}
+
+// Champ gerance.<x> à ArrayUnion/ArrayRemove selon le service - partagé
+// entre AgencesPage (invite/révoque) et ResidenceDetailPage (choix de
+// l'agent responsable d'une résidence, résolu depuis ce même tableau).
+export const AGENT_UID_FIELD: Record<ServiceType, "serviceSyndicAgentUids" | "geranceLocativeAgentUids"> = {
+  serviceSyndic: "serviceSyndicAgentUids",
+  geranceLocative: "geranceLocativeAgentUids",
 }

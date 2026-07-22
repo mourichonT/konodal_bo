@@ -35,10 +35,12 @@ import {
 } from "@/lib/structures"
 import { createLot, deleteLot, subscribeToLots, updateLot, type LotInput } from "@/lib/lots"
 import { subscribeToGerances } from "@/lib/gerances"
+import { resolveUsersByUids } from "@/lib/users"
 import { emptyAddress, type Residence } from "@/types/residence"
 import { structureTypeOptions, type StructureResidence } from "@/types/structure"
 import { defaultIsLinkableForType, typeLotOptions } from "@/types/lot"
-import { serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
+import { AGENT_UID_FIELD, serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
+import type { KonodalUser } from "@/types/user"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { cn } from "@/lib/utils"
 
@@ -143,7 +145,31 @@ function InfoSection({ residence }: { residence: Residence }) {
 
   const selectedGerance = gerances.find((g) => g.id === geranceId)
   const availableServiceTypes = (Object.keys(selectedGerance?.services ?? {}) as ServiceType[])
-  const availableAgents = serviceType ? selectedGerance?.services[serviceType]?.agents ?? [] : []
+
+  // Agents nommés = comptes déjà invités sur ce service (serviceSyndicAgentUids/
+  // geranceLocativeAgentUids), résolus depuis users/{uid} - le compte
+  // générique du service (dept.uid) est exclu, il a déjà sa propre option
+  // "Service (générique)" ci-dessous.
+  const [availableAgents, setAvailableAgents] = useState<KonodalUser[]>([])
+  useEffect(() => {
+    if (!serviceType || !selectedGerance) {
+      setAvailableAgents([])
+      return
+    }
+    const dept = selectedGerance.services[serviceType]
+    const uids = (selectedGerance[AGENT_UID_FIELD[serviceType]] ?? []).filter((uid) => uid !== dept?.uid)
+    if (uids.length === 0) {
+      setAvailableAgents([])
+      return
+    }
+    let cancelled = false
+    resolveUsersByUids(uids).then((users) => {
+      if (!cancelled) setAvailableAgents(users)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [serviceType, selectedGerance])
 
   async function handleSave() {
     setSaving(true)
@@ -251,10 +277,10 @@ function InfoSection({ residence }: { residence: Residence }) {
               >
                 <option value="">Service (générique, sans agent précis)</option>
                 {availableAgents
-                  .filter((a) => a.mail)
+                  .filter((a) => a.email)
                   .map((a) => (
-                    <option key={a.mail} value={a.mail}>
-                      {a.name_agent} {a.surname_agent}
+                    <option key={a.email} value={a.email}>
+                      {a.name} {a.surname}
                     </option>
                   ))}
               </select>

@@ -11,16 +11,13 @@ import {
 import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
 import { emptyAddress, type Address } from "@/types/residence"
-import { emptyAgencyDept, type Agent, type AgencyDept, type Gerance, type ServiceType } from "@/types/gerance"
+import { emptyAgencyDept, type AgencyDept, type Gerance, type ServiceType } from "@/types/gerance"
 
 const gerancesCollection = collection(db, "gerances")
 
-// Merge superficiel volontaire pour name/address/services (une gérance sans
-// agents pré-1re-invitation reste `agents: undefined` en base sur certains
-// documents plus anciens, créés avant que la saisie du formulaire ne pose
-// systématiquement `agents: []`) - chaque dept est donc renormalisé
-// individuellement pour garantir `agents` toujours défini, sans quoi
-// dept.agents.length plante partout où une fiche Agence est affichée.
+// Merge superficiel volontaire pour name/address/services - chaque dept est
+// renormalisé individuellement contre emptyAgencyDept (mail/phone toujours
+// définis, même sur un document plus ancien créé avant l'ajout d'un champ).
 function toGerance(id: string, data: unknown): Gerance {
   const raw = (data as Partial<Omit<Gerance, "id">>) ?? {}
   const rawServices = raw.services ?? {}
@@ -28,7 +25,7 @@ function toGerance(id: string, data: unknown): Gerance {
   for (const type of Object.keys(rawServices) as ServiceType[]) {
     const dept = rawServices[type]
     if (!dept) continue
-    services[type] = { ...emptyAgencyDept, ...dept, agents: dept.agents ?? [] }
+    services[type] = { ...emptyAgencyDept, ...dept }
   }
   return {
     id,
@@ -69,24 +66,9 @@ export type GeranceInput = {
   services: Partial<Record<ServiceType, AgencyDept>>
 }
 
-// Les agents n'ont pas forcément de mail/téléphone direct (contact au niveau
-// du service uniquement) : on omet ces clés plutôt que d'écrire une chaîne
-// vide, pour rester compatible avec le modèle Agent côté app mobile
-// (mail/phone optionnels, absents si non renseignés). `uid` (posé par
-// inviteAgencyAccount) est préservé tel quel s'il existe déjà - jamais
-// saisi manuellement dans le formulaire agence, donc jamais réécrit par lui.
-function sanitizeAgent(agent: Agent) {
-  return {
-    name_agent: agent.name_agent,
-    surname_agent: agent.surname_agent,
-    ...(agent.mail ? { mail: agent.mail } : {}),
-    ...(agent.phone ? { phone: agent.phone } : {}),
-    ...(agent.uid ? { uid: agent.uid } : {}),
-  }
-}
-
-// Même précaution que sanitizeAgent, pour l'adresse générique du service
-// (cas "une adresse globale par service", sans agent nommé individuel).
+// `uid` (posé par inviteAgencyAccount) est préservé tel quel s'il existe
+// déjà - jamais saisi manuellement dans le formulaire agence, donc jamais
+// réécrit par lui.
 function sanitizeServices(
   services: Partial<Record<ServiceType, AgencyDept>>
 ): Partial<Record<ServiceType, AgencyDept>> {
@@ -95,7 +77,6 @@ function sanitizeServices(
     result[key] = {
       mail: dept.mail,
       phone: dept.phone,
-      agents: dept.agents.map(sanitizeAgent),
       ...(dept.uid ? { uid: dept.uid } : {}),
     }
   }
@@ -160,54 +141,14 @@ export async function revokeAgencyAccount(
   await call({ geranceId, serviceType, uid })
 }
 
-// Reporte l'uid retourné par inviteAgencyAccount sur LE bon agent, identifié
-// par email (référence stable qu'utilise aussi la Cloud Function elle-même,
-// contrairement à une position dans le tableau qui peut changer si la liste
-// est réordonnée avant d'enregistrer) - sans ce lien, impossible de savoir
-// plus tard lequel des agents listés correspond à quel compte (le uid n'est
-// jamais saisi manuellement, cf. sanitizeAgent).
-export async function setAgentAccountUid(
-  gerance: Gerance,
-  serviceType: ServiceType,
-  agentMail: string,
-  uid: string
-) {
-  const dept = gerance.services[serviceType]
-  if (!dept) return
-  const agents: Agent[] = dept.agents.map((a) => (a.mail === agentMail ? { ...a, uid } : a))
-  await updateDoc(doc(db, "gerances", gerance.id), {
-    [`services.${serviceType}.agents`]: agents.map(sanitizeAgent),
-  })
-}
-
-// Même chose que setAgentAccountUid, pour l'adresse générique du service
-// (pas d'agent nommé - cas "une adresse globale par service").
+// Compte BO lié à l'adresse générique du service (pas d'agent nommé - cas
+// "une adresse globale par service"). Un agent NOMMÉ, lui, n'a plus besoin
+// d'équivalent : sa présence dans serviceSyndicAgentUids/
+// geranceLocativeAgentUids (posée directement par invite_agency_account)
+// suffit à le faire apparaître, résolu via resolveUsersByUids.
 export async function setDeptAccountUid(gerance: Gerance, serviceType: ServiceType, uid: string) {
   await updateDoc(doc(db, "gerances", gerance.id), {
     [`services.${serviceType}.uid`]: uid,
-  })
-}
-
-// Retrait direct d'un agent (fiche Agence, hors dialog) - l'appelant
-// garantit déjà côté UI qu'aucun compte actif n'y est rattaché (même garde
-// que dans GeranceFormDialog/ServiceSection : révoquer avant de supprimer).
-export async function removeGeranceAgent(gerance: Gerance, serviceType: ServiceType, index: number) {
-  const dept = gerance.services[serviceType]
-  if (!dept) return
-  const agents = dept.agents.filter((_, i) => i !== index)
-  await updateDoc(doc(db, "gerances", gerance.id), {
-    [`services.${serviceType}.agents`]: agents.map(sanitizeAgent),
-  })
-}
-
-// Ajout direct d'un agent (fiche Agence, hors dialog) - même contrepartie de
-// removeGeranceAgent ci-dessus.
-export async function addGeranceAgent(gerance: Gerance, serviceType: ServiceType, agent: Agent) {
-  const dept = gerance.services[serviceType]
-  if (!dept) return
-  const agents = [...dept.agents, agent]
-  await updateDoc(doc(db, "gerances", gerance.id), {
-    [`services.${serviceType}.agents`]: agents.map(sanitizeAgent),
   })
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { toast } from "sonner"
-import { Briefcase, Check, Home, Landmark, Mail, Pencil, Plus, Save, Search, ShieldOff, X } from "lucide-react"
+import { Briefcase, Check, Home, Landmark, Mail, Pencil, Plus, Save, Search, ShieldOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -23,12 +23,9 @@ import {
 } from "@/components/ui/table"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import {
-  addGeranceAgent,
   createGerance,
   inviteAgencyAccount,
-  removeGeranceAgent,
   revokeAgencyAccount,
-  setAgentAccountUid,
   setDeptAccountUid,
   subscribeToGerances,
   updateGerance,
@@ -37,18 +34,20 @@ import {
   type AgencyAccountRole,
   type GeranceInput,
 } from "@/lib/gerances"
+import { resolveUsersByUids } from "@/lib/users"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useAuth } from "@/lib/auth-context"
 import { emptyAddress } from "@/types/residence"
 import {
+  AGENT_UID_FIELD,
   emptyAgencyDept,
   serviceTypeLabels,
-  type Agent,
   type AgencyDept,
   type Gerance,
   type ServiceType,
 } from "@/types/gerance"
+import type { KonodalUser } from "@/types/user"
 
 const serviceTypes: ServiceType[] = ["serviceSyndic", "geranceLocative"]
 
@@ -329,7 +328,7 @@ function GeranceFormDialog({
     setServices((prev) => {
       const next = { ...prev }
       if (enabled) {
-        next[type] = next[type] ?? { ...emptyAgencyDept, agents: [] }
+        next[type] = next[type] ?? { ...emptyAgencyDept }
       } else {
         delete next[type]
       }
@@ -411,11 +410,6 @@ function GeranceFormDialog({
   )
 }
 
-const AGENT_UID_FIELD: Record<ServiceType, "serviceSyndicAgentUids" | "geranceLocativeAgentUids"> = {
-  serviceSyndic: "serviceSyndicAgentUids",
-  geranceLocative: "geranceLocativeAgentUids",
-}
-
 function ServiceSection({
   type,
   dept,
@@ -431,41 +425,12 @@ function ServiceSection({
 }) {
   const enabled = dept !== undefined
 
-  function addAgent() {
-    if (!dept) return
-    onChange({
-      ...dept,
-      agents: [...dept.agents, { name_agent: "", surname_agent: "" }],
-    })
-  }
-
-  function updateAgent(index: number, agent: Agent) {
-    if (!dept) return
-    onChange({
-      ...dept,
-      agents: dept.agents.map((a, i) => (i === index ? agent : a)),
-    })
-  }
-
-  function removeAgent(index: number) {
-    if (!dept) return
-    onChange({ ...dept, agents: dept.agents.filter((_, i) => i !== index) })
-  }
-
-  // "Le compte reste actif si on supprime la ligne sans révoquer d'abord" :
-  // supprimer un agent/désactiver un service ne fait que retirer l'entrée
-  // de services.<type>.agents (ou tout le service) au prochain
-  // "Enregistrer" - ça ne touche ni serviceSyndicAgentUids/
-  // geranceLocativeAgentUids, ni le compte Firebase Auth. Un agent/service
-  // avec un compte actif doit donc être révoqué AVANT de pouvoir être
-  // retiré, jamais implicitement par la suppression de sa ligne.
+  // Désactiver tout un service alors qu'il reste des comptes actifs dessus
+  // (compte générique ou agents nommés, tous deux dans ce même tableau
+  // désormais) le couperait sans passer par revoke_agency_account -
+  // il faut d'abord tous les révoquer.
   const uidField = AGENT_UID_FIELD[type]
-  function hasActiveAccount(uid: string | undefined): boolean {
-    return !!uid && !!gerance?.[uidField]?.includes(uid)
-  }
-  const deptHasActiveAccount =
-    hasActiveAccount(gerance?.services[type]?.uid) ||
-    (gerance?.services[type]?.agents ?? []).some((a) => hasActiveAccount(a.uid))
+  const deptHasActiveAccount = (gerance?.[uidField]?.length ?? 0) > 0
 
   return (
     <div className="rounded-lg border p-3">
@@ -529,78 +494,13 @@ function ServiceSection({
             />
           )}
 
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <Label>Agents</Label>
-              <Button type="button" variant="outline" size="sm" onClick={addAgent}>
-                <Plus />
-                Ajouter un agent
-              </Button>
-            </div>
-            {dept.agents.map((agent, index) => {
-              const persistedAgent = gerance?.services[type]?.agents.find((a) => a.mail === agent.mail)
-              const agentHasActiveAccount = hasActiveAccount(persistedAgent?.uid)
-              return (
-              <div key={index} className="flex min-w-0 flex-col gap-2 rounded-md bg-muted/50 p-2">
-                <div className="flex min-w-0 items-start gap-2">
-                  <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Prénom"
-                      value={agent.name_agent}
-                      onChange={(e) => updateAgent(index, { ...agent, name_agent: e.target.value })}
-                    />
-                    <Input
-                      placeholder="Nom"
-                      value={agent.surname_agent}
-                      onChange={(e) => updateAgent(index, { ...agent, surname_agent: e.target.value })}
-                    />
-                    <Input
-                      placeholder="Email (optionnel)"
-                      type="email"
-                      value={agent.mail ?? ""}
-                      // Même verrou que l'email de service ci-dessus, une
-                      // fois un compte déjà invité sur cette adresse.
-                      disabled={!!persistedAgent?.uid}
-                      title={persistedAgent?.uid ? "Rattaché à une licence, non modifiable" : undefined}
-                      onChange={(e) => updateAgent(index, { ...agent, mail: e.target.value })}
-                    />
-                    <Input
-                      placeholder="Téléphone (optionnel)"
-                      value={agent.phone ?? ""}
-                      onChange={(e) => updateAgent(index, { ...agent, phone: e.target.value })}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={agentHasActiveAccount}
-                    title={agentHasActiveAccount ? "Révoquez l'accès de cet agent avant de le supprimer" : undefined}
-                    onClick={() => removeAgent(index)}
-                  >
-                    <X />
-                  </Button>
-                </div>
-                {gerance && agent.mail && (
-                  persistedAgent ? (
-                    <AccountControl
-                      gerance={gerance}
-                      serviceType={type}
-                      mail={agent.mail}
-                      role="agent"
-                      persistedUid={persistedAgent.uid}
-                      onLinkUid={(uid) => setAgentAccountUid(gerance, type, agent.mail!, uid)}
-                    />
-                  ) : (
-                    <p className="px-1 text-xs text-muted-foreground">
-                      Enregistrez d'abord l'agence pour pouvoir inviter cet agent.
-                    </p>
-                  )
-                )}
-              </div>
-              )
-            })}
-          </div>
+          {gerance ? (
+            <NamedAgentsManager gerance={gerance} type={type} />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Enregistrez d'abord l'agence pour pouvoir inviter des agents.
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -714,6 +614,127 @@ function AccountControl({
         <Mail />
         {isRevoked ? "Réinviter" : "Inviter"}
       </Button>
+    </div>
+  )
+}
+
+// Liste des agents nommés d'un service - un agent n'existe QUE via
+// serviceSyndicAgentUids/geranceLocativeAgentUids (compte déjà invité),
+// résolu en fiche complète via resolveUsersByUids. Partagé entre
+// ServiceSection (dialog Superadmin) et AgencyServiceCard (fiche Agence) :
+// même mécanique, seul le contexte d'appel diffère. Éditable par
+// superAdmin/agence, en lecture seule pour agent (même garde que
+// AccountControl).
+function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: ServiceType }) {
+  const { isSuperAdmin } = useIsSuperAdmin()
+  const { isAgence } = useAccountRole()
+  const { user } = useAuth()
+  const canEdit = isSuperAdmin || isAgence
+
+  const deptUid = gerance.services[type]?.uid
+  const agentUids = useMemo(
+    () => (gerance[AGENT_UID_FIELD[type]] ?? []).filter((uid) => uid !== deptUid),
+    [gerance, type, deptUid]
+  )
+  const [profiles, setProfiles] = useState<KonodalUser[]>([])
+  const [loadingProfiles, setLoadingProfiles] = useState(false)
+  const [newAgentEmail, setNewAgentEmail] = useState("")
+  const [inviting, setInviting] = useState(false)
+
+  useEffect(() => {
+    if (agentUids.length === 0) {
+      setProfiles([])
+      return
+    }
+    let cancelled = false
+    setLoadingProfiles(true)
+    resolveUsersByUids(agentUids)
+      .then((users) => {
+        if (!cancelled) setProfiles(users)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProfiles(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [agentUids])
+
+  async function handleInvite() {
+    const email = newAgentEmail.trim()
+    if (!email) return
+    setInviting(true)
+    try {
+      await inviteAgencyAccount(gerance.id, type, email, "agent")
+      setNewAgentEmail("")
+      toast.success(`Invitation envoyée à ${email}`)
+    } catch (err) {
+      toast.error("Échec de l'invitation : " + (err as Error).message)
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  async function handleRevoke(uid: string) {
+    try {
+      await revokeAgencyAccount(gerance.id, type, uid)
+      toast.success("Accès révoqué")
+    } catch (err) {
+      toast.error("Échec de la révocation : " + (err as Error).message)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>Agents</Label>
+      {loadingProfiles ? (
+        <p className="text-sm text-muted-foreground">Chargement…</p>
+      ) : profiles.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Aucun agent pour ce service.</p>
+      ) : (
+        profiles.map((profile) => {
+          const isSelf = profile.uid === user?.uid
+          return (
+            <div
+              key={profile.uid}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 p-2"
+            >
+              <div className="text-sm">
+                <span className="font-medium">
+                  {`${profile.name} ${profile.surname}`.trim() || profile.email}
+                </span>
+                <span className="text-muted-foreground">
+                  {" — "}
+                  {[profile.email, profile.phone].filter(Boolean).join(" · ") || "—"}
+                </span>
+              </div>
+              {canEdit &&
+                (isSelf ? (
+                  <span className="text-xs text-muted-foreground">C'est votre compte</span>
+                ) : (
+                  <Button type="button" variant="outline" size="sm" onClick={() => handleRevoke(profile.uid)}>
+                    <ShieldOff />
+                    Révoquer l'accès
+                  </Button>
+                ))}
+            </div>
+          )
+        })
+      )}
+      {canEdit && (
+        <div className="flex gap-2">
+          <Input
+            placeholder="Email de l'agent à inviter"
+            type="email"
+            value={newAgentEmail}
+            onChange={(e) => setNewAgentEmail(e.target.value)}
+          />
+          <Button type="button" size="sm" onClick={handleInvite} disabled={inviting}>
+            <Mail />
+            Inviter
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -836,17 +857,13 @@ function AgencyServiceCard({
   const dept = gerance.services[type]
   const [phone, setPhone] = useState(dept?.phone ?? "")
   const [savingContact, setSavingContact] = useState(false)
-  const [addingAgent, setAddingAgent] = useState(false)
-  const [newAgent, setNewAgent] = useState<Agent>({ name_agent: "", surname_agent: "" })
-  const [savingAgent, setSavingAgent] = useState(false)
 
   useEffect(() => {
     setPhone(dept?.phone ?? "")
   }, [gerance.id, type, dept?.phone])
 
   if (!dept) return null
-
-  const uidField = AGENT_UID_FIELD[type]
+  const currentDept = dept
 
   // Email du service jamais modifiable ici (contrairement au téléphone) :
   // c'est l'identifiant de la licence (une adresse mail = un compte
@@ -856,36 +873,12 @@ function AgencyServiceCard({
   async function handleSaveContact() {
     setSavingContact(true)
     try {
-      await updateGeranceDeptContact(gerance.id, type, { mail: dept.mail, phone })
+      await updateGeranceDeptContact(gerance.id, type, { mail: currentDept.mail, phone })
       toast.success("Service mis à jour")
     } catch (err) {
       toast.error("Échec de l'enregistrement : " + (err as Error).message)
     } finally {
       setSavingContact(false)
-    }
-  }
-
-  async function handleAddAgent() {
-    if (!newAgent.name_agent && !newAgent.surname_agent && !newAgent.mail) return
-    setSavingAgent(true)
-    try {
-      await addGeranceAgent(gerance, type, newAgent)
-      setNewAgent({ name_agent: "", surname_agent: "" })
-      setAddingAgent(false)
-      toast.success("Agent ajouté")
-    } catch (err) {
-      toast.error("Échec de l'ajout : " + (err as Error).message)
-    } finally {
-      setSavingAgent(false)
-    }
-  }
-
-  async function handleRemoveAgent(index: number) {
-    try {
-      await removeGeranceAgent(gerance, type, index)
-      toast.success("Agent retiré")
-    } catch (err) {
-      toast.error("Échec de la suppression : " + (err as Error).message)
     }
   }
 
@@ -941,112 +934,8 @@ function AgencyServiceCard({
           />
         )}
 
-        <div className="flex flex-col gap-2 border-t pt-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Agents</span>
-            {canEdit && !addingAgent && (
-              <Button type="button" variant="outline" size="sm" onClick={() => setAddingAgent(true)}>
-                <Plus />
-                Ajouter un agent
-              </Button>
-            )}
-          </div>
-
-          {dept.agents.length === 0 && !addingAgent ? (
-            <p className="text-sm text-muted-foreground">Aucun agent nommé pour ce service.</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {dept.agents.map((agent, i) => {
-                const agentHasActiveAccount = !!agent.uid && !!gerance[uidField]?.includes(agent.uid)
-                return (
-                  <div key={i} className="flex flex-col gap-2 rounded-md bg-muted/50 p-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-sm">
-                        <span className="font-medium">
-                          {`${agent.name_agent} ${agent.surname_agent}`.trim() || "—"}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {" — "}
-                          {[agent.mail, agent.phone].filter(Boolean).join(" · ") || "—"}
-                        </span>
-                      </div>
-                      {canEdit && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          disabled={agentHasActiveAccount}
-                          title={
-                            agentHasActiveAccount
-                              ? "Révoquez l'accès de cet agent avant de le supprimer"
-                              : undefined
-                          }
-                          onClick={() => handleRemoveAgent(i)}
-                        >
-                          <X />
-                        </Button>
-                      )}
-                    </div>
-                    {canEdit && agent.mail && (
-                      <AccountControl
-                        gerance={gerance}
-                        serviceType={type}
-                        mail={agent.mail}
-                        role="agent"
-                        persistedUid={agent.uid}
-                        onLinkUid={(uid) => setAgentAccountUid(gerance, type, agent.mail!, uid)}
-                      />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {canEdit && addingAgent && (
-            <div className="flex flex-col gap-2 rounded-md border p-2">
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  placeholder="Prénom"
-                  value={newAgent.name_agent}
-                  onChange={(e) => setNewAgent({ ...newAgent, name_agent: e.target.value })}
-                />
-                <Input
-                  placeholder="Nom"
-                  value={newAgent.surname_agent}
-                  onChange={(e) => setNewAgent({ ...newAgent, surname_agent: e.target.value })}
-                />
-                <Input
-                  placeholder="Email (optionnel)"
-                  type="email"
-                  value={newAgent.mail ?? ""}
-                  onChange={(e) => setNewAgent({ ...newAgent, mail: e.target.value })}
-                />
-                <Input
-                  placeholder="Téléphone (optionnel)"
-                  value={newAgent.phone ?? ""}
-                  onChange={(e) => setNewAgent({ ...newAgent, phone: e.target.value })}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button type="button" size="sm" onClick={handleAddAgent} disabled={savingAgent}>
-                  <Save />
-                  Enregistrer
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setAddingAgent(false)
-                    setNewAgent({ name_agent: "", surname_agent: "" })
-                  }}
-                >
-                  Annuler
-                </Button>
-              </div>
-            </div>
-          )}
+        <div className="border-t pt-4">
+          <NamedAgentsManager gerance={gerance} type={type} />
         </div>
       </CardContent>
     </Card>

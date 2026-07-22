@@ -20,9 +20,9 @@ import { db, storage } from "@/firebase"
 import { GERANCE_PLACEHOLDER_LOGO_URL, type EventInput } from "@/lib/events"
 import { subscribeToContacts } from "@/lib/contacts"
 import { subscribeToStructures } from "@/lib/structures"
+import { findUserByEmail } from "@/lib/users"
 import { CONTACT_SERVICE_ICON_FILENAMES, type Contact } from "@/types/contact"
 import type { GeranceRef } from "@/types/residence"
-import type { Agent, ServiceType } from "@/types/gerance"
 import type { StructureResidence } from "@/types/structure"
 import { cn } from "@/lib/utils"
 
@@ -176,15 +176,14 @@ function EventFormDialogContent({
       return
     }
     let cancelled = false
-    getDoc(doc(db, "gerances", geranceRef.geranceId)).then((snap) => {
+    Promise.all([
+      getDoc(doc(db, "gerances", geranceRef.geranceId)),
+      geranceRef.agentMail ? findUserByEmail(geranceRef.agentMail) : Promise.resolve(null),
+    ]).then(([snap, agentUser]) => {
       if (cancelled || !snap.exists()) return
-      const data = snap.data()
-      const services = (data.services as Record<ServiceType, { agents?: Agent[] } | undefined>) ?? {}
-      const agents = services[geranceRef.serviceType]?.agents ?? []
-      const agent = geranceRef.agentMail ? agents.find((a) => a.mail === geranceRef.agentMail) : undefined
-      const geranceName = (data.name as string) ?? ""
-      if (agent) {
-        const agentName = `${agent.name_agent} ${agent.surname_agent}`.trim()
+      const geranceName = (snap.data().name as string) ?? ""
+      if (agentUser) {
+        const agentName = `${agentUser.name} ${agentUser.surname}`.trim()
         setGeranceAgentLabel(geranceName ? `${agentName} (${geranceName})` : agentName)
       } else {
         setGeranceAgentLabel(geranceName || null)
