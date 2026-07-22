@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { Briefcase, Save } from "lucide-react"
+import { Briefcase, Building2, Mail, Phone, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,7 +11,10 @@ import { useAuth } from "@/lib/auth-context"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { subscribeToUser, updateOwnProfile } from "@/lib/users"
 import { subscribeToGerance } from "@/lib/gerances"
+import { subscribeToResidencesForGerance } from "@/lib/residences"
+import { departmentCodeFromZip, departmentLabel, groupResidencesByDepartment } from "@/lib/departments"
 import { serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
+import type { Residence } from "@/types/residence"
 import type { KonodalUser } from "@/types/user"
 
 const serviceTypes: ServiceType[] = ["serviceSyndic", "geranceLocative"]
@@ -28,6 +32,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<KonodalUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [gerance, setGerance] = useState<Gerance | null>(null)
+  const [managedResidences, setManagedResidences] = useState<Residence[]>([])
 
   useEffect(() => {
     if (!authUser) return
@@ -55,6 +60,25 @@ export default function ProfilePage() {
     )
   }, [isAgence, isAgent, geranceId])
 
+  useEffect(() => {
+    if (!(isAgence || isAgent) || !geranceId) {
+      setManagedResidences([])
+      return
+    }
+    return subscribeToResidencesForGerance(geranceId, setManagedResidences, (error) =>
+      toast.error("Impossible de charger les résidences : " + error.message)
+    )
+  }, [isAgence, isAgent, geranceId])
+
+  // Répartition des résidences gérées par département (dérivé du code
+  // postal, cf. lib/departments.ts déjà utilisé pour le ciblage des
+  // campagnes pub) - une gérance opère souvent sur plusieurs départements
+  // autour de son siège, plus parlant qu'un simple total.
+  const residencesByDepartment = useMemo(
+    () => groupResidencesByDepartment(managedResidences),
+    [managedResidences]
+  )
+
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-semibold">Mon profil</h1>
@@ -75,8 +99,15 @@ export default function ProfilePage() {
               <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
                 <Briefcase className="size-5" />
               </div>
-              <div className="flex flex-col">
-                <span className="text-lg font-medium">{gerance?.name ?? "…"}</span>
+              <div className="flex flex-col gap-0.5">
+                <span className="flex items-center gap-2 text-lg font-medium">
+                  {gerance?.name ?? "…"}
+                  {gerance?.address.zipCode && (
+                    <Badge variant="outline">
+                      {departmentLabel(departmentCodeFromZip(gerance.address.zipCode))}
+                    </Badge>
+                  )}
+                </span>
                 {gerance && (
                   <span className="text-sm text-muted-foreground">
                     {[gerance.address.street, [gerance.address.zipCode, gerance.address.city].join(" ")]
@@ -88,16 +119,61 @@ export default function ProfilePage() {
             </div>
 
             {gerance && (
-              <div className="flex flex-wrap gap-1 border-t pt-4">
+              <div className="flex flex-col gap-3 border-t pt-4">
                 {serviceTypes
                   .filter((type) => gerance.services[type])
-                  .map((type) => (
-                    <Badge key={type} variant="secondary">
-                      {serviceTypeLabels[type]}
-                    </Badge>
-                  ))}
+                  .map((type) => {
+                    const dept = gerance.services[type]
+                    if (!dept) return null
+                    return (
+                      <div key={type} className="flex flex-col gap-1">
+                        <Badge variant="secondary" className="w-fit">
+                          {serviceTypeLabels[type]}
+                        </Badge>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                          {dept.mail && (
+                            <span className="flex items-center gap-1.5">
+                              <Mail className="size-3.5" />
+                              {dept.mail}
+                            </span>
+                          )}
+                          {dept.phone && (
+                            <span className="flex items-center gap-1.5">
+                              <Phone className="size-3.5" />
+                              {dept.phone}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
               </div>
             )}
+
+            {/* Indicateur "intelligent" : plutôt qu'un simple total, la
+                répartition par département donne une vraie idée du
+                périmètre géographique réellement couvert par cette
+                gérance - directement dérivé de subscribeToResidencesForGerance,
+                le même mécanisme qui scope déjà tout le BO pour ce compte. */}
+            <div className="flex flex-col gap-2 border-t pt-4">
+              <Link
+                to="/residences"
+                className="flex items-center gap-2 text-sm font-medium hover:underline"
+              >
+                <Building2 className="size-4 text-muted-foreground" />
+                {managedResidences.length} résidence{managedResidences.length > 1 ? "s" : ""} gérée
+                {managedResidences.length > 1 ? "s" : ""}
+              </Link>
+              {residencesByDepartment.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {residencesByDepartment.map(([code, group]) => (
+                    <Badge key={code} variant="outline" className="border-transparent bg-sky-100 text-sky-800">
+                      {departmentLabel(code)} · {group.length}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
