@@ -4,6 +4,11 @@ export type KonodalUser = {
   name: string
   surname: string
   phone: string
+  // Même champ que le modèle Dart partagé (User.profilPic, sous 'profil') -
+  // affiché partout où l'app montre l'auteur d'un post/commentaire
+  // (ProfilTile), donc une photo posée ici depuis le BO apparaît aussi
+  // côté résident si ce compte interagit avec l'app.
+  profilePic?: string
   isApproved: boolean
   accountType: string
   createdDate: Date | null

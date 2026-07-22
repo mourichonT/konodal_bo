@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
 import { useAccountRole } from "@/hooks/useAccountRole"
-import { subscribeToUser, updateOwnProfile } from "@/lib/users"
+import { subscribeToUser, updateOwnProfile, uploadOwnProfilePic } from "@/lib/users"
 import { subscribeToGerance } from "@/lib/gerances"
 import { subscribeToResidencesForGerance } from "@/lib/residences"
 import { departmentCodeFromZip, departmentLabel, groupResidencesByDepartment } from "@/lib/departments"
@@ -181,21 +181,32 @@ export default function ProfilePage() {
   )
 }
 
+function initials(name: string, surname: string, email: string): string {
+  const fromNames = `${name[0] ?? ""}${surname[0] ?? ""}`.toUpperCase()
+  return fromNames || (email[0] ?? "?").toUpperCase()
+}
+
 function ProfileForm({ profile }: { profile: KonodalUser }) {
   const [name, setName] = useState(profile.name)
   const [surname, setSurname] = useState(profile.surname)
   const [phone, setPhone] = useState(profile.phone)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setName(profile.name)
     setSurname(profile.surname)
     setPhone(profile.phone)
+    setPhotoFile(null)
   }, [profile.uid])
 
   async function handleSave() {
     setSaving(true)
     try {
+      if (photoFile) {
+        await uploadOwnProfilePic(profile.uid, photoFile)
+        setPhotoFile(null)
+      }
       await updateOwnProfile(profile.uid, { name, surname, phone })
       toast.success("Profil mis à jour")
     } catch (err) {
@@ -211,6 +222,35 @@ function ProfileForm({ profile }: { profile: KonodalUser }) {
         <CardTitle className="text-base">Informations</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        <div className="flex items-center gap-4">
+          <label
+            htmlFor="profile-pic"
+            className="group relative flex size-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-accent text-accent-foreground"
+          >
+            {photoFile ? (
+              <img src={URL.createObjectURL(photoFile)} alt="" className="size-full object-cover" />
+            ) : profile.profilePic ? (
+              <img src={profile.profilePic} alt="" className="size-full object-cover" />
+            ) : (
+              <span className="text-lg font-semibold">{initials(name, surname, profile.email)}</span>
+            )}
+            <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+              Changer
+            </span>
+          </label>
+          <input
+            id="profile-pic"
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+          />
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">Photo de profil</span>
+            <span className="text-xs text-muted-foreground">Cliquez sur l'avatar pour la changer.</span>
+          </div>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="profile-email">Email</Label>

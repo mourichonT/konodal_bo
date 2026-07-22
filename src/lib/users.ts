@@ -13,7 +13,8 @@ import {
   type Unsubscribe,
 } from "firebase/firestore"
 import type { User as FirebaseUser } from "firebase/auth"
-import { db } from "@/firebase"
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage"
+import { db, storage } from "@/firebase"
 import type { KonodalUser } from "@/types/user"
 
 const usersCollection = collection(db, "users")
@@ -34,6 +35,7 @@ function toKonodalUser(snapshot: DocumentSnapshot<DocumentData>): KonodalUser {
     name: (userGroup.name as string) ?? "",
     surname: (userGroup.surname as string) ?? "",
     phone: (profilGroup.phone as string) ?? "",
+    profilePic: (profilGroup.profilPic as string) || undefined,
     isApproved: (data.isApproved as boolean) ?? false,
     accountType: (data.accountType as string) ?? "utilisateur",
     createdDate: toDateOrNull(data.createdDate),
@@ -153,6 +155,20 @@ export async function updateOwnProfile(uid: string, input: OwnProfileInput) {
     "user.surname": input.surname,
     "profil.phone": input.phone,
   })
+}
+
+// Storage path identique à FirestoreStorageRepository.uploadImg côté app
+// mobile (racine="user", résidence=uid, dossier="photo") pour qu'une photo
+// posée depuis le BO suive exactement la même convention que si le compte
+// l'avait déposée lui-même depuis l'app.
+export async function uploadOwnProfilePic(uid: string, file: File): Promise<string> {
+  const extension = file.name.includes(".") ? (file.name.split(".").pop() ?? "").toLowerCase() : "jpg"
+  const path = `user/${uid}/photo/${crypto.randomUUID()}.${extension}`
+  const fileRef = ref(storage, path)
+  await uploadBytes(fileRef, file)
+  const url = await getDownloadURL(fileRef)
+  await updateDoc(doc(usersCollection, uid), { "profil.profilPic": url })
+  return url
 }
 
 export type UserDocument = {
