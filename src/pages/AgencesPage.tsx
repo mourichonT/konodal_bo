@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -624,9 +624,16 @@ function AccountControl({
   onLinkUid: (uid: string) => Promise<void>
 }) {
   const { isSuperAdmin } = useIsSuperAdmin()
+  // Une Agence gère ses propres agents (inviter/révoquer) sans passer par un
+  // superAdmin - Agent reste en lecture seule sur cette action (cf. matrice
+  // de droits). Portée déjà garantie côté client : `gerances` (AgencesPage)
+  // ne contient QUE la gérance de l'agence connectée, donc ce composant ne
+  // peut jamais monter sur la fiche d'une autre agence. Côté serveur,
+  // _require_superadmin_or_own_agence revérifie la même appartenance.
+  const { isAgence } = useAccountRole()
   const [submitting, setSubmitting] = useState(false)
 
-  if (!isSuperAdmin) return null
+  if (!isSuperAdmin && !isAgence) return null
 
   const uidField = AGENT_UID_FIELD[serviceType]
   const isActive = !!persistedUid && !!gerance[uidField]?.includes(persistedUid)
@@ -708,17 +715,9 @@ function OwnAgencyPage({
 }) {
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">
-          {gerance ? gerance.name : loading ? "…" : "Agence introuvable"}
-        </h1>
-        {canEdit && gerance && (
-          <Button variant="outline" size="sm" onClick={onEdit}>
-            <Pencil />
-            Modifier
-          </Button>
-        )}
-      </div>
+      <h1 className="text-2xl font-semibold">
+        {gerance ? gerance.name : loading ? "…" : "Agence introuvable"}
+      </h1>
 
       {!loading && !gerance && (
         <p className="text-muted-foreground">
@@ -731,6 +730,14 @@ function OwnAgencyPage({
           <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
             <CardHeader>
               <CardTitle className="text-base">Informations</CardTitle>
+              {canEdit && (
+                <CardAction>
+                  <Button variant="outline" size="sm" onClick={onEdit}>
+                    <Pencil />
+                    Modifier
+                  </Button>
+                </CardAction>
+              )}
             </CardHeader>
             <CardContent className="grid gap-4 text-sm sm:grid-cols-2">
               <div className="sm:col-span-2">
