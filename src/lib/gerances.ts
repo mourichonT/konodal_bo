@@ -15,6 +15,16 @@ import type { Agent, AgencyDept, Gerance, ServiceType } from "@/types/gerance"
 
 const gerancesCollection = collection(db, "gerances")
 
+function toGerance(id: string, data: unknown): Gerance {
+  return {
+    id,
+    name: "",
+    address: emptyAddress,
+    services: {},
+    ...(data as Partial<Omit<Gerance, "id">>),
+  }
+}
+
 export function subscribeToGerances(
   onData: (gerances: Gerance[]) => void,
   onError: (error: Error) => void
@@ -22,17 +32,19 @@ export function subscribeToGerances(
   const q = query(gerancesCollection, orderBy("name"))
   return onSnapshot(
     q,
-    (snapshot) => {
-      onData(
-        snapshot.docs.map((d) => ({
-          id: d.id,
-          name: "",
-          address: emptyAddress,
-          services: {},
-          ...(d.data() as Partial<Omit<Gerance, "id">>),
-        }))
-      )
-    },
+    (snapshot) => onData(snapshot.docs.map((d) => toGerance(d.id, d.data()))),
+    onError
+  )
+}
+
+export function subscribeToGerance(
+  id: string,
+  onData: (gerance: Gerance | null) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(gerancesCollection, id),
+    (snapshot) => onData(snapshot.exists() ? toGerance(snapshot.id, snapshot.data()) : null),
     onError
   )
 }
