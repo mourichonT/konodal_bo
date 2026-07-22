@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
 import { subscribeToResidences } from "@/lib/residences"
 import {
   deleteContact,
@@ -222,7 +223,16 @@ export default function ContactDetailPage() {
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="contact-street">Adresse</Label>
-                  <Input id="contact-street" value={street} onChange={(e) => setStreet(e.target.value)} />
+                  <AddressAutocompleteInput
+                    id="contact-street"
+                    value={street}
+                    onChange={setStreet}
+                    onSelect={(a) => {
+                      setStreet(a.street)
+                      setZipCode(a.zipCode)
+                      setCity(a.city)
+                    }}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">

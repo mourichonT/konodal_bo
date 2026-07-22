@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
 import {
   Dialog,
   DialogContent,
@@ -371,7 +372,17 @@ function GeranceFormDialog({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ger-street">Adresse</Label>
-              <Input id="ger-street" required value={street} onChange={(e) => setStreet(e.target.value)} />
+              <AddressAutocompleteInput
+                id="ger-street"
+                required
+                value={street}
+                onChange={setStreet}
+                onSelect={(a) => {
+                  setStreet(a.street)
+                  setZipCode(a.zipCode)
+                  setCity(a.city)
+                }}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
@@ -818,7 +829,16 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="agency-street">Adresse</Label>
-                <Input id="agency-street" value={street} onChange={(e) => setStreet(e.target.value)} />
+                <AddressAutocompleteInput
+                  id="agency-street"
+                  value={street}
+                  onChange={setStreet}
+                  onSelect={(a) => {
+                    setStreet(a.street)
+                    setZipCode(a.zipCode)
+                    setCity(a.city)
+                  }}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="agency-zip">Code postal</Label>
