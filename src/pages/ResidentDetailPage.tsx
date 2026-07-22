@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { storage, db } from "@/firebase"
 import { useAccountRole } from "@/hooks/useAccountRole"
+import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { cn } from "@/lib/utils"
 import {
   approveUserLot,
@@ -36,6 +37,7 @@ import type { KonodalUser } from "@/types/user"
 export default function ResidentDetailPage() {
   const { uid } = useParams<{ uid: string }>()
   const { isSuperAdmin, isAgence } = useAccountRole()
+  const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   const [user, setUser] = useState<KonodalUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [documents, setDocuments] = useState<UserDocument[]>([])
@@ -71,13 +73,18 @@ export default function ResidentDetailPage() {
   }, [uid])
 
   useEffect(() => {
-    if (!uid) return
+    // Attend la résolution du périmètre (agence/agent) avant de souscrire :
+    // Firestore exige un where("residenceId","in",...) pour que
+    // isProfessionnelResidence autorise cette lecture (cf. lib/users.ts,
+    // subscribeToUserLots) - interroger trop tôt sans ce filtre échouerait.
+    if (!uid || scopeLoading) return
     return subscribeToUserLots(
       uid,
       (data) => setLots(data),
-      (error) => toast.error("Impossible de charger les lots : " + error.message)
+      (error) => toast.error("Impossible de charger les lots : " + error.message),
+      scopedResidenceIds ? [...scopedResidenceIds] : scopedResidenceIds
     )
-  }, [uid])
+  }, [uid, scopeLoading, scopedResidenceIds])
 
   if (!uid) return null
 

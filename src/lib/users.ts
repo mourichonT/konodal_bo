@@ -4,10 +4,12 @@ import {
   doc,
   getDoc,
   onSnapshot,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
+  where,
   type DocumentData,
   type DocumentSnapshot,
   type Unsubscribe,
@@ -239,13 +241,39 @@ export type UserLot = {
 // self-service par le résident, cf. firestore.rules - create exige
 // isOwner(uid)). Le backoffice ne fait que lire et approuver
 // (isApprovedLot: false -> true), réservé à isSuperAdmin côté règles.
+//
+// scopedResidenceIds (agence/agent uniquement, cf. useScopedResidenceIds) :
+// requis pour que la règle isProfessionnelResidence(resource.data.residenceId)
+// autorise ne serait-ce que la LECTURE de cette sous-collection. Cloud
+// Firestore n'évalue un `get()` construit à partir d'un champ du document
+// (ici residenceId) pour une requête *list* QUE si le champ est contraint
+// par un where() de la requête elle-même (vérifié empiriquement : un get()
+// isolé sur un lotId connu passe, mais le onSnapshot sur toute la
+// collection échoue par "Missing or insufficient permissions" sans ce
+// filtre, alors que la même règle passe avec un where("residenceId","in",...)
+// - Firestore ne peut pas prouver la sécurité de la requête sans lui).
+// undefined/null = superAdmin, aucun filtre nécessaire (isSuperAdmin() ne
+// dépend pas des champs du document). Tableau vide = professionnel sans
+// aucune résidence en périmètre : on n'interroge même pas Firestore.
 export function subscribeToUserLots(
   uid: string,
   onData: (lots: UserLot[]) => void,
-  onError: (error: Error) => void
+  onError: (error: Error) => void,
+  scopedResidenceIds?: string[] | null
 ): Unsubscribe {
+  if (scopedResidenceIds && scopedResidenceIds.length === 0) {
+    onData([])
+    return () => {}
+  }
+  const lotsCollection = collection(db, "users", uid, "lots")
+  // Limite "in" Firestore : 30 valeurs - une gérance gérant plus de 30
+  // résidences n'est pas couverte ici, limitation assumée comme ailleurs
+  // dans ce lot RBAC (cf. useScopedResidenceIds).
+  const lotsQuery = scopedResidenceIds
+    ? query(lotsCollection, where("residenceId", "in", scopedResidenceIds.slice(0, 30)))
+    : lotsCollection
   return onSnapshot(
-    collection(db, "users", uid, "lots"),
+    lotsQuery,
     (snapshot) => {
       onData(
         snapshot.docs.map((d) => {
