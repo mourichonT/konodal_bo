@@ -142,6 +142,15 @@ export async function updateUserIdentity(uid: string, input: UserIdentityInput) 
   })
 }
 
+// Correction isolée du téléphone (ResidentDetailPage) - contrairement à
+// updateUserIdentity, ne touche QUE profil.phone : c'est ce qui permet à
+// firestore.rules d'autoriser Agence/Agent sur ce champ précis
+// (diff().affectedKeys().hasOnly(['profil'])) sans leur ouvrir le reste de
+// l'identité (nom/prénom/pièce...), réservé superAdmin.
+export async function updateUserPhone(uid: string, phone: string) {
+  await updateDoc(doc(usersCollection, uid), { "profil.phone": phone })
+}
+
 export type OwnProfileInput = {
   name?: string
   surname?: string

@@ -25,10 +25,10 @@ import {
   rejectUser,
   setUserApproved,
   subscribeToUser,
-  subscribeToUserDocuments,
   subscribeToUserLotDocuments,
   subscribeToUserLots,
   updateUserIdentity,
+  updateUserPhone,
   type UserDocument,
   type UserLot,
 } from "@/lib/users"
@@ -40,7 +40,6 @@ export default function ResidentDetailPage() {
   const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   const [user, setUser] = useState<KonodalUser | null>(null)
   const [loading, setLoading] = useState(true)
-  const [documents, setDocuments] = useState<UserDocument[]>([])
   const [lots, setLots] = useState<UserLot[]>([])
   const [savingApproval, setSavingApproval] = useState(false)
   const [rejecting, setRejecting] = useState(false)
@@ -60,15 +59,6 @@ export default function ResidentDetailPage() {
         toast.error("Impossible de charger le résident : " + error.message)
         setLoading(false)
       }
-    )
-  }, [uid])
-
-  useEffect(() => {
-    if (!uid) return
-    return subscribeToUserDocuments(
-      uid,
-      (data) => setDocuments(data),
-      (error) => toast.error("Impossible de charger les documents : " + error.message)
     )
   }, [uid])
 
@@ -194,15 +184,6 @@ export default function ResidentDetailPage() {
                   reconnue = action superAdmin, distincte de la gestion de
                   ses propres lots/agents). */}
               <IdentityFields user={user} canEdit={isSuperAdmin} />
-
-              <div className="pr-[20px] flex flex-col gap-2 pt-[22px] pb-[20px]">
-                <Label className="mb-[20px]">Document(s)</Label>
-                {documents.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Aucun document déposé.</p>
-                ) : (
-                  documents.map((document) => <DocumentRow key={document.id} document={document} />)
-                )}
-              </div>
             </CardContent>
           </Card>
 
@@ -333,9 +314,25 @@ function IdentityFields({ user, canEdit }: { user: KonodalUser; canEdit: boolean
     }
   }
 
+  // Le téléphone reste modifiable par Agence/Agent même sans le reste
+  // (correction d'un numéro erroné = besoin courant, pas une correction
+  // d'identité) - écrit isolément (profil.phone uniquement), jamais via
+  // updateUserIdentity qui toucherait aussi user.* hors de portée pour eux.
+  async function handleSavePhone() {
+    setSaving(true)
+    try {
+      await updateUserPhone(user.uid, phone)
+      toast.success("Téléphone mis à jour")
+    } catch (err) {
+      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      <div className={cn("grid gap-3 text-sm sm:grid-cols-2", !canEdit && "pointer-events-none opacity-50")}>
+      <div className="grid gap-3 text-sm sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="identity-email">Email</Label>
           <Input id="identity-email" value={user.email} disabled />
@@ -344,6 +341,12 @@ function IdentityFields({ user, canEdit }: { user: KonodalUser; canEdit: boolean
           <Label htmlFor="identity-phone">Téléphone</Label>
           <Input id="identity-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </div>
+      </div>
+
+      {/* Le reste de l'identité (nom/prénom/date de naissance/pièce...)
+          reste réservé superAdmin - seul le téléphone ci-dessus est
+          modifiable par Agence/Agent. */}
+      <div className={cn("grid gap-3 text-sm sm:grid-cols-2", !canEdit && "pointer-events-none opacity-50")}>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="identity-name">Prénom</Label>
           <Input id="identity-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -388,14 +391,12 @@ function IdentityFields({ user, canEdit }: { user: KonodalUser; canEdit: boolean
         {user.isInfoCorrect ? "Oui" : "Non"}
       </p>
 
-      {canEdit && (
-        <div className="mb-[20px] flex justify-end">
-          <Button size="sm" disabled={saving} onClick={handleSave}>
-            <Save />
-            Enregistrer les modifications
-          </Button>
-        </div>
-      )}
+      <div className="mb-[20px] flex justify-end">
+        <Button size="sm" disabled={saving} onClick={canEdit ? handleSave : handleSavePhone}>
+          <Save />
+          {canEdit ? "Enregistrer les modifications" : "Enregistrer le téléphone"}
+        </Button>
+      </div>
     </div>
   )
 }
