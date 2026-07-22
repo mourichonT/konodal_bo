@@ -32,16 +32,10 @@ import {
   HelpCircle,
   PlusCircle,
   Repeat,
-  Briefcase,
-  Mail,
-  Phone,
-  MapPin,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAccountRole } from "@/hooks/useAccountRole"
-import { subscribeToGerance } from "@/lib/gerances"
-import { serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -197,18 +191,7 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const [users, setUsers] = useState<KonodalUser[]>([])
   const { scopedResidenceIds } = useScopedResidenceIds()
-  const { isAgent, geranceId } = useAccountRole()
-  const [ownGerance, setOwnGerance] = useState<Gerance | null>(null)
-
-  useEffect(() => {
-    if (!isAgent || !geranceId) {
-      setOwnGerance(null)
-      return
-    }
-    return subscribeToGerance(geranceId, setOwnGerance, (error) =>
-      toast.error("Impossible de charger l'agence : " + error.message)
-    )
-  }, [isAgent, geranceId])
+  const { isAgent } = useAccountRole()
   const { sinistres, loading: sinistresLoading } = useAllSinistres((message) => toast.error(message), scopedResidenceIds)
   const { events, residences, loading: eventsLoading } = useAllEvents((message) => toast.error(message), scopedResidenceIds)
   const { contacts, loading: contactsLoading } = useAllContacts((message) => toast.error(message), scopedResidenceIds)
@@ -599,72 +582,6 @@ export default function DashboardPage() {
     setResidenceFilter("all")
     setDateFrom("")
     setDateTo("")
-  }
-
-  // Un Agent n'a pas la vue analytique/KPI plateforme (réservée
-  // Agence/Superadmin, cf. matrice de droits BO) - juste un rappel de
-  // l'agence à laquelle il est rattaché.
-  if (isAgent) {
-    const activeServices = (Object.keys(ownGerance?.services ?? {}) as ServiceType[])
-    return (
-      <div className="flex flex-col gap-8">
-        <div>
-          <h1 className="text-2xl font-semibold">Bonjour{displayName ? `, ${displayName}` : ""}</h1>
-          <p className="text-muted-foreground">Votre espace agent KONODAL.</p>
-        </div>
-
-        <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-                <Briefcase className="size-5" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-lg font-medium">{ownGerance?.name ?? "…"}</span>
-                {ownGerance && (
-                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <MapPin className="size-3.5" />
-                    {[ownGerance.address.street, [ownGerance.address.zipCode, ownGerance.address.city].join(" ")]
-                      .filter(Boolean)
-                      .join(" — ") || "—"}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {ownGerance && activeServices.length > 0 && (
-              <div className="flex flex-col gap-3 border-t pt-4">
-                {activeServices.map((type) => {
-                  const dept = ownGerance.services[type]
-                  if (!dept) return null
-                  return (
-                    <div key={type} className="flex flex-col gap-1">
-                      <Badge variant="secondary" className="w-fit">
-                        {serviceTypeLabels[type]}
-                      </Badge>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                        {dept.mail && (
-                          <span className="flex items-center gap-1.5">
-                            <Mail className="size-3.5" />
-                            {dept.mail}
-                          </span>
-                        )}
-                        {dept.phone && (
-                          <span className="flex items-center gap-1.5">
-                            <Phone className="size-3.5" />
-                            {dept.phone}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    )
   }
 
   return (
