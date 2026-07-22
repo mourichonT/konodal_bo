@@ -15,6 +15,7 @@ import {
 import type { User as FirebaseUser } from "firebase/auth"
 import { db } from "@/firebase"
 import type { KonodalUser } from "@/types/user"
+import type { Address } from "@/types/residence"
 
 const usersCollection = collection(db, "users")
 
@@ -34,6 +35,7 @@ function toKonodalUser(snapshot: DocumentSnapshot<DocumentData>): KonodalUser {
     name: (userGroup.name as string) ?? "",
     surname: (userGroup.surname as string) ?? "",
     phone: (profilGroup.phone as string) ?? "",
+    address: profilGroup.address as Address | undefined,
     isApproved: (data.isApproved as boolean) ?? false,
     accountType: (data.accountType as string) ?? "utilisateur",
     createdDate: toDateOrNull(data.createdDate),
@@ -133,6 +135,28 @@ export async function updateUserIdentity(uid: string, input: UserIdentityInput) 
     "user.placeOfborn": input.placeOfborn,
     "user.birthday": input.birthday ? Timestamp.fromDate(input.birthday) : null,
     "profil.phone": input.phone,
+  })
+}
+
+export type OwnProfileInput = {
+  name: string
+  surname: string
+  phone: string
+  address: Address
+}
+
+// Auto-édition de son propre profil BO (page /profil, tous rôles) - à ne
+// pas confondre avec updateUserIdentity (correction d'un résident PAR un
+// admin) : ici l'appelant modifie son propre compte, déjà couvert par
+// firestore.rules (users/{uid}.update autorise isOwner(uid) tant
+// qu'isApproved/accountType ne bougent pas). `address` n'existe pas côté
+// modèle Dart résident - propre au profil BO.
+export async function updateOwnProfile(uid: string, input: OwnProfileInput) {
+  await updateDoc(doc(usersCollection, uid), {
+    "user.name": input.name,
+    "user.surname": input.surname,
+    "profil.phone": input.phone,
+    "profil.address": input.address,
   })
 }
 

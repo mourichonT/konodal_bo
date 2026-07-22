@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { NavLink, useLocation } from "react-router-dom"
+import { Link, NavLink, useLocation } from "react-router-dom"
 import {
   LayoutDashboard,
   Building2,
@@ -13,6 +13,7 @@ import {
   LogOut,
   ChevronsUpDown,
   ChevronDown,
+  UserCircle,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
@@ -116,11 +117,14 @@ export function Sidebar() {
   const { isAgence, isAgent } = useAccountRole()
   const location = useLocation()
   // "Agences" (répertoire, Superadmin) devient "Agence" au singulier pour
-  // un compte agence/agent - la page pointe alors sur sa propre fiche, pas
-  // un annuaire (cf. AgencesPage.tsx, OwnAgencyPage).
-  const baseNavItems: NavItem[] = (isAgence || isAgent)
-    ? navItems.map((item) => (item.to === "/agences" ? { ...item, label: "Agence" } : item))
-    : navItems
+  // une Agence (la page pointe alors sur sa propre fiche, pas un annuaire -
+  // cf. AgencesPage.tsx, OwnAgencyPage) et disparaît entièrement pour un
+  // Agent (consultation retirée du menu, cf. demande explicite).
+  const baseNavItems: NavItem[] = isAgent
+    ? navItems.filter((item) => item.to !== "/agences")
+    : isAgence
+      ? navItems.map((item) => (item.to === "/agences" ? { ...item, label: "Agence" } : item))
+      : navItems
   const allNavItems: NavItem[] = isSuperAdmin ? [...baseNavItems, ...superAdminNavItems] : baseNavItems
   const [openSections, toggleSection] = useOpenSections(allNavItems)
 
@@ -267,6 +271,10 @@ export function Sidebar() {
             <ChevronsUpDown className="size-4 shrink-0 text-sidebar-foreground/50" />
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-56">
+            <DropdownMenuItem render={<Link to="/profil" />}>
+              <UserCircle />
+              Profil
+            </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onClick={() => logout()}>
               <LogOut />
               Déconnexion

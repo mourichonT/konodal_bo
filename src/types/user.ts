@@ -1,9 +1,16 @@
+import type { Address } from "@/types/residence"
+
 export type KonodalUser = {
   uid: string
   email: string
   name: string
   surname: string
   phone: string
+  // Champ BO uniquement (profil des comptes agence/agent/superAdmin) -
+  // absent du modèle Dart côté app résident, pas de contrepartie côté
+  // mobile pour ce champ précis (contrairement à name/surname/phone,
+  // partagés avec le modèle résident).
+  address?: Address
   isApproved: boolean
   accountType: string
   createdDate: Date | null
