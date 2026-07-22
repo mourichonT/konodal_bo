@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
+import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import {
   Dialog,
   DialogContent,
@@ -360,7 +361,13 @@ function ResidenceFormDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="res-zip">Code postal</Label>
-                <Input id="res-zip" required value={zipCode} onChange={(e) => setZipCode(e.target.value)} />
+                <ZipCodeCityInput
+                  id="res-zip"
+                  required
+                  value={zipCode}
+                  onChange={setZipCode}
+                  onCityResolved={setCity}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="res-city">Ville</Label>

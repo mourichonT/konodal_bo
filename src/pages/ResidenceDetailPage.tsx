@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
+import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import {
   Card,
   CardContent,
@@ -232,7 +233,12 @@ function InfoSection({ residence }: { residence: Residence }) {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="info-zip">Code postal</Label>
-            <Input id="info-zip" value={zipCode} onChange={(e) => setZipCode(e.target.value)} />
+            <ZipCodeCityInput
+              id="info-zip"
+              value={zipCode}
+              onChange={setZipCode}
+              onCityResolved={setCity}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="info-city">Ville</Label>

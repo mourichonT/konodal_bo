@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
+import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import { toast } from "sonner"
 import type { ContactInput } from "@/lib/contacts"
 import { CONTACT_SERVICES } from "@/types/contact"
@@ -135,7 +136,12 @@ export function ContactFormDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="contact-zip">Code postal</Label>
-                <Input id="contact-zip" value={zipCode} onChange={(e) => setZipCode(e.target.value)} />
+                <ZipCodeCityInput
+                  id="contact-zip"
+                  value={zipCode}
+                  onChange={setZipCode}
+                  onCityResolved={setCity}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="contact-city">Ville</Label>

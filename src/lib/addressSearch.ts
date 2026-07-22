@@ -39,3 +39,22 @@ export async function searchAddresses(query: string): Promise<AddressSearchResul
     city: f.properties.city ?? "",
   }))
 }
+
+type RawCommune = { nom: string; code: string }
+
+// API découpage administratif (geo.api.gouv.fr, IGN/Etalab) - publique et
+// gratuite, sans clé. Un même code postal couvre souvent plusieurs communes
+// (ex: 01090 → 6 communes) - l'appelant doit gérer 0, 1 ou plusieurs
+// résultats plutôt que supposer une correspondance unique.
+export async function searchCitiesByZipCode(zipCode: string): Promise<string[]> {
+  const trimmed = zipCode.trim()
+  if (!/^\d{5}$/.test(trimmed)) return []
+  const response = await fetch(
+    `https://geo.api.gouv.fr/communes?codePostal=${encodeURIComponent(trimmed)}&fields=nom&format=json`
+  )
+  if (!response.ok) {
+    throw new Error("Recherche de ville impossible pour le moment")
+  }
+  const communes = (await response.json()) as RawCommune[]
+  return communes.map((c) => c.nom)
+}

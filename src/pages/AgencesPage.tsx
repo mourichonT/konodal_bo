@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
+import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import {
   Dialog,
   DialogContent,
@@ -387,7 +388,13 @@ function GeranceFormDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ger-zip">Code postal</Label>
-                <Input id="ger-zip" required value={zipCode} onChange={(e) => setZipCode(e.target.value)} />
+                <ZipCodeCityInput
+                  id="ger-zip"
+                  required
+                  value={zipCode}
+                  onChange={setZipCode}
+                  onCityResolved={setCity}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ger-city">Ville</Label>
@@ -842,7 +849,12 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="agency-zip">Code postal</Label>
-                <Input id="agency-zip" value={zipCode} onChange={(e) => setZipCode(e.target.value)} />
+                <ZipCodeCityInput
+                  id="agency-zip"
+                  value={zipCode}
+                  onChange={setZipCode}
+                  onCityResolved={setCity}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="agency-city">Ville</Label>
