@@ -39,6 +39,7 @@ import {
 } from "@/lib/gerances"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
+import { useAuth } from "@/lib/auth-context"
 import { emptyAddress } from "@/types/residence"
 import {
   emptyAgencyDept,
@@ -630,6 +631,7 @@ function AccountControl({
   // peut jamais monter sur la fiche d'une autre agence. Côté serveur,
   // _require_superadmin_or_own_agence revérifie la même appartenance.
   const { isAgence } = useAccountRole()
+  const { user } = useAuth()
   const [submitting, setSubmitting] = useState(false)
 
   if (!isSuperAdmin && !isAgence) return null
@@ -637,6 +639,14 @@ function AccountControl({
   const uidField = AGENT_UID_FIELD[serviceType]
   const isActive = !!persistedUid && !!gerance[uidField]?.includes(persistedUid)
   const isRevoked = !!persistedUid && !isActive
+  // Une Agence gérant sa propre fiche peut tomber sur SON PROPRE compte
+  // (adresse générique du service, ou elle-même listée comme agent) - se
+  // révoquer soi-même couperait immédiatement l'accès en cours d'usage,
+  // sans façon de se réinviter derrière (il faudrait déjà être déconnecté
+  // pour redemander l'accès à un superAdmin). Bouton masqué dans ce cas
+  // précis, pas juste désactivé côté serveur : un superAdmin, lui, n'est
+  // jamais concerné (il ne peut pas être le compte agence/agent affiché ici).
+  const isSelf = !!persistedUid && persistedUid === user?.uid
 
   async function handleInvite() {
     setSubmitting(true)
@@ -671,10 +681,14 @@ function AccountControl({
           <Check />
           Compte actif
         </Badge>
-        <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={handleRevoke}>
-          <ShieldOff />
-          Révoquer l'accès
-        </Button>
+        {isSelf ? (
+          <span className="text-xs text-muted-foreground">C'est votre compte</span>
+        ) : (
+          <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={handleRevoke}>
+            <ShieldOff />
+            Révoquer l'accès
+          </Button>
+        )}
       </div>
     )
   }
