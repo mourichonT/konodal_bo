@@ -5,6 +5,7 @@ import { CheckCircle2, Clock3, Eye, Search, User as UserIcon, Users } from "luci
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -32,7 +33,7 @@ export default function ResidentsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>(null)
-  const { isAgent } = useAccountRole()
+  const { isAgent, isAgence } = useAccountRole()
   const { scopedResidenceIds } = useScopedResidenceIds()
   // Les utilisateurs ne portent pas de residenceId direct - le périmètre
   // RBAC se déduit des lots qu'ils possèdent/louent dans le périmètre
@@ -130,60 +131,111 @@ export default function ResidentsPage() {
         />
       </div>
 
-      <div className="flex flex-col">
-        <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
-          <Table>
-            <TableHeader className="bg-muted/40">
-              <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Date de la demande</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="bg-white">
-              {filteredResidents.map((user) => (
-                <TableRow key={user.uid}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-                        <UserIcon className="size-4" />
-                      </div>
-                      {user.name || user.surname ? `${user.name} ${user.surname}`.trim() : "—"}
-                    </div>
-                  </TableCell>
-                  <TableCell>{user.email || "—"}</TableCell>
-                  <TableCell>{user.createdDate ? user.createdDate.toLocaleDateString("fr-FR") : "—"}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={user.isApproved ? "default" : "outline"}
-                      className={!user.isApproved ? "border-transparent bg-amber-100 text-amber-800" : undefined}
-                    >
-                      {user.isApproved ? "Approuvé" : "En attente"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" render={<Link to={`/residents/${user.uid}`} />}>
-                      <Eye />
-                      Voir la fiche
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!loading && filteredResidents.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    {residents.length === 0
-                      ? "Aucun utilisateur pour l'instant."
-                      : "Aucun résultat pour cette recherche."}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+      {isAgence ? (
+        <div className="flex flex-col gap-3">
+          {filteredResidents.map((user) => (
+            <ResidentCard key={user.uid} user={user} />
+          ))}
+          {!loading && filteredResidents.length === 0 && (
+            <p className="py-8 text-center text-muted-foreground">
+              {residents.length === 0 ? "Aucun utilisateur pour l'instant." : "Aucun résultat pour cette recherche."}
+            </p>
+          )}
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col">
+          <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+            <Table>
+              <TableHeader className="bg-muted/40">
+                <TableRow>
+                  <TableHead>Nom</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Date de la demande</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="bg-white">
+                {filteredResidents.map((user) => (
+                  <TableRow key={user.uid}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                          <UserIcon className="size-4" />
+                        </div>
+                        {user.name || user.surname ? `${user.name} ${user.surname}`.trim() : "—"}
+                      </div>
+                    </TableCell>
+                    <TableCell>{user.email || "—"}</TableCell>
+                    <TableCell>{user.createdDate ? user.createdDate.toLocaleDateString("fr-FR") : "—"}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={user.isApproved ? "default" : "outline"}
+                        className={!user.isApproved ? "border-transparent bg-amber-100 text-amber-800" : undefined}
+                      >
+                        {user.isApproved ? "Approuvé" : "En attente"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" render={<Link to={`/residents/${user.uid}`} />}>
+                        <Eye />
+                        Voir la fiche
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!loading && filteredResidents.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                      {residents.length === 0
+                        ? "Aucun utilisateur pour l'instant."
+                        : "Aucun résultat pour cette recherche."}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+// Vue Agence (RBAC) : une Card par utilisateur, tout visible directement -
+// même philosophie que la fiche Agence (OwnAgencyPage), plutôt que le
+// tableau générique réservé à superAdmin/agent.
+function ResidentCard({ user }: { user: KonodalUser }) {
+  return (
+    <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+      <CardContent className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+            <UserIcon className="size-5" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-medium">
+              {user.name || user.surname ? `${user.name} ${user.surname}`.trim() : "—"}
+            </span>
+            <span className="text-sm text-muted-foreground">{user.email || "—"}</span>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="text-sm text-muted-foreground">
+            {user.createdDate ? user.createdDate.toLocaleDateString("fr-FR") : "—"}
+          </span>
+          <Badge
+            variant={user.isApproved ? "default" : "outline"}
+            className={!user.isApproved ? "border-transparent bg-amber-100 text-amber-800" : undefined}
+          >
+            {user.isApproved ? "Approuvé" : "En attente"}
+          </Badge>
+          <Button variant="outline" size="sm" render={<Link to={`/residents/${user.uid}`} />}>
+            <Eye />
+            Voir la fiche
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
