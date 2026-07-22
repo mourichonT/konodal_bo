@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { Ban, ChevronDown, Save } from "lucide-react"
 import { doc, getDoc } from "firebase/firestore"
 import { getDownloadURL, ref } from "firebase/storage"
@@ -45,6 +45,34 @@ function dateToLocalParts(date: Date): { dateOnly: string; time: string } {
   return {
     dateOnly: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
     time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+  }
+}
+
+// Résout la photo associée au prestataire choisi - placeholder gérance, ou
+// icône du service du contact (assets/icones_presta/ dans Storage, même
+// fichiers que _prestaIconFileName côté app mobile). Partagé entre l'aperçu
+// live (pendant la saisie) et handleSubmit (valeur réellement enregistrée),
+// pour ne jamais désynchroniser les deux. Si aucun des deux ne matche ou si
+// le fichier est introuvable, retombe sur `fallback` (photo déjà présente
+// en édition, "" en création) plutôt que de l'écraser par du vide.
+async function resolvePrestaImage(
+  name: string,
+  geranceAgentLabel: string | null,
+  contacts: Contact[],
+  fallback: string
+): Promise<string> {
+  if (geranceAgentLabel && name === geranceAgentLabel) {
+    return GERANCE_PLACEHOLDER_LOGO_URL
+  }
+  const contact = contacts.find((c) => c.name === name)
+  if (!contact) return fallback
+  const fileName =
+    CONTACT_SERVICE_ICON_FILENAMES[contact.service as keyof typeof CONTACT_SERVICE_ICON_FILENAMES]
+  if (!fileName) return fallback
+  try {
+    return await getDownloadURL(ref(storage, `assets/icones_presta/${fileName}`))
+  } catch {
+    return fallback
   }
 }
 
@@ -131,6 +159,7 @@ function EventFormDialogContent({
     initial?.eventDate ? dateToLocalParts(initial.eventDate).time : ""
   )
   const [prestaName, setPrestaName] = useState(initial?.prestaName ?? "")
+  const [pathImage, setPathImage] = useState(initial?.pathImage ?? "")
   const [locationElement, setLocationElement] = useState(
     initial?.locationElement ?? prefillFromSinistre?.locationElement ?? ""
   )
@@ -196,7 +225,34 @@ function EventFormDialogContent({
   }, [geranceRef?.geranceId, geranceRef?.serviceType, geranceRef?.agentUid])
 
   const residenceName = selectedResidence?.name ?? "Choisir une résidence"
-  const residenceContacts = contacts.filter((c) => selectedResidence?.contactRefs?.[c.id])
+  // Mémoïsé : référencé comme dépendance de l'aperçu live ci-dessous, un
+  // nouveau tableau à chaque rendu (.filter()) redéclencherait la
+  // résolution de l'image en boucle sans ça.
+  const residenceContacts = useMemo(
+    () => contacts.filter((c) => selectedResidence?.contactRefs?.[c.id]),
+    [contacts, selectedResidence]
+  )
+
+  // Aperçu live de la photo pendant la saisie (avant même d'enregistrer) -
+  // recalculé à chaque changement de prestataire, même résolution que
+  // handleSubmit (resolvePrestaImage) pour ne jamais diverger.
+  useEffect(() => {
+    if (!prestaName) {
+      setPathImage(initial?.pathImage ?? "")
+      return
+    }
+    let cancelled = false
+    resolvePrestaImage(prestaName, geranceAgentLabel, residenceContacts, initial?.pathImage ?? "").then(
+      (url) => {
+        if (!cancelled) setPathImage(url)
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prestaName, geranceAgentLabel, residenceContacts, initial?.pathImage])
+
   const selectedStructure = structures.find((s) => structureLabel(s) === locationElement)
   const floorOptions = selectedStructure?.etage ?? []
   // Tant qu'aucune résidence n'est choisie (hors édition, où elle est
@@ -225,33 +281,10 @@ function EventFormDialogContent({
       // L'heure est optionnelle - minuit par défaut si non renseignée,
       // plutôt que de bloquer la soumission tant qu'elle est vide.
       const eventDate = new Date(`${eventDateOnly}T${eventTime || "00:00"}`)
-      // Photo de l'intervention résolue depuis le prestataire choisi : le
-      // placeholder gérance (en attendant une vraie photo de profil par
-      // gérance), ou l'icône du service du contact (assets/icones_presta/
-      // dans Storage, même fichiers que _prestaIconFileName côté app
-      // mobile). Si aucun des deux ne matche ou si le fichier est
-      // introuvable, on garde la photo déjà présente (édition) plutôt que de
-      // l'écraser par du vide - sinon rechoisir/reconfirmer un prestataire
-      // sur une intervention existante effaçait sa photo réelle.
-      const isGeranceSelected = !!geranceAgentLabel && prestaName === geranceAgentLabel
-      const selectedContact = residenceContacts.find((c) => c.name === prestaName)
-      let pathImage = initial?.pathImage ?? ""
-      if (isGeranceSelected) {
-        pathImage = GERANCE_PLACEHOLDER_LOGO_URL
-      } else if (selectedContact) {
-        const fileName =
-          CONTACT_SERVICE_ICON_FILENAMES[selectedContact.service as keyof typeof CONTACT_SERVICE_ICON_FILENAMES]
-        if (fileName) {
-          try {
-            pathImage = await getDownloadURL(ref(storage, `assets/icones_presta/${fileName}`))
-          } catch {
-            // Échec de résolution (fichier introuvable, etc.) : on garde la
-            // valeur de départ (photo existante en édition, "" en création)
-            // plutôt que d'écraser explicitement.
-          }
-        }
-      }
-
+      // pathImage vient de l'aperçu live (déjà résolu par le même
+      // resolvePrestaImage à chaque changement de prestaName, cf. useEffect
+      // ci-dessus) - jamais recalculé ici, pour ne jamais diverger de ce que
+      // l'utilisateur a vu à l'écran avant de valider.
       await onSubmit(residenceId, {
         title: eventTitle,
         description,
@@ -339,7 +372,16 @@ function EventFormDialogContent({
             </div>
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="event-presta">Prestataire</Label>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="event-presta">Prestataire</Label>
+              {pathImage && (
+                <img
+                  src={pathImage}
+                  alt=""
+                  className="size-6 shrink-0 rounded-full border object-cover"
+                />
+              )}
+            </div>
             <select
               id="event-presta"
               required
