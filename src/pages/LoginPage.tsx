@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import logoVertical from "@/assets/logo_vertical-transparent_green.png"
 
 function firebaseAuthErrorMessage(error: unknown): string {
   const code = (error as { code?: string })?.code
@@ -64,9 +65,12 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-xl">Konodal Backoffice</CardTitle>
-          <CardDescription>Connecte-toi pour accéder à l'administration.</CardDescription>
+        <CardHeader className="p-[30px]">
+          <img src={logoVertical} alt="Konodal" className="mx-auto mb-[30px] h-24 w-auto" />
+          <CardTitle className="text-center text-xl">Back Office</CardTitle>
+          <CardDescription className="text-center">
+            Connecte-toi pour accéder à l'administration.
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4">
