@@ -90,18 +90,20 @@ export type ContactInput = ContactProfileInput & {
   residencesIds: string[]
 }
 
-// Créé par un admin = déjà validé (pas de file d'attente pour ses propres
-// créations) - contrairement à une création côté app, toujours isApproved:
-// false, cf. firestore.rules. Le contact lui-même ne stocke plus
-// residencesIds : chaque résidence sélectionnée reçoit son propre
-// contactRefs.{id} = true.
-export async function createContact(input: ContactInput) {
+// Créé par un superAdmin = déjà validé, pas de file d'attente. Une Agence/
+// un Agent (backoffice web) doit en revanche créer avec isApproved: false
+// - c'est ce qu'exige firestore.rules (contacts/{id}.create), qui réserve
+// isApproved: true à isSuperAdmin() uniquement ; envoyer true depuis un
+// compte agence/agent est un Missing or insufficient permissions direct.
+// Le contact lui-même ne stocke plus residencesIds : chaque résidence
+// sélectionnée reçoit son propre contactRefs.{id} = true.
+export async function createContact(input: ContactInput, isApproved: boolean) {
   const { residencesIds, ...profile } = input
   const docRef = await addDoc(contactsCollection, {
     ...profile,
     nameNormalized: profile.name.trim().toLowerCase(),
     likelyDuplicateIds: [],
-    isApproved: true,
+    isApproved,
   })
   if (residencesIds.length > 0) {
     const batch = writeBatch(db)

@@ -19,6 +19,7 @@ import { ContactFormDialog } from "@/components/ContactFormDialog"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { useAllContacts } from "@/hooks/useAllContacts"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
+import { useAccountRole } from "@/hooks/useAccountRole"
 import {
   createContact,
   deleteContact,
@@ -38,6 +39,7 @@ function matchesSearch(contact: Contact, search: string): boolean {
 }
 
 export default function ContactsPage() {
+  const { isSuperAdmin } = useAccountRole()
   const { scopedResidenceIds } = useScopedResidenceIds()
   const { contacts, residences, loading } = useAllContacts((message) => toast.error(message), scopedResidenceIds)
   const [search, setSearch] = useState("")
@@ -286,7 +288,10 @@ export default function ContactsPage() {
         title="Ajouter un contact"
         residences={residences}
         onSubmit={async (input: ContactInput) => {
-          await createContact(input)
+          // isApproved: true réservé isSuperAdmin côté firestore.rules -
+          // une Agence/un Agent doit créer avec false, sous peine de
+          // permission-denied direct (cf. lib/contacts.ts, createContact).
+          await createContact(input, isSuperAdmin)
           toast.success("Contact créé")
           setCreating(false)
         }}
