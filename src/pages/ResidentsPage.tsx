@@ -33,7 +33,7 @@ export default function ResidentsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>(null)
-  const { isAgent, isAgence } = useAccountRole()
+  const { isAgence, isSuperAdmin } = useAccountRole()
   const { scopedResidenceIds } = useScopedResidenceIds()
   // Les utilisateurs ne portent pas de residenceId direct - le périmètre
   // RBAC se déduit des lots qu'ils possèdent/louent dans le périmètre
@@ -82,10 +82,10 @@ export default function ResidentsPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Utilisateurs</h1>
 
-      {/* KPI (dont "En attente d'approbation") réservés Agence/Superadmin -
-          un simple Agent consulte l'annuaire mais pas ces agrégats, cf.
-          matrice de droits BO. */}
-      {!isAgent && (
+      {/* KPI réservés Superadmin - ni Agence ni Agent n'ont besoin de ces
+          agrégats sur leur propre annuaire (déjà scopé à leurs résidences),
+          cf. demande explicite de simplification de la vue Agence. */}
+      {isSuperAdmin && (
         <div className="grid grid-cols-3 gap-4">
           <FilterKpiCard
             label="Total utilisateurs"
