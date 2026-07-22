@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -114,85 +114,46 @@ export default function AgencesPage() {
 
   const totalSyndics = gerances.filter((gerance) => gerance.services.serviceSyndic).length
   const totalAgencies = gerances.filter((gerance) => gerance.services.geranceLocative).length
-  const ownGerance = isAgent ? (gerances[0] ?? null) : null
+
+  // Un Agent n'a ni vue agrégée (KPI sur TOUTES les agences n'a pas de sens
+  // pour un compte scopé à la sienne) ni répertoire à parcourir (une seule
+  // fiche possible) : page dédiée, détaillée, sur le modèle des pages
+  // détail du BO (ResidenceDetailPage, SinistreDetailPage...) plutôt que la
+  // liste/table pensée pour Superadmin.
+  if (isAgent) {
+    return <AgentOwnAgencyPage gerance={gerances[0] ?? null} loading={loading} />
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Agences</h1>
 
-      {/* Un Agent n'a pas la vue agrégée (KPI sur TOUTES les agences n'a pas
-          de sens pour un compte scopé à la sienne) - juste un rappel de son
-          agence de rattachement. */}
-      {isAgent ? (
-        <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-                <Briefcase className="size-5" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-lg font-medium">{ownGerance?.name ?? "…"}</span>
-                {ownGerance && (
-                  <span className="text-sm text-muted-foreground">
-                    {[ownGerance.address.street, [ownGerance.address.zipCode, ownGerance.address.city].join(" ")]
-                      .filter(Boolean)
-                      .join(" — ") || "—"}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {ownGerance && (
-              <div className="flex flex-col gap-3 border-t pt-4">
-                {serviceTypes
-                  .filter((type) => ownGerance.services[type])
-                  .map((type) => {
-                    const dept = ownGerance.services[type]
-                    if (!dept) return null
-                    return (
-                      <div key={type} className="flex flex-col gap-1">
-                        <Badge variant="secondary" className="w-fit">
-                          {serviceTypeLabels[type]}
-                        </Badge>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                          {dept.mail && <span>{dept.mail}</span>}
-                          {dept.phone && <span>{dept.phone}</span>}
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-3 gap-4">
-          <FilterKpiCard
-            label="Total des professionnels de l'immo"
-            value={gerances.length}
-            icon={Briefcase}
-            colorClass="bg-slate-100 text-slate-600"
-            active={serviceFilter === null}
-            onClick={() => setServiceFilter(null)}
-          />
-          <FilterKpiCard
-            label="Total des syndics"
-            value={totalSyndics}
-            icon={Landmark}
-            colorClass="bg-sky-100 text-sky-600"
-            active={serviceFilter === "serviceSyndic"}
-            onClick={() => setServiceFilter((prev) => (prev === "serviceSyndic" ? null : "serviceSyndic"))}
-          />
-          <FilterKpiCard
-            label="Total des agences"
-            value={totalAgencies}
-            icon={Home}
-            colorClass="bg-emerald-100 text-emerald-600"
-            active={serviceFilter === "geranceLocative"}
-            onClick={() => setServiceFilter((prev) => (prev === "geranceLocative" ? null : "geranceLocative"))}
-          />
-        </div>
-      )}
+      <div className="grid grid-cols-3 gap-4">
+        <FilterKpiCard
+          label="Total des professionnels de l'immo"
+          value={gerances.length}
+          icon={Briefcase}
+          colorClass="bg-slate-100 text-slate-600"
+          active={serviceFilter === null}
+          onClick={() => setServiceFilter(null)}
+        />
+        <FilterKpiCard
+          label="Total des syndics"
+          value={totalSyndics}
+          icon={Landmark}
+          colorClass="bg-sky-100 text-sky-600"
+          active={serviceFilter === "serviceSyndic"}
+          onClick={() => setServiceFilter((prev) => (prev === "serviceSyndic" ? null : "serviceSyndic"))}
+        />
+        <FilterKpiCard
+          label="Total des agences"
+          value={totalAgencies}
+          icon={Home}
+          colorClass="bg-emerald-100 text-emerald-600"
+          active={serviceFilter === "geranceLocative"}
+          onClick={() => setServiceFilter((prev) => (prev === "geranceLocative" ? null : "geranceLocative"))}
+        />
+      </div>
 
       <div className="flex flex-col gap-1">
         <h2 className="text-lg">Répertoire des agences</h2>
@@ -262,15 +223,13 @@ export default function AgencesPage() {
                     </TableCell>
                     <TableCell>{primaryContact || "—"}</TableCell>
                     <TableCell className="text-right">
-                      {/* Agent = consultation seule (déjà visible dans les
-                          colonnes ci-contre) : pas d'édition, cf. matrice de
-                          droits BO. */}
-                      {!isAgent && (
-                        <Button variant="outline" size="sm" onClick={() => setEditingId(gerance.id)}>
-                          <Pencil />
-                          Modifier
-                        </Button>
-                      )}
+                      {/* Un Agent n'atteint jamais cette liste (early return
+                          plus haut vers AgentOwnAgencyPage) - pas besoin de
+                          gater ce bouton ici. */}
+                      <Button variant="outline" size="sm" onClick={() => setEditingId(gerance.id)}>
+                        <Pencil />
+                        Modifier
+                      </Button>
                     </TableCell>
                   </TableRow>
                 )
@@ -714,6 +673,100 @@ function AccountControl({
         <Mail />
         {isRevoked ? "Réinviter" : "Inviter"}
       </Button>
+    </div>
+  )
+}
+
+// Page détaillée de l'agence à laquelle un compte Agent est rattaché - même
+// gabarit (titre + Cards empilées) que les autres pages détail du BO
+// (ResidenceDetailPage, SinistreDetailPage, EvenementDetailPage), plutôt
+// que la liste/répertoire pensée pour Superadmin qui n'a pas de sens pour
+// un compte scopé à une seule fiche. Lecture seule : un Agent consulte,
+// il ne modifie pas (cf. matrice de droits BO).
+function AgentOwnAgencyPage({ gerance, loading }: { gerance: Gerance | null; loading: boolean }) {
+  return (
+    <div className="flex flex-col gap-8">
+      <h1 className="text-2xl font-semibold">
+        {gerance ? gerance.name : loading ? "…" : "Agence introuvable"}
+      </h1>
+
+      {!loading && !gerance && (
+        <p className="text-muted-foreground">
+          Aucune agence n'est rattachée à votre compte pour l'instant.
+        </p>
+      )}
+
+      {gerance && (
+        <>
+          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <CardHeader>
+              <CardTitle className="text-base">Informations</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 text-sm sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <span className="text-muted-foreground">Adresse : </span>
+                {[gerance.address.street, [gerance.address.zipCode, gerance.address.city].join(" ")]
+                  .filter(Boolean)
+                  .join(" — ") || "—"}
+              </div>
+            </CardContent>
+          </Card>
+
+          {serviceTypes
+            .filter((type) => gerance.services[type])
+            .map((type) => {
+              const dept = gerance.services[type]
+              if (!dept) return null
+              return (
+                <Card key={type} className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+                  <CardHeader>
+                    <CardTitle className="text-base">{serviceTypeLabels[type]}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-4">
+                    <div className="grid gap-4 text-sm sm:grid-cols-2">
+                      <div>
+                        <span className="text-muted-foreground">Email du service : </span>
+                        {dept.mail || "—"}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Téléphone : </span>
+                        {dept.phone || "—"}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2 border-t pt-4">
+                      <span className="text-sm text-muted-foreground">Agents</span>
+                      {dept.agents.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Aucun agent nommé pour ce service.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader className="bg-muted/40">
+                            <TableRow>
+                              <TableHead>Nom</TableHead>
+                              <TableHead>Email</TableHead>
+                              <TableHead>Téléphone</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody className="bg-white">
+                            {dept.agents.map((agent, i) => (
+                              <TableRow key={i}>
+                                <TableCell className="font-medium">
+                                  {`${agent.name_agent} ${agent.surname_agent}`.trim() || "—"}
+                                </TableCell>
+                                <TableCell>{agent.mail || "—"}</TableCell>
+                                <TableCell>{agent.phone || "—"}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+        </>
+      )}
     </div>
   )
 }
