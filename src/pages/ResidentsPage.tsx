@@ -116,9 +116,14 @@ export default function ResidentsPage() {
 
       <div className="flex flex-col gap-1">
         <h2 className="text-lg">Annuaire des utilisateurs</h2>
-        <p className="text-sm text-muted-foreground">
-          Rechercher un compte et approuver son identité (documents vérifiés côté KONODAL).
-        </p>
+        {/* Approbation d'identité réservée superAdmin (cf. matrice de
+            droits) - la mention n'a pas de sens pour agence/agent, qui ne
+            peuvent de toute façon pas approuver. */}
+        {isSuperAdmin && (
+          <p className="text-sm text-muted-foreground">
+            Rechercher un compte et approuver son identité (documents vérifiés côté KONODAL).
+          </p>
+        )}
       </div>
 
       <div className="relative max-w-sm flex-1">
