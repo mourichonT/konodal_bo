@@ -18,6 +18,7 @@ import {
 import { useAuth } from "@/lib/auth-context"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
+import { subscribeToUser } from "@/lib/users"
 import { cn } from "@/lib/utils"
 import logoKWhite from "@/assets/logo-k-white.png"
 import logoHorizontal from "@/assets/logo-horizontal.png"
@@ -116,6 +117,22 @@ export function Sidebar() {
   const { isSuperAdmin } = useIsSuperAdmin()
   const { isAgence, isAgent } = useAccountRole()
   const location = useLocation()
+  // profil.profilPic n'est pas porté par Firebase Auth (displayName/photoURL
+  // ne sont jamais renseignés côté résident) - souscription dédiée à sa
+  // propre fiche users/{uid} pour que l'avatar suive la photo posée depuis
+  // /profil sans recharger la page.
+  const [profilePic, setProfilePic] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    if (!user) {
+      setProfilePic(undefined)
+      return
+    }
+    return subscribeToUser(
+      user.uid,
+      (data) => setProfilePic(data?.profilePic),
+      () => setProfilePic(undefined)
+    )
+  }, [user])
   // "Agences" (répertoire, Superadmin) devient "Agence" au singulier pour
   // une Agence (la page pointe alors sur sa propre fiche, pas un annuaire -
   // cf. AgencesPage.tsx, OwnAgencyPage) et disparaît entièrement pour un
@@ -257,8 +274,12 @@ export function Sidebar() {
               "outline-none focus-visible:bg-sidebar-accent/50"
             )}
           >
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sidebar-foreground/15 text-xs font-semibold">
-              {initialsFor(user?.displayName, user?.email)}
+            <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-foreground/15 text-xs font-semibold">
+              {profilePic ? (
+                <img src={profilePic} alt="" className="size-full object-cover" />
+              ) : (
+                initialsFor(user?.displayName, user?.email)
+              )}
             </div>
             <div className="flex min-w-0 flex-1 flex-col leading-tight">
               <span className="truncate font-medium">
