@@ -123,7 +123,7 @@ function InfoSection({ residence }: { residence: Residence }) {
   const [gerances, setGerances] = useState<Gerance[]>([])
   const [geranceId, setGeranceId] = useState(residence.geranceRef?.geranceId ?? "")
   const [serviceType, setServiceType] = useState<ServiceType | "">(residence.geranceRef?.serviceType ?? "")
-  const [agentMail, setAgentMail] = useState(residence.geranceRef?.agentMail ?? "")
+  const [agentUid, setAgentUid] = useState(residence.geranceRef?.agentUid ?? "")
 
   useEffect(() => {
     setName(residence.name)
@@ -133,7 +133,7 @@ function InfoSection({ residence }: { residence: Residence }) {
     setMailContact(residence.mail_contact ?? "")
     setGeranceId(residence.geranceRef?.geranceId ?? "")
     setServiceType(residence.geranceRef?.serviceType ?? "")
-    setAgentMail(residence.geranceRef?.agentMail ?? "")
+    setAgentUid(residence.geranceRef?.agentUid ?? "")
   }, [residence.id])
 
   useEffect(() => {
@@ -184,7 +184,7 @@ function InfoSection({ residence }: { residence: Residence }) {
         await updateResidenceGeranceRef(
           residence.id,
           geranceId && serviceType
-            ? { geranceId, serviceType, ...(agentMail ? { agentMail } : {}) }
+            ? { geranceId, serviceType, ...(agentUid ? { agentUid } : {}) }
             : null
         )
       }
@@ -242,7 +242,7 @@ function InfoSection({ residence }: { residence: Residence }) {
                 onChange={(e) => {
                   setGeranceId(e.target.value)
                   setServiceType("")
-                  setAgentMail("")
+                  setAgentUid("")
                 }}
                 className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
@@ -258,7 +258,7 @@ function InfoSection({ residence }: { residence: Residence }) {
                 disabled={!geranceId}
                 onChange={(e) => {
                   setServiceType(e.target.value as ServiceType)
-                  setAgentMail("")
+                  setAgentUid("")
                 }}
                 className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
               >
@@ -270,19 +270,17 @@ function InfoSection({ residence }: { residence: Residence }) {
                 ))}
               </select>
               <select
-                value={agentMail}
+                value={agentUid}
                 disabled={!serviceType}
-                onChange={(e) => setAgentMail(e.target.value)}
+                onChange={(e) => setAgentUid(e.target.value)}
                 className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
               >
                 <option value="">Service (générique, sans agent précis)</option>
-                {availableAgents
-                  .filter((a) => a.email)
-                  .map((a) => (
-                    <option key={a.email} value={a.email}>
-                      {a.name} {a.surname}
-                    </option>
-                  ))}
+                {availableAgents.map((a) => (
+                  <option key={a.uid} value={a.uid}>
+                    {a.name} {a.surname}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

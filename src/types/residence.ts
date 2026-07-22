@@ -9,7 +9,13 @@ export type Address = {
 export type GeranceRef = {
   geranceId: string
   serviceType: "serviceSyndic" | "geranceLocative"
-  agentMail?: string
+  // uid Firebase Auth de l'agent précisément choisi pour cette résidence -
+  // PAS un email (cf. GeranceRef.agentUid côté Dart, gerance_ref.dart) :
+  // c'est ce champ que firestore_agency_repository.dart lit réellement pour
+  // résoudre le contact syndic/gérance affiché au résident, avec repli sur
+  // le premier uid de serviceSyndicAgentUids/geranceLocativeAgentUids si
+  // absent.
+  agentUid?: string
 }
 
 export type Residence = {

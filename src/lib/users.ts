@@ -3,8 +3,6 @@ import {
   deleteField,
   doc,
   getDoc,
-  getDocs,
-  limit as firestoreLimit,
   onSnapshot,
   query,
   serverTimestamp,
@@ -333,14 +331,6 @@ export async function resolveUsersByUids(uids: string[]): Promise<KonodalUser[]>
   const unique = [...new Set(uids)]
   const snapshots = await Promise.all(unique.map((uid) => getDoc(doc(usersCollection, uid))))
   return snapshots.filter((snap) => snap.exists()).map(toKonodalUser)
-}
-
-// Retrouve un compte par email (ex: residence.geranceRef.agentMail, qui
-// n'identifie l'agent responsable que par son adresse) - au plus un
-// résultat attendu, l'email étant l'identifiant du compte Firebase Auth.
-export async function findUserByEmail(email: string): Promise<KonodalUser | null> {
-  const snapshot = await getDocs(query(usersCollection, where("email", "==", email), firestoreLimit(1)))
-  return snapshot.empty ? null : toKonodalUser(snapshot.docs[0])
 }
 
 // Idempotent à dessein : ré-écrire `true` alors que c'est déjà `true` reste

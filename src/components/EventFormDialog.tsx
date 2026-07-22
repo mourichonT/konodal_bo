@@ -20,7 +20,7 @@ import { db, storage } from "@/firebase"
 import { GERANCE_PLACEHOLDER_LOGO_URL, type EventInput } from "@/lib/events"
 import { subscribeToContacts } from "@/lib/contacts"
 import { subscribeToStructures } from "@/lib/structures"
-import { findUserByEmail } from "@/lib/users"
+import { resolveUsersByUids } from "@/lib/users"
 import { CONTACT_SERVICE_ICON_FILENAMES, type Contact } from "@/types/contact"
 import type { GeranceRef } from "@/types/residence"
 import type { StructureResidence } from "@/types/structure"
@@ -178,10 +178,11 @@ function EventFormDialogContent({
     let cancelled = false
     Promise.all([
       getDoc(doc(db, "gerances", geranceRef.geranceId)),
-      geranceRef.agentMail ? findUserByEmail(geranceRef.agentMail) : Promise.resolve(null),
-    ]).then(([snap, agentUser]) => {
+      geranceRef.agentUid ? resolveUsersByUids([geranceRef.agentUid]) : Promise.resolve([]),
+    ]).then(([snap, agentUsers]) => {
       if (cancelled || !snap.exists()) return
       const geranceName = (snap.data().name as string) ?? ""
+      const agentUser = agentUsers[0]
       if (agentUser) {
         const agentName = `${agentUser.name} ${agentUser.surname}`.trim()
         setGeranceAgentLabel(geranceName ? `${agentName} (${geranceName})` : agentName)
@@ -192,7 +193,7 @@ function EventFormDialogContent({
     return () => {
       cancelled = true
     }
-  }, [geranceRef?.geranceId, geranceRef?.serviceType, geranceRef?.agentMail])
+  }, [geranceRef?.geranceId, geranceRef?.serviceType, geranceRef?.agentUid])
 
   const residenceName = selectedResidence?.name ?? "Choisir une résidence"
   const residenceContacts = contacts.filter((c) => selectedResidence?.contactRefs?.[c.id])
