@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { storage, db } from "@/firebase"
+import { useAccountRole } from "@/hooks/useAccountRole"
 import { cn } from "@/lib/utils"
 import {
   approveUserLot,
@@ -34,6 +35,7 @@ import type { KonodalUser } from "@/types/user"
 
 export default function ResidentDetailPage() {
   const { uid } = useParams<{ uid: string }>()
+  const { isSuperAdmin, isAgence } = useAccountRole()
   const [user, setUser] = useState<KonodalUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [documents, setDocuments] = useState<UserDocument[]>([])
@@ -144,16 +146,22 @@ export default function ResidentDetailPage() {
                     En attente d'approbation
                   </Badge>
                 )}
-                <Button
-                  variant={user.isApproved ? "outline" : "default"}
-                  size="sm"
-                  disabled={savingApproval}
-                  onClick={handleToggleApproved}
-                >
-                  {user.isApproved ? <X /> : <Check />}
-                  {user.isApproved ? "Révoquer l'identité" : "Approuver l'identité"}
-                </Button>
-                {!user.isApproved && (
+                {/* Validation d'identité (isApproved) réservée Superadmin -
+                    ni Agence ni Agent, cf. matrice de droits BO : c'est une
+                    vérification de pièce d'identité, pas une correction de
+                    fiche courante. */}
+                {isSuperAdmin && (
+                  <Button
+                    variant={user.isApproved ? "outline" : "default"}
+                    size="sm"
+                    disabled={savingApproval}
+                    onClick={handleToggleApproved}
+                  >
+                    {user.isApproved ? <X /> : <Check />}
+                    {user.isApproved ? "Révoquer l'identité" : "Approuver l'identité"}
+                  </Button>
+                )}
+                {isSuperAdmin && !user.isApproved && (
                   <Button
                     variant="destructive"
                     size="sm"
@@ -173,7 +181,7 @@ export default function ResidentDetailPage() {
                   {user.rejectionReason}
                 </div>
               )}
-              <IdentityFields user={user} />
+              <IdentityFields user={user} canEdit={isSuperAdmin || isAgence} />
 
               <div className="pr-[20px] flex flex-col gap-2 pt-[22px] pb-[20px]">
                 <Label className="mb-[20px]">Document(s)</Label>
@@ -205,7 +213,13 @@ export default function ResidentDetailPage() {
                 <p className="text-sm text-muted-foreground">Aucun lot rattaché à ce compte.</p>
               )}
               {lots.map((lot) => (
-                <LotRow key={lot.id} uid={uid} lot={lot} userApproved={user.isApproved} />
+                <LotRow
+                  key={lot.id}
+                  uid={uid}
+                  lot={lot}
+                  userApproved={user.isApproved}
+                  canApprove={isSuperAdmin || isAgence}
+                />
               ))}
             </CardContent>
           </Card>
@@ -265,7 +279,9 @@ function toDateInputValue(date: Date | null): string {
 
 // Champs corrigibles par un admin en cas d'erreur de reconnaissance (OCR à
 // l'inscription) - tout sauf l'email, identifiant du compte Firebase Auth.
-function IdentityFields({ user }: { user: KonodalUser }) {
+// canEdit=false (Agent) : consultation seule, cf. matrice de droits BO -
+// une Agence garde le droit de correction, pas un simple Agent.
+function IdentityFields({ user, canEdit }: { user: KonodalUser; canEdit: boolean }) {
   const [name, setName] = useState(user.name)
   const [surname, setSurname] = useState(user.surname)
   const [phone, setPhone] = useState(user.phone)
@@ -307,7 +323,7 @@ function IdentityFields({ user }: { user: KonodalUser }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid gap-3 text-sm sm:grid-cols-2">
+      <div className={cn("grid gap-3 text-sm sm:grid-cols-2", !canEdit && "pointer-events-none opacity-50")}>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="identity-email">Email</Label>
           <Input id="identity-email" value={user.email} disabled />
@@ -360,12 +376,14 @@ function IdentityFields({ user }: { user: KonodalUser }) {
         {user.isInfoCorrect ? "Oui" : "Non"}
       </p>
 
-      <div className="mb-[20px] flex justify-end">
-        <Button size="sm" disabled={saving} onClick={handleSave}>
-          <Save />
-          Enregistrer les modifications
-        </Button>
-      </div>
+      {canEdit && (
+        <div className="mb-[20px] flex justify-end">
+          <Button size="sm" disabled={saving} onClick={handleSave}>
+            <Save />
+            Enregistrer les modifications
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -413,10 +431,16 @@ function LotRow({
   uid,
   lot,
   userApproved,
+  canApprove,
 }: {
   uid: string
   lot: UserLot
   userApproved: boolean
+  // Approuver/actualiser l'accès à un lot (isApprovedLot) réservé
+  // Superadmin/Agence - un simple Agent reste en lecture seule, cf.
+  // matrice de droits BO (même logique que isApproved sur l'identité, en
+  // moins strict : ici une Agence gérance/syndic garde la main).
+  canApprove: boolean
 }) {
   const [residenceName, setResidenceName] = useState<string | null>(null)
   const [lotInfo, setLotInfo] = useState<{ refLot: string; batiment: string; lot: string } | null>(
@@ -556,16 +580,18 @@ function LotRow({
           <Badge variant={lot.isApprovedLot ? "default" : "destructive"}>
             {lot.isApprovedLot ? "Approuvé" : "En attente"}
           </Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={approving || !userApproved}
-            title={!userApproved ? "Approuve d'abord l'identité pour que la synchronisation fonctionne" : undefined}
-            onClick={handleApprove}
-          >
-            {lot.isApprovedLot ? <RefreshCw /> : <Check />}
-            {lot.isApprovedLot ? "Actualiser" : "Approuver"}
-          </Button>
+          {canApprove && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={approving || !userApproved}
+              title={!userApproved ? "Approuve d'abord l'identité pour que la synchronisation fonctionne" : undefined}
+              onClick={handleApprove}
+            >
+              {lot.isApprovedLot ? <RefreshCw /> : <Check />}
+              {lot.isApprovedLot ? "Actualiser" : "Approuver"}
+            </Button>
+          )}
         </div>
       </div>
 
