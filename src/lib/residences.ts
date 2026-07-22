@@ -1,15 +1,17 @@
 import {
   addDoc,
   collection,
+  deleteField,
   doc,
   onSnapshot,
   orderBy,
   query,
   updateDoc,
+  where,
   type Unsubscribe,
 } from "firebase/firestore"
 import { db } from "@/firebase"
-import type { Address, Residence } from "@/types/residence"
+import type { Address, GeranceRef, Residence } from "@/types/residence"
 
 const residencesCollection = collection(db, "residences")
 
@@ -45,6 +47,25 @@ export function subscribeToResidence(
   )
 }
 
+// Périmètre d'un compte agence/agent (RBAC) : résidences dont geranceRef
+// pointe vers CETTE gérance - requête indexée directe plutôt qu'un champ
+// dénormalisé gerance.residenceIds (évite une double écriture à maintenir
+// à chaque réassignation de gérance sur une résidence, cf. discussion de
+// cadrage RBAC). isProfessionnelResidence côté firestore.rules vérifie la
+// même relation, dans l'autre sens, résidence par résidence.
+export function subscribeToResidencesForGerance(
+  geranceId: string,
+  onData: (residences: Residence[]) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  const q = query(residencesCollection, where("geranceRef.geranceId", "==", geranceId))
+  return onSnapshot(
+    q,
+    (snapshot) => onData(snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Residence, "id">) }))),
+    onError
+  )
+}
+
 export type ResidenceInput = {
   name: string
   address: Address
@@ -64,4 +85,16 @@ export async function updateResidence(id: string, input: ResidenceInput) {
 
 export async function updateResidenceGeo(id: string, lat: number, lng: number) {
   await updateDoc(doc(db, "residences", id), { lat, lng })
+}
+
+// Rattache/détache la gérance qui gère cette résidence - condition
+// nécessaire pour qu'un compte agence/agent (RBAC) voie quoi que ce soit
+// (isProfessionnelResidence/isProfessionnelLot côté firestore.rules lisent
+// ce champ). deleteField() plutôt que null : la règle teste
+// 'geranceRef' in residence, qui resterait vraie avec une valeur null et
+// ferait échouer l'accès à .serviceType ensuite.
+export async function updateResidenceGeranceRef(id: string, geranceRef: GeranceRef | null) {
+  await updateDoc(doc(db, "residences", id), {
+    geranceRef: geranceRef ?? deleteField(),
+  })
 }

@@ -34,6 +34,8 @@ import {
   Repeat,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
+import { useAccountRole } from "@/hooks/useAccountRole"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -188,10 +190,12 @@ function KpiCard({
 export default function DashboardPage() {
   const { user } = useAuth()
   const [users, setUsers] = useState<KonodalUser[]>([])
-  const { sinistres, loading: sinistresLoading } = useAllSinistres((message) => toast.error(message))
-  const { events, residences, loading: eventsLoading } = useAllEvents((message) => toast.error(message))
-  const { contacts, loading: contactsLoading } = useAllContacts((message) => toast.error(message))
-  const { lots, loading: lotsLoading } = useAllLots((message) => toast.error(message))
+  const { scopedResidenceIds } = useScopedResidenceIds()
+  const { isAgent } = useAccountRole()
+  const { sinistres, loading: sinistresLoading } = useAllSinistres((message) => toast.error(message), scopedResidenceIds)
+  const { events, residences, loading: eventsLoading } = useAllEvents((message) => toast.error(message), scopedResidenceIds)
+  const { contacts, loading: contactsLoading } = useAllContacts((message) => toast.error(message), scopedResidenceIds)
+  const { lots, loading: lotsLoading } = useAllLots((message) => toast.error(message), scopedResidenceIds)
   const [residenceFilter, setResidenceFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -427,6 +431,10 @@ export default function DashboardPage() {
     return months
   }, [filteredSinistres, dateFrom, dateTo, now])
 
+  // "Utilisateurs" (total + badge "en attente d'approbation") réservé
+  // Agence/Superadmin, même logique que la page Utilisateurs elle-même -
+  // Propriétaires/Locataires restent visibles pour Agent (simples comptages,
+  // pas d'info d'approbation).
   const residencesKpis: Kpi[] = [
     {
       label: "Résidences",
@@ -435,15 +443,19 @@ export default function DashboardPage() {
       value: filteredResidences.length,
       description: "Nombre total de résidences enregistrées dans le backoffice.",
     },
-    {
-      label: "Utilisateurs",
-      to: "/residents",
-      icon: Users,
-      value: filteredResidents.length,
-      sub: filteredUsersPending > 0 ? `${filteredUsersPending} en attente` : undefined,
-      description:
-        "Comptes résidents/bailleurs (hors comptes professionnels). Le badge indique ceux en attente d'approbation d'identité.",
-    },
+    ...(isAgent
+      ? []
+      : [
+          {
+            label: "Utilisateurs",
+            to: "/residents",
+            icon: Users,
+            value: filteredResidents.length,
+            sub: filteredUsersPending > 0 ? `${filteredUsersPending} en attente` : undefined,
+            description:
+              "Comptes résidents/bailleurs (hors comptes professionnels). Le badge indique ceux en attente d'approbation d'identité.",
+          } satisfies Kpi,
+        ]),
     {
       label: "Propriétaires",
       to: "/residents",

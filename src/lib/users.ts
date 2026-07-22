@@ -43,6 +43,7 @@ function toKonodalUser(snapshot: DocumentSnapshot<DocumentData>): KonodalUser {
     placeOfborn: (userGroup.placeOfborn as string) ?? "",
     isInfoCorrect: (userGroup.isInfoCorrect as boolean) ?? false,
     rejectionReason: (data.rejectionReason as string) ?? null,
+    active: data.active as boolean | undefined,
   }
 }
 

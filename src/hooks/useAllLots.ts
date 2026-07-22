@@ -8,7 +8,9 @@ export type LotWithResidence = Lot & { residenceId: string; residenceName: strin
 
 // Agrège les lots de toutes les résidences, même choix que useAllSinistres/
 // useAllEvents (pas de collectionGroup disponible côté connectkasa).
-export function useAllLots(onError: (message: string) => void) {
+// scopedResidenceIds : périmètre RBAC (null = pas de restriction, cf.
+// useScopedResidenceIds).
+export function useAllLots(onError: (message: string) => void, scopedResidenceIds?: Set<string> | null) {
   const [residences, setResidences] = useState<Residence[]>([])
   const [byResidence, setByResidence] = useState<Record<string, Lot[]>>({})
   const [loading, setLoading] = useState(true)
@@ -25,8 +27,13 @@ export function useAllLots(onError: (message: string) => void) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const scopedResidences = useMemo(
+    () => (scopedResidenceIds ? residences.filter((r) => scopedResidenceIds.has(r.id)) : residences),
+    [residences, scopedResidenceIds]
+  )
+
   useEffect(() => {
-    const unsubscribes = residences.map((residence) =>
+    const unsubscribes = scopedResidences.map((residence) =>
       subscribeToLots(
         residence.id,
         (data) => setByResidence((prev) => ({ ...prev, [residence.id]: data })),
@@ -36,7 +43,7 @@ export function useAllLots(onError: (message: string) => void) {
     )
     return () => unsubscribes.forEach((unsub) => unsub())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [residences])
+  }, [scopedResidences])
 
   const residenceNameById = useMemo(
     () => new Map(residences.map((r) => [r.id, r.name])),

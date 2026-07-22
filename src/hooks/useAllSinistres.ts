@@ -10,7 +10,11 @@ export type SinistreWithResidence = Sinistre & { residenceName: string }
 // disponible côté connectkasa (aucune règle/index dédiés, comme pour
 // users/*/lots), donc une souscription par résidence plutôt qu'une requête
 // globale - choix assumé tant que le nombre de résidences reste modeste.
-export function useAllSinistres(onError: (message: string) => void) {
+// scopedResidenceIds : périmètre RBAC (null = pas de restriction, cf.
+// useScopedResidenceIds) - filtré ici, avant le fan-out par résidence, pour
+// qu'un compte agence/agent n'ouvre même pas de listener sur une résidence
+// hors périmètre.
+export function useAllSinistres(onError: (message: string) => void, scopedResidenceIds?: Set<string> | null) {
   const [residences, setResidences] = useState<Residence[]>([])
   const [byResidence, setByResidence] = useState<Record<string, Sinistre[]>>({})
   const [loading, setLoading] = useState(true)
@@ -27,8 +31,13 @@ export function useAllSinistres(onError: (message: string) => void) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const scopedResidences = useMemo(
+    () => (scopedResidenceIds ? residences.filter((r) => scopedResidenceIds.has(r.id)) : residences),
+    [residences, scopedResidenceIds]
+  )
+
   useEffect(() => {
-    const unsubscribes = residences.map((residence) =>
+    const unsubscribes = scopedResidences.map((residence) =>
       subscribeToResidenceSinistres(
         residence.id,
         (data) => setByResidence((prev) => ({ ...prev, [residence.id]: data })),
@@ -38,7 +47,7 @@ export function useAllSinistres(onError: (message: string) => void) {
     )
     return () => unsubscribes.forEach((unsub) => unsub())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [residences])
+  }, [scopedResidences])
 
   const residenceNameById = useMemo(
     () => new Map(residences.map((r) => [r.id, r.name])),

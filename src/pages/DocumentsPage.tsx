@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { AlertCircle, ChevronDown, FileText, Plus, Search, Trash2 } from "lucide-react"
+import { ChevronDown, FileText, Plus, Search, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -22,7 +21,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { ResidenceDocumentFormDialog } from "@/components/ResidenceDocumentFormDialog"
 import { LotDocumentFormDialog } from "@/components/LotDocumentFormDialog"
 import {
@@ -30,6 +28,7 @@ import {
   type ResidenceDocumentWithResidence,
 } from "@/hooks/useAllResidenceDocuments"
 import { useAllLots, type LotWithResidence } from "@/hooks/useAllLots"
+import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { createResidenceDocument, deleteResidenceDocument } from "@/lib/residenceDocuments"
 import { createLotDocument, deleteLotDocument, subscribeToLotDocuments } from "@/lib/lotDocuments"
 import { resolveUserLabels } from "@/lib/users"
@@ -51,19 +50,16 @@ export default function DocumentsPage() {
 }
 
 function ResidenceDocumentsSection() {
-  const { documents, residences, loading } = useAllResidenceDocuments((message) => toast.error(message))
+  const { scopedResidenceIds } = useScopedResidenceIds()
+  const { documents, residences, loading } = useAllResidenceDocuments(
+    (message) => toast.error(message),
+    scopedResidenceIds
+  )
   const [search, setSearch] = useState("")
   const [residenceFilter, setResidenceFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
-  const [showMissing, setShowMissing] = useState(false)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<ResidenceDocumentWithResidence | null>(null)
-
-  const now = new Date()
-  const addedThisMonth = documents.filter(
-    (d) => d.timeStamp && d.timeStamp.getFullYear() === now.getFullYear() && d.timeStamp.getMonth() === now.getMonth()
-  ).length
-  const residencesWithoutDocs = residences.filter((r) => !documents.some((d) => d.residenceId === r.id))
 
   const filteredDocuments = documents.filter((d) => {
     if (residenceFilter !== "all" && d.residenceId !== residenceFilter) return false
@@ -71,12 +67,6 @@ function ResidenceDocumentsSection() {
     if (!search.trim()) return true
     return [d.name, d.category, d.residenceName].join(" ").toLowerCase().includes(search.toLowerCase())
   })
-
-  function resetFilters() {
-    setResidenceFilter("all")
-    setCategoryFilter("all")
-    setSearch("")
-  }
 
   async function handleDelete() {
     if (!deleting) return
@@ -98,50 +88,6 @@ function ResidenceDocumentsSection() {
           Ajouter un document
         </Button>
       </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <FilterKpiCard
-          label="Documents de résidence"
-          value={documents.length}
-          icon={FileText}
-          colorClass="bg-slate-100 text-slate-600"
-          active={residenceFilter === "all" && categoryFilter === "all" && !search.trim()}
-          onClick={resetFilters}
-        />
-        <FilterKpiCard
-          label="Résidences sans document"
-          value={residencesWithoutDocs.length}
-          icon={AlertCircle}
-          colorClass="bg-red-100 text-red-600"
-          active={showMissing}
-          onClick={() => setShowMissing((v) => !v)}
-        />
-        <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-          <CardContent className="flex items-center gap-4">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-              <FileText className="size-5" />
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm text-muted-foreground">Ajoutés ce mois-ci</span>
-              <span className="text-2xl font-semibold">{addedThisMonth}</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {showMissing && (
-        <div className="flex flex-wrap gap-2 rounded-xl border border-dashed border-input p-3">
-          {residencesWithoutDocs.length === 0 ? (
-            <span className="text-sm text-muted-foreground">Toutes les résidences ont au moins un document.</span>
-          ) : (
-            residencesWithoutDocs.map((r) => (
-              <Badge key={r.id} variant="outline">
-                {r.name}
-              </Badge>
-            ))
-          )}
-        </div>
-      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-sm flex-1">
@@ -275,7 +221,8 @@ function ResidenceDocumentsSection() {
 }
 
 function LotDocumentsSection() {
-  const { lots, loading: lotsLoading } = useAllLots((message) => toast.error(message))
+  const { scopedResidenceIds } = useScopedResidenceIds()
+  const { lots, loading: lotsLoading } = useAllLots((message) => toast.error(message), scopedResidenceIds)
   const [residenceFilter, setResidenceFilter] = useState("")
   const [lotId, setLotId] = useState("")
   const [lotDocuments, setLotDocuments] = useState<LotDocument[]>([])

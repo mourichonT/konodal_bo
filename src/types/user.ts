@@ -18,4 +18,11 @@ export type KonodalUser = {
   // que le compte est simplement pas encore examiné. Affiché à l'utilisateur
   // dans l'app mobile (NoApprovalPage) et jamais réécrit par elle.
   rejectionReason: string | null
+  // Comptes agence/agent uniquement (RBAC) - posé par
+  // invite_agency_account (true)/revoke_agency_account (false). Absent sur
+  // les comptes résident/bailleur classiques. L'appartenance aux tableaux
+  // d'agents de la gérance reste la source de vérité pour les règles
+  // Firestore ; ce champ n'est qu'un signal lisible directement sur la
+  // fiche, pas un mécanisme d'autorisation.
+  active?: boolean
 }

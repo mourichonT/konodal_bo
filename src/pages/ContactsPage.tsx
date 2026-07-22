@@ -18,6 +18,7 @@ import {
 import { ContactFormDialog } from "@/components/ContactFormDialog"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { useAllContacts } from "@/hooks/useAllContacts"
+import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import {
   createContact,
   deleteContact,
@@ -37,7 +38,8 @@ function matchesSearch(contact: Contact, search: string): boolean {
 }
 
 export default function ContactsPage() {
-  const { contacts, residences, loading } = useAllContacts((message) => toast.error(message))
+  const { scopedResidenceIds } = useScopedResidenceIds()
+  const { contacts, residences, loading } = useAllContacts((message) => toast.error(message), scopedResidenceIds)
   const [search, setSearch] = useState("")
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>(null)
   const [creating, setCreating] = useState(false)

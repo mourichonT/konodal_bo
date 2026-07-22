@@ -15,6 +15,9 @@ import {
 } from "@/components/ui/table"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { subscribeToUsers } from "@/lib/users"
+import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
+import { useAccountRole } from "@/hooks/useAccountRole"
+import { useAllLots } from "@/hooks/useAllLots"
 import type { KonodalUser } from "@/types/user"
 
 type ApprovalFilter = "pending" | "approved" | null
@@ -29,6 +32,12 @@ export default function ResidentsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>(null)
+  const { isAgent } = useAccountRole()
+  const { scopedResidenceIds } = useScopedResidenceIds()
+  // Les utilisateurs ne portent pas de residenceId direct - le périmètre
+  // RBAC se déduit des lots qu'ils possèdent/louent dans le périmètre
+  // agence/agent (cf. useScopedResidenceIds).
+  const { lots: scopedLots } = useAllLots(() => {}, scopedResidenceIds)
 
   useEffect(() => {
     setLoading(true)
@@ -44,9 +53,16 @@ export default function ResidentsPage() {
     )
   }, [])
 
-  // Les comptes 'professionnel'/'superAdmin' sont créés hors app (backoffice,
-  // gérance) et n'ont pas leur place dans un annuaire utilisateurs.
-  const residents = useMemo(() => users.filter((u) => (u.accountType || "utilisateur") === "utilisateur"), [users])
+  // Les comptes 'agence'/'agent'/'superAdmin' sont créés hors app
+  // (backoffice, gérance) et n'ont pas leur place dans un annuaire
+  // utilisateurs.
+  const allResidents = useMemo(() => users.filter((u) => (u.accountType || "utilisateur") === "utilisateur"), [users])
+
+  const residents = useMemo(() => {
+    if (!scopedResidenceIds) return allResidents
+    const allowedUids = new Set(scopedLots.flatMap((l) => [...l.idProprietaire, ...l.idLocataire]))
+    return allResidents.filter((u) => allowedUids.has(u.uid))
+  }, [allResidents, scopedResidenceIds, scopedLots])
 
   const filteredResidents = useMemo(
     () =>
@@ -65,32 +81,37 @@ export default function ResidentsPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Utilisateurs</h1>
 
-      <div className="grid grid-cols-3 gap-4">
-        <FilterKpiCard
-          label="Total utilisateurs"
-          value={residents.length}
-          icon={Users}
-          colorClass="bg-slate-100 text-slate-600"
-          active={approvalFilter === null}
-          onClick={() => setApprovalFilter(null)}
-        />
-        <FilterKpiCard
-          label="En attente d'approbation"
-          value={pendingCount}
-          icon={Clock3}
-          colorClass="bg-amber-100 text-amber-600"
-          active={approvalFilter === "pending"}
-          onClick={() => setApprovalFilter((prev) => (prev === "pending" ? null : "pending"))}
-        />
-        <FilterKpiCard
-          label="Comptes approuvés"
-          value={approvedCount}
-          icon={CheckCircle2}
-          colorClass="bg-emerald-100 text-emerald-600"
-          active={approvalFilter === "approved"}
-          onClick={() => setApprovalFilter((prev) => (prev === "approved" ? null : "approved"))}
-        />
-      </div>
+      {/* KPI (dont "En attente d'approbation") réservés Agence/Superadmin -
+          un simple Agent consulte l'annuaire mais pas ces agrégats, cf.
+          matrice de droits BO. */}
+      {!isAgent && (
+        <div className="grid grid-cols-3 gap-4">
+          <FilterKpiCard
+            label="Total utilisateurs"
+            value={residents.length}
+            icon={Users}
+            colorClass="bg-slate-100 text-slate-600"
+            active={approvalFilter === null}
+            onClick={() => setApprovalFilter(null)}
+          />
+          <FilterKpiCard
+            label="En attente d'approbation"
+            value={pendingCount}
+            icon={Clock3}
+            colorClass="bg-amber-100 text-amber-600"
+            active={approvalFilter === "pending"}
+            onClick={() => setApprovalFilter((prev) => (prev === "pending" ? null : "pending"))}
+          />
+          <FilterKpiCard
+            label="Comptes approuvés"
+            value={approvedCount}
+            icon={CheckCircle2}
+            colorClass="bg-emerald-100 text-emerald-600"
+            active={approvalFilter === "approved"}
+            onClick={() => setApprovalFilter((prev) => (prev === "approved" ? null : "approved"))}
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <h2 className="text-lg">Annuaire des utilisateurs</h2>

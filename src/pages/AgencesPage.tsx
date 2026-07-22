@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { toast } from "sonner"
-import { Briefcase, Home, Landmark, Pencil, Plus, Save, Search, X } from "lucide-react"
+import { Briefcase, Check, Home, Landmark, Mail, Pencil, Plus, Save, Search, ShieldOff, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -23,10 +23,17 @@ import {
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import {
   createGerance,
+  inviteAgencyAccount,
+  revokeAgencyAccount,
+  setAgentAccountUid,
+  setDeptAccountUid,
   subscribeToGerances,
   updateGerance,
+  type AgencyAccountRole,
   type GeranceInput,
 } from "@/lib/gerances"
+import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
+import { useAccountRole } from "@/hooks/useAccountRole"
 import { emptyAddress } from "@/types/residence"
 import {
   emptyAgencyDept,
@@ -55,18 +62,23 @@ function matchesSearch(gerance: Gerance, search: string): boolean {
 }
 
 export default function AgencesPage() {
-  const [gerances, setGerances] = useState<Gerance[]>([])
+  const [allGerances, setAllGerances] = useState<Gerance[]>([])
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<Gerance | null>(null)
+  // ID plutôt qu'un snapshot Gerance : le statut "compte actif" affiché dans
+  // le dialog (posé par inviteAgencyAccount) doit rester à jour en direct
+  // pendant que le dialog reste ouvert, pas figé sur l'état au moment du
+  // clic "Modifier".
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [search, setSearch] = useState("")
   const [serviceFilter, setServiceFilter] = useState<ServiceType | null>(null)
+  const { isSuperAdmin, isAgence, isAgent, geranceId: ownGeranceId } = useAccountRole()
 
   useEffect(() => {
     setLoading(true)
     return subscribeToGerances(
       (data) => {
-        setGerances(data)
+        setAllGerances(data)
         setLoading(false)
       },
       (error) => {
@@ -75,6 +87,20 @@ export default function AgencesPage() {
       }
     )
   }, [])
+
+  // Une agence/agent ne doit voir/gérer que SA PROPRE fiche, jamais
+  // l'annuaire complet (coordonnées et agents des autres agences, y compris
+  // potentiellement concurrentes) - contrairement à firestore.rules qui
+  // laisse la lecture ouverte à tout signed-in (annuaire non scopé
+  // résidence par conception, cf. recherche par email côté app), c'est ici
+  // une restriction volontaire côté BO.
+  const gerances = useMemo(() => {
+    if (isSuperAdmin) return allGerances
+    if (isAgence || isAgent) return allGerances.filter((g) => g.id === ownGeranceId)
+    return []
+  }, [allGerances, isSuperAdmin, isAgence, isAgent, ownGeranceId])
+
+  const editingGerance = useMemo(() => gerances.find((g) => g.id === editingId) ?? null, [gerances, editingId])
 
   const filteredGerances = useMemo(
     () =>
@@ -134,10 +160,12 @@ export default function AgencesPage() {
             className="pl-8"
           />
         </div>
-        <Button className="rounded-full" onClick={() => setCreating(true)}>
-          <Plus />
-          Ajouter une agence
-        </Button>
+        {isSuperAdmin && (
+          <Button className="rounded-full" onClick={() => setCreating(true)}>
+            <Plus />
+            Ajouter une agence
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col">
@@ -185,10 +213,15 @@ export default function AgencesPage() {
                     </TableCell>
                     <TableCell>{primaryContact || "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="outline" size="sm" onClick={() => setEditing(gerance)}>
-                        <Pencil />
-                        Modifier
-                      </Button>
+                      {/* Agent = consultation seule (déjà visible dans les
+                          colonnes ci-contre) : pas d'édition, cf. matrice de
+                          droits BO. */}
+                      {!isAgent && (
+                        <Button variant="outline" size="sm" onClick={() => setEditingId(gerance.id)}>
+                          <Pencil />
+                          Modifier
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 )
@@ -219,15 +252,16 @@ export default function AgencesPage() {
       />
 
       <GeranceFormDialog
-        open={editing !== null}
-        onOpenChange={(open) => !open && setEditing(null)}
+        open={editingId !== null}
+        onOpenChange={(open) => !open && setEditingId(null)}
         title="Modifier l'agence"
-        initial={editing ? geranceToInput(editing) : undefined}
+        initial={editingGerance ? geranceToInput(editingGerance) : undefined}
+        gerance={editingGerance}
         onSubmit={async (input) => {
-          if (!editing) return
-          await updateGerance(editing.id, input)
+          if (!editingGerance) return
+          await updateGerance(editingGerance.id, input)
           toast.success("Agence mise à jour")
-          setEditing(null)
+          setEditingId(null)
         }}
       />
     </div>
@@ -239,12 +273,18 @@ function GeranceFormDialog({
   onOpenChange,
   title,
   initial,
+  gerance,
   onSubmit,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   title: string
   initial?: GeranceInput
+  // Objet Gerance PERSISTÉ (distinct de `initial`, la copie de travail
+  // éditable) - fourni uniquement en édition, jamais en création (une
+  // agence pas encore enregistrée n'a pas d'id à invitier dessus). Passé
+  // jusqu'à ServiceSection pour le statut "compte actif" par agent.
+  gerance?: Gerance | null
   onSubmit: (input: GeranceInput) => Promise<void>
 }) {
   const [name, setName] = useState(initial?.name ?? "")
@@ -332,6 +372,7 @@ function GeranceFormDialog({
                   key={type}
                   type={type}
                   dept={services[type]}
+                  gerance={gerance}
                   onToggle={(enabled) => toggleService(type, enabled)}
                   onChange={(dept) => updateDept(type, dept)}
                 />
@@ -351,14 +392,21 @@ function GeranceFormDialog({
   )
 }
 
+const AGENT_UID_FIELD: Record<ServiceType, "serviceSyndicAgentUids" | "geranceLocativeAgentUids"> = {
+  serviceSyndic: "serviceSyndicAgentUids",
+  geranceLocative: "geranceLocativeAgentUids",
+}
+
 function ServiceSection({
   type,
   dept,
+  gerance,
   onToggle,
   onChange,
 }: {
   type: ServiceType
   dept?: AgencyDept
+  gerance?: Gerance | null
   onToggle: (enabled: boolean) => void
   onChange: (dept: AgencyDept) => void
 }) {
@@ -385,13 +433,36 @@ function ServiceSection({
     onChange({ ...dept, agents: dept.agents.filter((_, i) => i !== index) })
   }
 
+  // "Le compte reste actif si on supprime la ligne sans révoquer d'abord" :
+  // supprimer un agent/désactiver un service ne fait que retirer l'entrée
+  // de services.<type>.agents (ou tout le service) au prochain
+  // "Enregistrer" - ça ne touche ni serviceSyndicAgentUids/
+  // geranceLocativeAgentUids, ni le compte Firebase Auth. Un agent/service
+  // avec un compte actif doit donc être révoqué AVANT de pouvoir être
+  // retiré, jamais implicitement par la suppression de sa ligne.
+  const uidField = AGENT_UID_FIELD[type]
+  function hasActiveAccount(uid: string | undefined): boolean {
+    return !!uid && !!gerance?.[uidField]?.includes(uid)
+  }
+  const deptHasActiveAccount =
+    hasActiveAccount(gerance?.services[type]?.uid) ||
+    (gerance?.services[type]?.agents ?? []).some((a) => hasActiveAccount(a.uid))
+
   return (
     <div className="rounded-lg border p-3">
-      <label className="flex items-center gap-2 text-sm font-medium">
+      <label
+        className="flex items-center gap-2 text-sm font-medium"
+        title={
+          enabled && deptHasActiveAccount
+            ? "Révoquez l'accès de tous les comptes de ce service avant de le désactiver"
+            : undefined
+        }
+      >
         <input
           type="checkbox"
           className="size-4 rounded border-input"
           checked={enabled}
+          disabled={enabled && deptHasActiveAccount}
           onChange={(e) => onToggle(e.target.checked)}
         />
         {serviceTypeLabels[type]}
@@ -419,6 +490,20 @@ function ServiceSection({
             </div>
           </div>
 
+          {/* Cas "adresse globale par service" (pas d'agent nommé) : le
+              compte se rattache directement à cette adresse générique,
+              même mécanique que pour un agent précis ci-dessous. */}
+          {gerance && dept.mail && gerance.services[type]?.mail === dept.mail && (
+            <AccountControl
+              gerance={gerance}
+              serviceType={type}
+              mail={dept.mail}
+              role="agence"
+              persistedUid={gerance.services[type]?.uid}
+              onLinkUid={(uid) => setDeptAccountUid(gerance, type, uid)}
+            />
+          )}
+
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <Label>Agents</Label>
@@ -427,44 +512,159 @@ function ServiceSection({
                 Ajouter un agent
               </Button>
             </div>
-            {dept.agents.map((agent, index) => (
-              <div key={index} className="flex min-w-0 items-start gap-2 rounded-md bg-muted/50 p-2">
-                <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
-                  <Input
-                    placeholder="Prénom"
-                    value={agent.name_agent}
-                    onChange={(e) => updateAgent(index, { ...agent, name_agent: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Nom"
-                    value={agent.surname_agent}
-                    onChange={(e) => updateAgent(index, { ...agent, surname_agent: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Email (optionnel)"
-                    type="email"
-                    value={agent.mail ?? ""}
-                    onChange={(e) => updateAgent(index, { ...agent, mail: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Téléphone (optionnel)"
-                    value={agent.phone ?? ""}
-                    onChange={(e) => updateAgent(index, { ...agent, phone: e.target.value })}
-                  />
+            {dept.agents.map((agent, index) => {
+              const persistedAgent = gerance?.services[type]?.agents.find((a) => a.mail === agent.mail)
+              const agentHasActiveAccount = hasActiveAccount(persistedAgent?.uid)
+              return (
+              <div key={index} className="flex min-w-0 flex-col gap-2 rounded-md bg-muted/50 p-2">
+                <div className="flex min-w-0 items-start gap-2">
+                  <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Prénom"
+                      value={agent.name_agent}
+                      onChange={(e) => updateAgent(index, { ...agent, name_agent: e.target.value })}
+                    />
+                    <Input
+                      placeholder="Nom"
+                      value={agent.surname_agent}
+                      onChange={(e) => updateAgent(index, { ...agent, surname_agent: e.target.value })}
+                    />
+                    <Input
+                      placeholder="Email (optionnel)"
+                      type="email"
+                      value={agent.mail ?? ""}
+                      onChange={(e) => updateAgent(index, { ...agent, mail: e.target.value })}
+                    />
+                    <Input
+                      placeholder="Téléphone (optionnel)"
+                      value={agent.phone ?? ""}
+                      onChange={(e) => updateAgent(index, { ...agent, phone: e.target.value })}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={agentHasActiveAccount}
+                    title={agentHasActiveAccount ? "Révoquez l'accès de cet agent avant de le supprimer" : undefined}
+                    onClick={() => removeAgent(index)}
+                  >
+                    <X />
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => removeAgent(index)}
-                >
-                  <X />
-                </Button>
+                {gerance && agent.mail && (
+                  persistedAgent ? (
+                    <AccountControl
+                      gerance={gerance}
+                      serviceType={type}
+                      mail={agent.mail}
+                      role="agent"
+                      persistedUid={persistedAgent.uid}
+                      onLinkUid={(uid) => setAgentAccountUid(gerance, type, agent.mail!, uid)}
+                    />
+                  ) : (
+                    <p className="px-1 text-xs text-muted-foreground">
+                      Enregistrez d'abord l'agence pour pouvoir inviter cet agent.
+                    </p>
+                  )
+                )}
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Statut/actions du compte BO lié à CETTE adresse mail (une adresse mail =
+// une licence) - réutilisé pour un agent nommé (mail=agent.mail,
+// persistedUid=agent.uid) ET pour l'adresse générique d'un service sans
+// agent nommé (mail=dept.mail, persistedUid=dept.uid) : même mécanique,
+// seule la façon de reporter l'uid une fois l'invitation acceptée diffère
+// (onLinkUid). L'appelant est responsable de vérifier que `mail` est déjà
+// PERSISTÉ (pas juste une saisie locale pas encore enregistrée) avant de
+// monter ce composant.
+function AccountControl({
+  gerance,
+  serviceType,
+  mail,
+  role,
+  persistedUid,
+  onLinkUid,
+}: {
+  gerance: Gerance
+  serviceType: ServiceType
+  mail: string
+  // Déterminé par l'appelant selon le contexte (adresse générique du
+  // service = "agence", agent nommé listé dessous = "agent") - jamais un
+  // choix libre : à cette étape précise, le rôle est déjà connu.
+  role: AgencyAccountRole
+  persistedUid?: string
+  onLinkUid: (uid: string) => Promise<void>
+}) {
+  const { isSuperAdmin } = useIsSuperAdmin()
+  const [submitting, setSubmitting] = useState(false)
+
+  if (!isSuperAdmin) return null
+
+  const uidField = AGENT_UID_FIELD[serviceType]
+  const isActive = !!persistedUid && !!gerance[uidField]?.includes(persistedUid)
+  const isRevoked = !!persistedUid && !isActive
+
+  async function handleInvite() {
+    setSubmitting(true)
+    try {
+      const { uid } = await inviteAgencyAccount(gerance.id, serviceType, mail, role)
+      await onLinkUid(uid)
+      toast.success(`Invitation envoyée à ${mail}`)
+    } catch (err) {
+      toast.error("Échec de l'invitation : " + (err as Error).message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleRevoke() {
+    if (!persistedUid) return
+    setSubmitting(true)
+    try {
+      await revokeAgencyAccount(gerance.id, serviceType, persistedUid)
+      toast.success("Accès révoqué")
+    } catch (err) {
+      toast.error("Échec de la révocation : " + (err as Error).message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (isActive) {
+    return (
+      <div className="flex items-center gap-2 px-1">
+        <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-800">
+          <Check />
+          Compte actif
+        </Badge>
+        <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={handleRevoke}>
+          <ShieldOff />
+          Révoquer l'accès
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-1">
+      {isRevoked && (
+        <Badge variant="outline" className="border-transparent bg-red-100 text-red-800">
+          Accès révoqué
+        </Badge>
+      )}
+      <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={handleInvite}>
+        <Mail />
+        {isRevoked ? "Réinviter" : "Inviter"}
+      </Button>
     </div>
   )
 }

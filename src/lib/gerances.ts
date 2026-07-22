@@ -8,9 +8,10 @@ import {
   updateDoc,
   type Unsubscribe,
 } from "firebase/firestore"
-import { db } from "@/firebase"
+import { httpsCallable } from "firebase/functions"
+import { db, functions } from "@/firebase"
 import { emptyAddress, type Address } from "@/types/residence"
-import type { AgencyDept, Gerance, ServiceType } from "@/types/gerance"
+import type { Agent, AgencyDept, Gerance, ServiceType } from "@/types/gerance"
 
 const gerancesCollection = collection(db, "gerances")
 
@@ -45,7 +46,21 @@ export type GeranceInput = {
 // Les agents n'ont pas forcément de mail/téléphone direct (contact au niveau
 // du service uniquement) : on omet ces clés plutôt que d'écrire une chaîne
 // vide, pour rester compatible avec le modèle Agent côté app mobile
-// (mail/phone optionnels, absents si non renseignés).
+// (mail/phone optionnels, absents si non renseignés). `uid` (posé par
+// inviteAgencyAccount) est préservé tel quel s'il existe déjà - jamais
+// saisi manuellement dans le formulaire agence, donc jamais réécrit par lui.
+function sanitizeAgent(agent: Agent) {
+  return {
+    name_agent: agent.name_agent,
+    surname_agent: agent.surname_agent,
+    ...(agent.mail ? { mail: agent.mail } : {}),
+    ...(agent.phone ? { phone: agent.phone } : {}),
+    ...(agent.uid ? { uid: agent.uid } : {}),
+  }
+}
+
+// Même précaution que sanitizeAgent, pour l'adresse générique du service
+// (cas "une adresse globale par service", sans agent nommé individuel).
 function sanitizeServices(
   services: Partial<Record<ServiceType, AgencyDept>>
 ): Partial<Record<ServiceType, AgencyDept>> {
@@ -54,12 +69,8 @@ function sanitizeServices(
     result[key] = {
       mail: dept.mail,
       phone: dept.phone,
-      agents: dept.agents.map((agent) => ({
-        name_agent: agent.name_agent,
-        surname_agent: agent.surname_agent,
-        ...(agent.mail ? { mail: agent.mail } : {}),
-        ...(agent.phone ? { phone: agent.phone } : {}),
-      })),
+      agents: dept.agents.map(sanitizeAgent),
+      ...(dept.uid ? { uid: dept.uid } : {}),
     }
   }
   return result
@@ -78,5 +89,67 @@ export async function updateGerance(id: string, input: GeranceInput) {
     name: input.name,
     address: input.address,
     services: sanitizeServices(input.services),
+  })
+}
+
+export type AgencyAccountRole = "agence" | "agent"
+
+// Cloud Functions Admin SDK (functions_python/main.py) - seul chemin pour
+// créer/lier un compte agence/agent : firestore.rules interdit d'écrire
+// gerances/{id}.serviceSyndicAgentUids/geranceLocativeAgentUids directement
+// depuis le client, même pour une Agence éditant sa propre fiche (cf.
+// commentaire sur la règle) - évite qu'un compte compromis s'auto-octroie
+// l'accès à d'autres résidences.
+export async function inviteAgencyAccount(
+  geranceId: string,
+  serviceType: ServiceType,
+  email: string,
+  role: AgencyAccountRole
+): Promise<{ uid: string }> {
+  const call = httpsCallable<
+    { geranceId: string; serviceType: ServiceType; email: string; role: AgencyAccountRole },
+    { uid: string }
+  >(functions, "invite_agency_account")
+  const result = await call({ geranceId, serviceType, email, role })
+  return result.data
+}
+
+export async function revokeAgencyAccount(
+  geranceId: string,
+  serviceType: ServiceType,
+  uid: string
+): Promise<void> {
+  const call = httpsCallable<{ geranceId: string; serviceType: ServiceType; uid: string }, { success: boolean }>(
+    functions,
+    "revoke_agency_account"
+  )
+  await call({ geranceId, serviceType, uid })
+}
+
+// Reporte l'uid retourné par inviteAgencyAccount sur LE bon agent, identifié
+// par email (référence stable qu'utilise aussi la Cloud Function elle-même,
+// contrairement à une position dans le tableau qui peut changer si la liste
+// est réordonnée avant d'enregistrer) - sans ce lien, impossible de savoir
+// plus tard lequel des agents listés correspond à quel compte (le uid n'est
+// jamais saisi manuellement, cf. sanitizeAgent).
+export async function setAgentAccountUid(
+  gerance: Gerance,
+  serviceType: ServiceType,
+  agentMail: string,
+  uid: string
+) {
+  const dept = gerance.services[serviceType]
+  if (!dept) return
+  const agents: Agent[] = dept.agents.map((a) => (a.mail === agentMail ? { ...a, uid } : a))
+  await updateDoc(doc(db, "gerances", gerance.id), {
+    [`services.${serviceType}.agents`]: agents.map(sanitizeAgent),
+  })
+}
+
+// Même chose que setAgentAccountUid, pour l'adresse générique du service
+// (pas d'agent nommé - cas "une adresse globale par service").
+export async function setDeptAccountUid(gerance: Gerance, serviceType: ServiceType, uid: string) {
+  await updateDoc(doc(db, "gerances", gerance.id), {
+    [`services.${serviceType}.uid`]: uid,
   })
 }

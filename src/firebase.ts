@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
 
 // Config du projet Firebase konodal-dev (partagé avec l'app Flutter),
 // app Web dédiée "Konodal Backoffice" enregistrée séparément côté Firebase
@@ -24,3 +25,8 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+// Région "us-central1" : même région que le codebase "mail" (functions_python,
+// cf. firebase.json côté connectkasa) où vivent invite_agency_account /
+// revoke_agency_account - getFunctions() sans région cible "us-central1" par
+// défaut, précisé explicitement pour ne pas dépendre de ce défaut implicite.
+export const functions = getFunctions(app, "us-central1");

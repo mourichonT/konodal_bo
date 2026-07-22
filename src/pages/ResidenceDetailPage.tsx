@@ -20,7 +20,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { subscribeToResidence, updateResidence, type ResidenceInput } from "@/lib/residences"
+import {
+  subscribeToResidence,
+  updateResidence,
+  updateResidenceGeranceRef,
+  type ResidenceInput,
+} from "@/lib/residences"
 import {
   createStructure,
   deleteStructure,
@@ -29,9 +34,12 @@ import {
   type StructureInput,
 } from "@/lib/structures"
 import { createLot, deleteLot, subscribeToLots, updateLot, type LotInput } from "@/lib/lots"
+import { subscribeToGerances } from "@/lib/gerances"
 import { emptyAddress, type Residence } from "@/types/residence"
 import { structureTypeOptions, type StructureResidence } from "@/types/structure"
 import { defaultIsLinkableForType, typeLotOptions } from "@/types/lot"
+import { serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
+import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { cn } from "@/lib/utils"
 
 export default function ResidenceDetailPage() {
@@ -102,6 +110,18 @@ function InfoSection({ residence }: { residence: Residence }) {
   const [city, setCity] = useState(residence.address.city)
   const [mailContact, setMailContact] = useState(residence.mail_contact ?? "")
   const [saving, setSaving] = useState(false)
+  const { isSuperAdmin } = useIsSuperAdmin()
+
+  // Gérance qui gère cette résidence (geranceRef) - condition nécessaire
+  // pour qu'un compte agence/agent RBAC voie quoi que ce soit sur cette
+  // résidence (isProfessionnelResidence côté firestore.rules). Réservé
+  // superAdmin : un CS member ou un professionnel déjà rattaché pourrait
+  // sinon se réassigner lui-même une autre résidence via ce champ (la règle
+  // Firestore actuelle ne restreint pas ce champ précis sur residences.update).
+  const [gerances, setGerances] = useState<Gerance[]>([])
+  const [geranceId, setGeranceId] = useState(residence.geranceRef?.geranceId ?? "")
+  const [serviceType, setServiceType] = useState<ServiceType | "">(residence.geranceRef?.serviceType ?? "")
+  const [agentMail, setAgentMail] = useState(residence.geranceRef?.agentMail ?? "")
 
   useEffect(() => {
     setName(residence.name)
@@ -109,7 +129,21 @@ function InfoSection({ residence }: { residence: Residence }) {
     setZipCode(residence.address.zipCode)
     setCity(residence.address.city)
     setMailContact(residence.mail_contact ?? "")
+    setGeranceId(residence.geranceRef?.geranceId ?? "")
+    setServiceType(residence.geranceRef?.serviceType ?? "")
+    setAgentMail(residence.geranceRef?.agentMail ?? "")
   }, [residence.id])
+
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    return subscribeToGerances(setGerances, () => {
+      toast.error("Impossible de charger les agences")
+    })
+  }, [isSuperAdmin])
+
+  const selectedGerance = gerances.find((g) => g.id === geranceId)
+  const availableServiceTypes = (Object.keys(selectedGerance?.services ?? {}) as ServiceType[])
+  const availableAgents = serviceType ? selectedGerance?.services[serviceType]?.agents ?? [] : []
 
   async function handleSave() {
     setSaving(true)
@@ -120,6 +154,14 @@ function InfoSection({ residence }: { residence: Residence }) {
         mail_contact: mailContact,
       }
       await updateResidence(residence.id, input)
+      if (isSuperAdmin) {
+        await updateResidenceGeranceRef(
+          residence.id,
+          geranceId && serviceType
+            ? { geranceId, serviceType, ...(agentMail ? { agentMail } : {}) }
+            : null
+        )
+      }
       toast.success("Résidence mise à jour")
     } catch (err) {
       toast.error("Échec de l'enregistrement : " + (err as Error).message)
@@ -161,6 +203,65 @@ function InfoSection({ residence }: { residence: Residence }) {
             <Input id="info-city" value={city} onChange={(e) => setCity(e.target.value)} />
           </div>
         </div>
+
+        {isSuperAdmin && (
+          <div className="flex flex-col gap-3 border-t pt-4">
+            <Label>Gérance rattachée</Label>
+            <p className="text-xs text-muted-foreground">
+              Détermine quel compte agence/agent (RBAC) a accès à cette résidence depuis le backoffice.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <select
+                value={geranceId}
+                onChange={(e) => {
+                  setGeranceId(e.target.value)
+                  setServiceType("")
+                  setAgentMail("")
+                }}
+                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">Aucune gérance</option>
+                {gerances.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={serviceType}
+                disabled={!geranceId}
+                onChange={(e) => {
+                  setServiceType(e.target.value as ServiceType)
+                  setAgentMail("")
+                }}
+                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+              >
+                <option value="">Choisir un service</option>
+                {availableServiceTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {serviceTypeLabels[type]}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={agentMail}
+                disabled={!serviceType}
+                onChange={(e) => setAgentMail(e.target.value)}
+                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+              >
+                <option value="">Service (générique, sans agent précis)</option>
+                {availableAgents
+                  .filter((a) => a.mail)
+                  .map((a) => (
+                    <option key={a.mail} value={a.mail}>
+                      {a.name_agent} {a.surname_agent}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+        )}
+
         <Button className="w-fit" onClick={handleSave} disabled={saving}>
           Enregistrer
         </Button>

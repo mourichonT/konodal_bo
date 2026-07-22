@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAllSinistres, type SinistreWithResidence } from "@/hooks/useAllSinistres"
+import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { SHOW_ARCHIVED_KEY, SHOW_NON_DECLARES_KEY } from "@/types/sinistre"
 import { cn } from "@/lib/utils"
 
@@ -40,7 +41,8 @@ const tabs = [
 export default function SinistresPage() {
   const location = useLocation()
   const isListeTab = location.pathname.endsWith("/liste")
-  const { sinistres, loading } = useAllSinistres((message) => toast.error(message))
+  const { scopedResidenceIds } = useScopedResidenceIds()
+  const { sinistres, loading } = useAllSinistres((message) => toast.error(message), scopedResidenceIds)
   // Filtres partagés entre Kanban et Liste (un seul objet, cf. décision : les
   // deux vues doivent toujours montrer le même sous-ensemble de tickets) -
   // seul le statut cliqué sur les KPI de la vue Liste reste propre à cette vue.

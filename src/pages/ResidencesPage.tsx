@@ -31,6 +31,8 @@ import {
 } from "@/lib/residences"
 import { geocodeAddress } from "@/lib/geocode"
 import { emptyAddress, type Residence } from "@/types/residence"
+import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
+import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 
 // maplibre-gl pèse ~600 Ko gzippé : chargé à la demande, seulement par les
 // visiteurs de cette page, plutôt que gonfler le bundle principal partagé
@@ -57,6 +59,8 @@ export default function ResidencesPage() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [search, setSearch] = useState("")
+  const { scopedResidenceIds } = useScopedResidenceIds()
+  const { isSuperAdmin } = useIsSuperAdmin()
 
   useEffect(() => {
     setLoading(true)
@@ -73,8 +77,11 @@ export default function ResidencesPage() {
   }, [])
 
   const filteredResidences = useMemo(
-    () => residences.filter((residence) => matchesSearch(residence, search)),
-    [residences, search]
+    () =>
+      residences
+        .filter((residence) => !scopedResidenceIds || scopedResidenceIds.has(residence.id))
+        .filter((residence) => matchesSearch(residence, search)),
+    [residences, search, scopedResidenceIds]
   )
 
   // Géocodage paresseux : une résidence sans lat/lng est géocodée une seule
@@ -207,10 +214,12 @@ export default function ResidencesPage() {
             className="pl-8"
           />
         </div>
-        <Button className="rounded-full" onClick={() => setCreating(true)}>
-          <Plus />
-          Ajouter une résidence
-        </Button>
+        {isSuperAdmin && (
+          <Button className="rounded-full" onClick={() => setCreating(true)}>
+            <Plus />
+            Ajouter une résidence
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col">
