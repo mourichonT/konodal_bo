@@ -36,6 +36,7 @@ import {
 import { useAuth } from "@/lib/auth-context"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAccountRole } from "@/hooks/useAccountRole"
+import { subscribeToGerance } from "@/lib/gerances"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -191,7 +192,22 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const [users, setUsers] = useState<KonodalUser[]>([])
   const { scopedResidenceIds } = useScopedResidenceIds()
-  const { isAgent } = useAccountRole()
+  const { isAgent, isAgence, geranceId } = useAccountRole()
+  // Un compte agence/agent n'a pas de prénom personnel pertinent (cf.
+  // ProfilePage) - le "Bonjour" affiche le nom de la gérance plutôt que le
+  // préfixe de l'email, qui n'aurait aucun sens ("Bonjour, pecoul").
+  const [geranceName, setGeranceName] = useState<string | null>(null)
+  useEffect(() => {
+    if (!(isAgence || isAgent) || !geranceId) {
+      setGeranceName(null)
+      return
+    }
+    return subscribeToGerance(
+      geranceId,
+      (gerance) => setGeranceName(gerance?.name ?? null),
+      () => setGeranceName(null)
+    )
+  }, [isAgence, isAgent, geranceId])
   const { sinistres, loading: sinistresLoading } = useAllSinistres((message) => toast.error(message), scopedResidenceIds)
   const { events, residences, loading: eventsLoading } = useAllEvents((message) => toast.error(message), scopedResidenceIds)
   const { contacts, loading: contactsLoading } = useAllContacts((message) => toast.error(message), scopedResidenceIds)
@@ -432,9 +448,9 @@ export default function DashboardPage() {
   }, [filteredSinistres, dateFrom, dateTo, now])
 
   // "Utilisateurs" (total + badge "en attente d'approbation") réservé
-  // Agence/Superadmin, même logique que la page Utilisateurs elle-même -
-  // Propriétaires/Locataires restent visibles pour Agent (simples comptages,
-  // pas d'info d'approbation).
+  // Superadmin uniquement désormais (demande explicite) - Propriétaires/
+  // Locataires restent visibles pour Agence/Agent (simples comptages, pas
+  // d'info d'approbation).
   const residencesKpis: Kpi[] = [
     {
       label: "Résidences",
@@ -443,7 +459,7 @@ export default function DashboardPage() {
       value: filteredResidences.length,
       description: "Nombre total de résidences enregistrées dans le backoffice.",
     },
-    ...(isAgent
+    ...(isAgent || isAgence
       ? []
       : [
           {
@@ -576,7 +592,11 @@ export default function DashboardPage() {
     },
   ]
 
-  const displayName = user?.displayName?.split(" ")[0] || user?.email?.split("@")[0]
+  const rawDisplayName =
+    (isAgence || isAgent ? geranceName : null) || user?.displayName?.split(" ")[0] || user?.email?.split("@")[0]
+  const displayName = rawDisplayName
+    ? rawDisplayName[0].toUpperCase() + rawDisplayName.slice(1)
+    : rawDisplayName
 
   function handleClearFilters() {
     setResidenceFilter("all")
