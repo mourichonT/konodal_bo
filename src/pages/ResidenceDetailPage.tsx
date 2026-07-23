@@ -538,7 +538,7 @@ function StructureCard({
         </button>
       </div>
       {expanded && (
-        <div className="flex flex-col gap-3 border-t p-3">
+        <div className="flex flex-col gap-5 border-t p-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>Nom du bâtiment</Label>
