@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, ChevronDown, GripVertical, Plus, Trash2 } from "lucide-react"
+import { ArrowLeft, ChevronDown, GripVertical, Plus, Trash2, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -57,7 +57,7 @@ import { createLot, deleteLot, subscribeToLots, updateLot, type LotInput } from 
 import { subscribeToGerances } from "@/lib/gerances"
 import { resolveUsersByUids } from "@/lib/users"
 import { emptyAddress, type Residence } from "@/types/residence"
-import { structureTypeOptions, type StructureResidence } from "@/types/structure"
+import { structureElementOptions, structureTypeOptions, type StructureResidence } from "@/types/structure"
 import { defaultIsLinkableForType, typeLotOptions } from "@/types/lot"
 import { AGENT_UID_FIELD, serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
 import type { KonodalUser } from "@/types/user"
@@ -457,7 +457,20 @@ function StructureCard({
   const [undergroundCount, setUndergroundCount] = useState(
     String(countUnderground(structure?.etage ?? []))
   )
+  const [elements, setElements] = useState<string[]>(structure?.elements ?? [])
+  const [customElement, setCustomElement] = useState("")
   const [saving, setSaving] = useState(false)
+
+  function toggleElement(el: string) {
+    setElements((prev) => (prev.includes(el) ? prev.filter((e) => e !== el) : [...prev, el]))
+  }
+
+  function addCustomElement() {
+    const trimmed = customElement.trim()
+    if (!trimmed || elements.includes(trimmed)) return
+    setElements((prev) => [...prev, trimmed])
+    setCustomElement("")
+  }
 
   async function handleSave() {
     if (!name.trim() || !type.trim()) {
@@ -471,6 +484,7 @@ function StructureCard({
         type,
         etage: buildEtage(floorCount, hasUnderground, undergroundCount),
         hasUnderground,
+        elements,
       }
       if (structure) {
         await updateStructure(residenceId, structure.id, input)
@@ -569,6 +583,54 @@ function StructureCard({
               )}
             </div>
           </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label>Éléments (cage d'escalier, boîte aux lettres…)</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {structureElementOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => toggleElement(option)}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs transition-colors",
+                    elements.includes(option)
+                      ? "border-transparent bg-primary text-primary-foreground"
+                      : "border-input text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {option}
+                </button>
+              ))}
+              {elements
+                .filter((el) => !structureElementOptions.includes(el))
+                .map((custom) => (
+                  <button
+                    key={custom}
+                    type="button"
+                    onClick={() => toggleElement(custom)}
+                    className="flex items-center gap-1 rounded-full border border-transparent bg-primary px-3 py-1 text-xs text-primary-foreground"
+                  >
+                    {custom}
+                    <X className="size-3" />
+                  </button>
+                ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Ajouter un élément personnalisé"
+                value={customElement}
+                onChange={(e) => setCustomElement(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomElement())}
+                className="max-w-64"
+              />
+              <Button type="button" variant="outline" size="sm" onClick={addCustomElement}>
+                <Plus />
+                Ajouter
+              </Button>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
             <Button type="button" variant="ghost" size="sm" onClick={handleDelete}>
               <Trash2 />

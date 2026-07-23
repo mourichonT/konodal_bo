@@ -51,6 +51,7 @@ export type StructureInput = {
   type: string
   etage: string[]
   hasUnderground: boolean
+  elements: string[]
 }
 
 // `order` fourni par l'appelant (pas dans StructureInput, réutilisé aussi
@@ -63,7 +64,6 @@ export async function createStructure(residenceId: string, input: StructureInput
     // Champs présents côté app mobile (StructureResidence.toJson) mais pas
     // encore gérés depuis ce formulaire ; explicitement null plutôt
     // qu'absents pour matcher le shape attendu par l'app.
-    elements: null,
     hasDifferentSyndic: false,
     syndicAgency: null,
     geranceRef: null,
