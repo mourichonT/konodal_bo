@@ -14,6 +14,10 @@ function lotsCollection(residenceId: string) {
   return collection(db, "residences", residenceId, "lots")
 }
 
+// Pas de orderBy("order") côté Firestore à dessein - même piège que
+// subscribeToStructures/subscribeToUsers (exclusion silencieuse des
+// documents sans le champ). Tri côté client, ceux sans `order` passent
+// après (Infinity).
 export function subscribeToLots(
   residenceId: string,
   onData: (lots: Lot[]) => void,
@@ -23,19 +27,19 @@ export function subscribeToLots(
   return onSnapshot(
     q,
     (snapshot) => {
-      onData(
-        snapshot.docs.map((d) => ({
-          id: d.id,
-          refLot: "",
-          batiment: "",
-          lot: "",
-          typeLot: "",
-          isLinkable: false,
-          idProprietaire: [],
-          idLocataire: [],
-          ...(d.data() as Partial<Omit<Lot, "id">>),
-        }))
-      )
+      const lots = snapshot.docs.map((d) => ({
+        id: d.id,
+        refLot: "",
+        batiment: "",
+        lot: "",
+        typeLot: "",
+        isLinkable: false,
+        idProprietaire: [],
+        idLocataire: [],
+        ...(d.data() as Partial<Omit<Lot, "id">>),
+      }))
+      lots.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity))
+      onData(lots)
     },
     onError
   )
@@ -47,6 +51,7 @@ export type LotInput = {
   lot: string
   typeLot: string
   isLinkable: boolean
+  order: number
 }
 
 // Mêmes clés que Lot.toJsonForDb() côté app mobile (connectkasa) : on
@@ -60,6 +65,7 @@ function toFirestoreLotData(input: LotInput) {
     ...(input.lot ? { lot: input.lot } : {}),
     ...(input.typeLot ? { typeLot: input.typeLot } : {}),
     isLinkable: input.isLinkable,
+    order: input.order,
   }
 }
 

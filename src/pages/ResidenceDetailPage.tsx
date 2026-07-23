@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
 import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
+import { SearchableSelect } from "@/components/SearchableSelect"
 import {
   Card,
   CardAction,
@@ -270,51 +271,42 @@ function InfoSection({ residence }: { residence: Residence }) {
               Détermine quel compte agence/agent (RBAC) a accès à cette résidence depuis le backoffice.
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
-              <select
+              <SearchableSelect
                 value={geranceId}
-                onChange={(e) => {
-                  setGeranceId(e.target.value)
+                onChange={(v) => {
+                  setGeranceId(v)
                   setServiceType("")
                   setAgentUid("")
                 }}
-                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <option value="">Aucune gérance</option>
-                {gerances.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-              <select
+                emptyLabel="Aucune gérance"
+                groups={[{ options: gerances.map((g) => ({ value: g.id, label: g.name })) }]}
+              />
+              <SearchableSelect
                 value={serviceType}
                 disabled={!geranceId}
-                onChange={(e) => {
-                  setServiceType(e.target.value as ServiceType)
+                onChange={(v) => {
+                  setServiceType(v as ServiceType)
                   setAgentUid("")
                 }}
-                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
-              >
-                <option value="">Choisir un service</option>
-                {availableServiceTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {serviceTypeLabels[type]}
-                  </option>
-                ))}
-              </select>
-              <select
+                emptyLabel="Choisir un service"
+                groups={[
+                  {
+                    options: availableServiceTypes.map((type) => ({
+                      value: type,
+                      label: serviceTypeLabels[type],
+                    })),
+                  },
+                ]}
+              />
+              <SearchableSelect
                 value={agentUid}
                 disabled={!serviceType}
-                onChange={(e) => setAgentUid(e.target.value)}
-                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
-              >
-                <option value="">Service (générique, sans agent précis)</option>
-                {availableAgents.map((a) => (
-                  <option key={a.uid} value={a.uid}>
-                    {a.name} {a.surname}
-                  </option>
-                ))}
-              </select>
+                onChange={setAgentUid}
+                emptyLabel="Service (générique, sans agent précis)"
+                groups={[
+                  { options: availableAgents.map((a) => ({ value: a.uid, label: `${a.name} ${a.surname}` })) },
+                ]}
+              />
             </div>
           </div>
         )}
@@ -540,18 +532,12 @@ function StructureCard({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Type</Label>
-              <select
-                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+              <SearchableSelect
                 value={type}
-                onChange={(e) => setType(e.target.value)}
-              >
-                <option value="">—</option>
-                {structureTypeOptions.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
+                onChange={setType}
+                emptyLabel="—"
+                groups={[{ options: structureTypeOptions.map((opt) => ({ value: opt, label: opt })) }]}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Nombre d'étages (RDC inclus)</Label>
@@ -619,6 +605,18 @@ function LotsSection({
   const [rows, setRows] = useState<LotRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setRows((prev) => {
+      const oldIndex = prev.findIndex((r) => r.key === active.id)
+      const newIndex = prev.findIndex((r) => r.key === over.id)
+      if (oldIndex === -1 || newIndex === -1) return prev
+      return arrayMove(prev, oldIndex, newIndex)
+    })
+  }
 
   useEffect(() => {
     return subscribeToLots(
@@ -731,13 +729,17 @@ function LotsSection({
 
     setSaving(true)
     try {
-      for (const row of relevantRows) {
+      for (const [index, row] of relevantRows.entries()) {
         const input: LotInput = {
           refLot: row.refLot.trim(),
           batiment: row.batiment.trim(),
           lot: row.lot.trim(),
           typeLot: row.typeLot,
           isLinkable: row.isLinkable,
+          // Reflète l'ordre visuel actuel (réorganisation click-and-déplace,
+          // cf. handleDragEnd) - réécrit à chaque sauvegarde, même pour un
+          // lot dont rien d'autre n'a changé.
+          order: index,
         }
         if (row.id) {
           await updateLot(residenceId, row.id, input)
@@ -759,14 +761,22 @@ function LotsSection({
       <CardHeader>
         <CardTitle>Lots</CardTitle>
         <CardDescription>
-          Ajoutez autant de lignes que nécessaire, puis enregistrez-les en une seule fois.
+          Ajoutez autant de lignes que nécessaire, puis enregistrez-les en une seule fois. Glissez une
+          ligne par sa poignée pour réordonner.
         </CardDescription>
+        <CardAction>
+          <Button type="button" variant="outline" onClick={addRow}>
+            <Plus />
+            Ajouter une ligne
+          </Button>
+        </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8" />
                 <TableHead>Bâtiment</TableHead>
                 <TableHead>N°</TableHead>
                 <TableHead>Référence</TableHead>
@@ -776,84 +786,22 @@ function LotsSection({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.key}>
-                  <TableCell>
-                    <select
-                      className="h-8 w-full min-w-32 rounded-lg border border-input bg-transparent px-2 text-sm"
-                      value={row.batiment}
-                      onChange={(e) => updateRow(row.key, { batiment: e.target.value })}
-                    >
-                      <option value="">—</option>
-                      {buildingOptions.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="w-20"
-                      value={row.lot}
-                      onChange={(e) => updateRow(row.key, { lot: e.target.value })}
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={rows.map((r) => r.key)} strategy={verticalListSortingStrategy}>
+                  {rows.map((row) => (
+                    <SortableLotRow
+                      key={row.key}
+                      row={row}
+                      buildingOptions={buildingOptions}
+                      updateRow={updateRow}
+                      removeRow={removeRow}
                     />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="w-32"
-                      value={row.refLot}
-                      onChange={(e) => updateRow(row.key, { refLot: e.target.value })}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <select
-                      className="h-8 w-full min-w-40 rounded-lg border border-input bg-transparent px-2 text-sm"
-                      value={row.typeLot}
-                      onChange={(e) =>
-                        updateRow(row.key, {
-                          typeLot: e.target.value,
-                          isLinkable: defaultIsLinkableForType(e.target.value),
-                        })
-                      }
-                    >
-                      <option value="">—</option>
-                      {typeLotOptions.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  </TableCell>
-                  <TableCell>
-                    <input
-                      type="checkbox"
-                      className="size-4 rounded border-input"
-                      checked={row.isLinkable}
-                      onChange={(e) => updateRow(row.key, { isLinkable: e.target.checked })}
-                    />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      disabled={row.idProprietaire.length > 0}
-                      title={
-                        row.idProprietaire.length > 0
-                          ? "Lot déjà rattaché à un propriétaire"
-                          : undefined
-                      }
-                      onClick={() => removeRow(row)}
-                    >
-                      <Trash2 />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+                  ))}
+                </SortableContext>
+              </DndContext>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                     Aucun lot pour l'instant.
                   </TableCell>
                 </TableRow>
@@ -862,16 +810,100 @@ function LotsSection({
           </Table>
         </div>
 
-        <div className="flex items-center justify-between">
-          <Button type="button" variant="outline" onClick={addRow}>
-            <Plus />
-            Ajouter une ligne
-          </Button>
+        <div className="flex justify-end">
           <Button type="button" onClick={handleSaveAll} disabled={saving}>
             Enregistrer les lots
           </Button>
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function SortableLotRow({
+  row,
+  buildingOptions,
+  updateRow,
+  removeRow,
+}: {
+  row: LotRow
+  buildingOptions: string[]
+  updateRow: (key: string, patch: Partial<LotRow>) => void
+  removeRow: (row: LotRow) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: row.key,
+  })
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn("relative", isDragging && "z-10 opacity-50")}
+    >
+      <TableCell>
+        <button
+          type="button"
+          className="flex cursor-grab touch-none items-center justify-center text-muted-foreground active:cursor-grabbing"
+          aria-label="Réordonner cette ligne"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-4" />
+        </button>
+      </TableCell>
+      <TableCell>
+        <SearchableSelect
+          className="min-w-32"
+          value={row.batiment}
+          onChange={(v) => updateRow(row.key, { batiment: v })}
+          emptyLabel="—"
+          groups={[{ options: buildingOptions.map((opt) => ({ value: opt, label: opt })) }]}
+        />
+      </TableCell>
+      <TableCell>
+        <Input className="w-20" value={row.lot} onChange={(e) => updateRow(row.key, { lot: e.target.value })} />
+      </TableCell>
+      <TableCell>
+        <Input
+          className="w-32"
+          value={row.refLot}
+          onChange={(e) => updateRow(row.key, { refLot: e.target.value })}
+        />
+      </TableCell>
+      <TableCell>
+        <SearchableSelect
+          className="min-w-40"
+          value={row.typeLot}
+          onChange={(v) =>
+            updateRow(row.key, {
+              typeLot: v,
+              isLinkable: defaultIsLinkableForType(v),
+            })
+          }
+          emptyLabel="—"
+          groups={[{ options: typeLotOptions.map((opt) => ({ value: opt, label: opt })) }]}
+        />
+      </TableCell>
+      <TableCell>
+        <input
+          type="checkbox"
+          className="size-4 rounded border-input"
+          checked={row.isLinkable}
+          onChange={(e) => updateRow(row.key, { isLinkable: e.target.checked })}
+        />
+      </TableCell>
+      <TableCell className="text-right">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          disabled={row.idProprietaire.length > 0}
+          title={row.idProprietaire.length > 0 ? "Lot déjà rattaché à un propriétaire" : undefined}
+          onClick={() => removeRow(row)}
+        >
+          <Trash2 />
+        </Button>
+      </TableCell>
+    </TableRow>
   )
 }

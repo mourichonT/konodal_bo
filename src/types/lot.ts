@@ -43,4 +43,8 @@ export type Lot = {
   // attribué.
   idProprietaire: string[]
   idLocataire: string[]
+  // Ordre d'affichage choisi manuellement (réorganisation click-and-déplace,
+  // cf. LotsSection) - absent sur les lots créés avant l'ajout de ce champ,
+  // triés après ceux qui en ont un (cf. subscribeToLots).
+  order?: number
 }
