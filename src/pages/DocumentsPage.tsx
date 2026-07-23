@@ -1,18 +1,11 @@
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { ChevronDown, FileText, Plus, Search, Trash2 } from "lucide-react"
+import { FileText, Plus, Search, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { SearchableSelect } from "@/components/SearchableSelect"
 import {
   Table,
   TableBody,
@@ -99,41 +92,34 @@ function ResidenceDocumentsSection() {
             className="pl-8"
           />
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
-            Résidence :{" "}
-            {residenceFilter === "all" ? "Toutes" : (residences.find((r) => r.id === residenceFilter)?.name ?? "Toutes")}
-            <ChevronDown className="size-4 text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuRadioGroup value={residenceFilter} onValueChange={setResidenceFilter}>
-              <DropdownMenuLabel>Résidence</DropdownMenuLabel>
-              <DropdownMenuRadioItem value="all">Toutes les résidences</DropdownMenuRadioItem>
-              {[...residences].sort((a, b) => a.name.localeCompare(b.name)).map((r) => (
-                <DropdownMenuRadioItem key={r.id} value={r.id}>
-                  {r.name}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
-            Catégorie : {categoryFilter === "all" ? "Toutes" : categoryFilter}
-            <ChevronDown className="size-4 text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-72">
-            <DropdownMenuRadioGroup value={categoryFilter} onValueChange={setCategoryFilter}>
-              <DropdownMenuLabel>Catégorie</DropdownMenuLabel>
-              <DropdownMenuRadioItem value="all">Toutes les catégories</DropdownMenuRadioItem>
-              {RESIDENCE_DOCUMENT_CATEGORIES.map((c) => (
-                <DropdownMenuRadioItem key={c} value={c}>
-                  {c}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <SearchableSelect
+          className="w-56"
+          value={residenceFilter}
+          onChange={setResidenceFilter}
+          groups={[
+            {
+              options: [
+                { value: "all", label: "Toutes les résidences" },
+                ...[...residences]
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((r) => ({ value: r.id, label: r.name })),
+              ],
+            },
+          ]}
+        />
+        <SearchableSelect
+          className="w-64"
+          value={categoryFilter}
+          onChange={setCategoryFilter}
+          groups={[
+            {
+              options: [
+                { value: "all", label: "Toutes les catégories" },
+                ...RESIDENCE_DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: c })),
+              ],
+            },
+          ]}
+        />
       </div>
 
       <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
@@ -298,44 +284,29 @@ function LotDocumentsSection() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
-            Résidence : {residenceOptions.find(([id]) => id === residenceFilter)?.[1] ?? "Choisir…"}
-            <ChevronDown className="size-4 text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuRadioGroup value={residenceFilter} onValueChange={setResidenceFilter}>
-              <DropdownMenuLabel>Résidence</DropdownMenuLabel>
-              {residenceOptions.map(([id, name]) => (
-                <DropdownMenuRadioItem key={id} value={id}>
-                  {name}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            disabled={!residenceFilter}
-            className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
-          >
-            Lot : {selectedLot ? selectedLot.refLot || selectedLot.lot : "Choisir…"}
-            <ChevronDown className="size-4 text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuRadioGroup value={lotId} onValueChange={setLotId}>
-              <DropdownMenuLabel>Lot</DropdownMenuLabel>
-              {lotsForResidence.length === 0 && (
-                <span className="block px-2 py-1.5 text-sm text-muted-foreground">Aucun lot</span>
-              )}
-              {lotsForResidence.map((l) => (
-                <DropdownMenuRadioItem key={l.id} value={l.id}>
-                  {l.refLot || l.lot} {l.batiment ? `— ${l.batiment}` : ""}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <SearchableSelect
+          className="w-56"
+          value={residenceFilter}
+          onChange={setResidenceFilter}
+          emptyLabel="Résidence : Choisir…"
+          groups={[{ options: residenceOptions.map(([id, name]) => ({ value: id, label: name })) }]}
+        />
+        <SearchableSelect
+          className="w-56"
+          value={lotId}
+          onChange={setLotId}
+          disabled={!residenceFilter}
+          emptyLabel="Lot : Choisir…"
+          noResultsLabel="Aucun lot."
+          groups={[
+            {
+              options: lotsForResidence.map((l) => ({
+                value: l.id,
+                label: `${l.refLot || l.lot}${l.batiment ? ` — ${l.batiment}` : ""}`,
+              })),
+            },
+          ]}
+        />
       </div>
 
       {!selectedLot ? (
