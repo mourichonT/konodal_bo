@@ -24,6 +24,7 @@ import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
 import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -379,6 +380,16 @@ function StructuresSection({
           Chaque bâtiment déclaré ici devient un emplacement sélectionnable pour les lots ci-dessous.
           Glissez une carte par sa poignée pour réordonner.
         </CardDescription>
+        <CardAction>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setDrafts((prev) => [...prev, crypto.randomUUID()])}
+          >
+            <Plus />
+            Ajouter un bâtiment
+          </Button>
+        </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -399,15 +410,6 @@ function StructuresSection({
         {structures.length === 0 && drafts.length === 0 && (
           <p className="text-sm text-muted-foreground">Aucun bâtiment pour l'instant.</p>
         )}
-        <Button
-          type="button"
-          variant="outline"
-          className="w-fit"
-          onClick={() => setDrafts((prev) => [...prev, crypto.randomUUID()])}
-        >
-          <Plus />
-          Ajouter un bâtiment
-        </Button>
       </CardContent>
     </Card>
   )
