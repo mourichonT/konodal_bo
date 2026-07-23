@@ -17,6 +17,8 @@ import EvenementsPage from "@/pages/EvenementsPage"
 import EvenementsListPage from "@/pages/EvenementsListPage"
 import EvenementsCalendarPage from "@/pages/EvenementsCalendarPage"
 import EvenementDetailPage from "@/pages/EvenementDetailPage"
+import CommunicationsPage from "@/pages/CommunicationsPage"
+import CommunicationDetailPage from "@/pages/CommunicationDetailPage"
 import AgencesPage from "@/pages/AgencesPage"
 import ContactsPage from "@/pages/ContactsPage"
 import ContactDetailPage from "@/pages/ContactDetailPage"
@@ -52,6 +54,8 @@ function App() {
           <Route path="calendrier" element={<EvenementsCalendarPage />} />
         </Route>
         <Route path="evenements/:residenceId/:postId" element={<EvenementDetailPage />} />
+        <Route path="communications" element={<CommunicationsPage />} />
+        <Route path="communications/:residenceId/:postId" element={<CommunicationDetailPage />} />
         <Route path="residences" element={<ResidencesPage />} />
         <Route path="residences/:id" element={<ResidenceDetailPage />} />
         <Route path="residents" element={<ResidentsPage />} />
