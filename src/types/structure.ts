@@ -19,4 +19,8 @@ export type StructureResidence = {
   type: string
   etage: string[]
   hasUnderground: boolean
+  // Ordre d'affichage choisi manuellement (réorganisation click-and-déplace,
+  // cf. StructuresSection) - absent sur les structures créées avant l'ajout
+  // de ce champ, triées après celles qui en ont un (cf. subscribeToStructures).
+  order?: number
 }

@@ -4,9 +4,8 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
-  orderBy,
-  query,
   updateDoc,
+  writeBatch,
   type Unsubscribe,
 } from "firebase/firestore"
 import { db } from "@/firebase"
@@ -16,25 +15,32 @@ function structuresCollection(residenceId: string) {
   return collection(db, "residences", residenceId, "structures")
 }
 
+// Pas de orderBy("order") côté Firestore à dessein : les structures créées
+// avant l'ajout de ce champ n'en ont pas, et Firestore exclurait
+// silencieusement ces documents d'un orderBy dessus (même piège que
+// subscribeToUsers/createdDate). Tri fait côté client, celles sans `order`
+// passent après (Infinity), en conservant l'ordre alphabétique entre elles.
 export function subscribeToStructures(
   residenceId: string,
   onData: (structures: StructureResidence[]) => void,
   onError: (error: Error) => void
 ): Unsubscribe {
-  const q = query(structuresCollection(residenceId), orderBy("name"))
   return onSnapshot(
-    q,
+    structuresCollection(residenceId),
     (snapshot) => {
-      onData(
-        snapshot.docs.map((d) => ({
-          id: d.id,
-          name: "",
-          type: "",
-          etage: [],
-          hasUnderground: false,
-          ...(d.data() as Partial<Omit<StructureResidence, "id">>),
-        }))
-      )
+      const structures = snapshot.docs.map((d) => ({
+        id: d.id,
+        name: "",
+        type: "",
+        etage: [],
+        hasUnderground: false,
+        ...(d.data() as Partial<Omit<StructureResidence, "id">>),
+      }))
+      structures.sort((a, b) => {
+        const orderDiff = (a.order ?? Infinity) - (b.order ?? Infinity)
+        return orderDiff !== 0 ? orderDiff : a.name.localeCompare(b.name)
+      })
+      onData(structures)
     },
     onError
   )
@@ -47,9 +53,13 @@ export type StructureInput = {
   hasUnderground: boolean
 }
 
-export async function createStructure(residenceId: string, input: StructureInput) {
+// `order` fourni par l'appelant (pas dans StructureInput, réutilisé aussi
+// pour l'édition où l'ordre ne change jamais depuis ce formulaire) - une
+// nouvelle structure prend place à la fin de la liste actuelle.
+export async function createStructure(residenceId: string, input: StructureInput, order: number) {
   await addDoc(structuresCollection(residenceId), {
     ...input,
+    order,
     // Champs présents côté app mobile (StructureResidence.toJson) mais pas
     // encore gérés depuis ce formulaire ; explicitement null plutôt
     // qu'absents pour matcher le shape attendu par l'app.
@@ -66,6 +76,17 @@ export async function updateStructure(
   input: StructureInput
 ) {
   await updateDoc(doc(db, "residences", residenceId, "structures", id), { ...input })
+}
+
+// Réorganisation click-and-déplace (StructuresSection) - `orderedIds` reflète
+// le nouvel ordre visuel complet, chaque structure reçoit son index comme
+// `order`.
+export async function reorderStructures(residenceId: string, orderedIds: string[]) {
+  const batch = writeBatch(db)
+  orderedIds.forEach((id, index) => {
+    batch.update(doc(db, "residences", residenceId, "structures", id), { order: index })
+  })
+  await batch.commit()
 }
 
 export async function deleteStructure(residenceId: string, id: string) {

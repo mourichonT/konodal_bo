@@ -1,7 +1,22 @@
 import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, ChevronDown, Plus, Trash2 } from "lucide-react"
+import { ArrowLeft, ChevronDown, GripVertical, Plus, Trash2 } from "lucide-react"
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -31,6 +46,7 @@ import {
 import {
   createStructure,
   deleteStructure,
+  reorderStructures,
   subscribeToStructures,
   updateStructure,
   type StructureInput,
@@ -338,6 +354,22 @@ function StructuresSection({
   structures: StructureResidence[]
 }) {
   const [drafts, setDrafts] = useState<string[]>([])
+  // distance: 5 - sans ça, le moindre clic (ex: ouvrir/fermer une carte)
+  // déclenche un drag d'un pixel et bloque le onClick normal.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = structures.findIndex((s) => s.id === active.id)
+    const newIndex = structures.findIndex((s) => s.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    try {
+      await reorderStructures(residenceId, arrayMove(structures, oldIndex, newIndex).map((s) => s.id))
+    } catch (err) {
+      toast.error("Échec de la réorganisation : " + (err as Error).message)
+    }
+  }
 
   return (
     <Card>
@@ -345,16 +377,22 @@ function StructuresSection({
         <CardTitle>Structures / bâtiments</CardTitle>
         <CardDescription>
           Chaque bâtiment déclaré ici devient un emplacement sélectionnable pour les lots ci-dessous.
+          Glissez une carte par sa poignée pour réordonner.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {structures.map((structure) => (
-          <StructureCard key={structure.id} residenceId={residenceId} structure={structure} />
-        ))}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={structures.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+            {structures.map((structure) => (
+              <SortableStructureCard key={structure.id} residenceId={residenceId} structure={structure} />
+            ))}
+          </SortableContext>
+        </DndContext>
         {drafts.map((tempId) => (
           <StructureCard
             key={tempId}
             residenceId={residenceId}
+            nextOrder={structures.length}
             onDiscard={() => setDrafts((prev) => prev.filter((d) => d !== tempId))}
           />
         ))}
@@ -375,13 +413,46 @@ function StructuresSection({
   )
 }
 
+// Poignée de drag isolée du bouton d'expansion (cf. SortableStructureCard) -
+// sans ça, le listener de drag capte aussi le clic normal sur toute la
+// carte et empêche de la déplier.
+type DragHandleProps = {
+  attributes: ReturnType<typeof useSortable>["attributes"]
+  listeners: ReturnType<typeof useSortable>["listeners"]
+}
+
+function SortableStructureCard({
+  residenceId,
+  structure,
+}: {
+  residenceId: string
+  structure: StructureResidence
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: structure.id,
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(isDragging && "z-10 opacity-50")}
+    >
+      <StructureCard residenceId={residenceId} structure={structure} dragHandleProps={{ attributes, listeners }} />
+    </div>
+  )
+}
+
 function StructureCard({
   residenceId,
   structure,
+  nextOrder,
+  dragHandleProps,
   onDiscard,
 }: {
   residenceId: string
   structure?: StructureResidence
+  nextOrder?: number
+  dragHandleProps?: DragHandleProps
   onDiscard?: () => void
 }) {
   const [expanded, setExpanded] = useState(!structure)
@@ -411,7 +482,7 @@ function StructureCard({
         await updateStructure(residenceId, structure.id, input)
         toast.success("Bâtiment mis à jour")
       } else {
-        await createStructure(residenceId, input)
+        await createStructure(residenceId, input, nextOrder ?? 0)
         toast.success("Bâtiment créé")
         onDiscard?.()
       }
@@ -436,15 +507,28 @@ function StructureCard({
   }
 
   return (
-    <div className="rounded-lg border">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-medium"
-        onClick={() => setExpanded((e) => !e)}
-      >
-        {name ? `${type} ${name}`.trim() : "Nouveau bâtiment"}
-        <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
-      </button>
+    <div className="rounded-lg border bg-background">
+      <div className="flex items-center gap-1 px-1">
+        {dragHandleProps && (
+          <button
+            type="button"
+            className="flex shrink-0 cursor-grab touch-none items-center justify-center p-1.5 text-muted-foreground active:cursor-grabbing"
+            aria-label="Réordonner ce bâtiment"
+            {...dragHandleProps.attributes}
+            {...dragHandleProps.listeners}
+          >
+            <GripVertical className="size-4" />
+          </button>
+        )}
+        <button
+          type="button"
+          className="flex flex-1 items-center justify-between py-2.5 pr-3 text-left text-sm font-medium"
+          onClick={() => setExpanded((e) => !e)}
+        >
+          {name ? `${type} ${name}`.trim() : "Nouveau bâtiment"}
+          <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
+        </button>
+      </div>
       {expanded && (
         <div className="flex flex-col gap-3 border-t p-3">
           <div className="grid grid-cols-2 gap-3">
