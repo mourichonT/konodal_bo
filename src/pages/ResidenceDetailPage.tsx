@@ -586,7 +586,7 @@ function StructureCard({
 
           <div className="flex flex-col gap-2.5">
             <Label>Éléments (cage d'escalier, boîte aux lettres…)</Label>
-            <div className="flex flex-wrap gap-2.5">
+            <div className="flex flex-wrap gap-x-3 gap-y-3">
               {structureElementOptions.map((option) => (
                 <button
                   key={option}
