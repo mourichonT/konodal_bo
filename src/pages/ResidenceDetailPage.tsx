@@ -584,16 +584,16 @@ function StructureCard({
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2.5">
             <Label>Éléments (cage d'escalier, boîte aux lettres…)</Label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2.5">
               {structureElementOptions.map((option) => (
                 <button
                   key={option}
                   type="button"
                   onClick={() => toggleElement(option)}
                   className={cn(
-                    "rounded-full border px-3 py-1 text-xs transition-colors",
+                    "rounded-full border px-3.5 py-1.5 text-xs transition-colors",
                     elements.includes(option)
                       ? "border-transparent bg-primary text-primary-foreground"
                       : "border-input text-muted-foreground hover:text-foreground"
@@ -609,7 +609,7 @@ function StructureCard({
                     key={custom}
                     type="button"
                     onClick={() => toggleElement(custom)}
-                    className="flex items-center gap-1 rounded-full border border-transparent bg-primary px-3 py-1 text-xs text-primary-foreground"
+                    className="flex items-center gap-1.5 rounded-full border border-transparent bg-primary px-3.5 py-1.5 text-xs text-primary-foreground"
                   >
                     {custom}
                     <X className="size-3" />
