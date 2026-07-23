@@ -540,11 +540,11 @@ function StructureCard({
       {expanded && (
         <div className="flex flex-col gap-5 border-t p-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2.5">
               <Label>Nom du bâtiment</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2.5">
               <Label>Type</Label>
               <SearchableSelect
                 value={type}
@@ -553,7 +553,7 @@ function StructureCard({
                 groups={[{ options: structureTypeOptions.map((opt) => ({ value: opt, label: opt })) }]}
               />
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2.5">
               <Label>Nombre d'étages (RDC inclus)</Label>
               <Input
                 type="number"
@@ -562,7 +562,7 @@ function StructureCard({
                 onChange={(e) => setFloorCount(e.target.value)}
               />
             </div>
-            <div className="flex flex-col justify-end gap-1.5">
+            <div className="flex flex-col justify-end gap-2.5">
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
