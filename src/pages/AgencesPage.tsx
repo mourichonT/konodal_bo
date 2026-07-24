@@ -33,6 +33,7 @@ import {
   updateGerance,
   updateGeranceAddress,
   updateGeranceDeptContact,
+  updateGeranceName,
   type AgencyAccountRole,
   type GeranceInput,
 } from "@/lib/gerances"
@@ -802,22 +803,27 @@ function OwnAgencyPage({
 }
 
 function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boolean }) {
+  const [name, setName] = useState(gerance.name)
   const [street, setStreet] = useState(gerance.address.street)
   const [zipCode, setZipCode] = useState(gerance.address.zipCode)
   const [city, setCity] = useState(gerance.address.city)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
+    setName(gerance.name)
     setStreet(gerance.address.street)
     setZipCode(gerance.address.zipCode)
     setCity(gerance.address.city)
-  }, [gerance.id, gerance.address.street, gerance.address.zipCode, gerance.address.city])
+  }, [gerance.id, gerance.name, gerance.address.street, gerance.address.zipCode, gerance.address.city])
 
   async function handleSave() {
     setSaving(true)
     try {
-      await updateGeranceAddress(gerance.id, { ...emptyAddress, street, zipCode, city })
-      toast.success("Adresse mise à jour")
+      await Promise.all([
+        updateGeranceName(gerance.id, name),
+        updateGeranceAddress(gerance.id, { ...emptyAddress, street, zipCode, city }),
+      ])
+      toast.success("Informations mises à jour")
     } catch (err) {
       toast.error("Échec de l'enregistrement : " + (err as Error).message)
     } finally {
@@ -833,6 +839,10 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
       <CardContent>
         {canEdit ? (
           <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="agency-name">Nom de l'agence</Label>
+              <Input id="agency-name" required value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="agency-street">Adresse</Label>
@@ -861,15 +871,21 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
                 <Input id="agency-city" value={city} onChange={(e) => setCity(e.target.value)} />
               </div>
             </div>
-            <Button className="w-fit" size="sm" onClick={handleSave} disabled={saving}>
+            <Button className="w-fit" size="sm" onClick={handleSave} disabled={saving || !name.trim()}>
               <Save />
               Enregistrer
             </Button>
           </div>
         ) : (
-          <div className="text-sm">
-            <span className="text-muted-foreground">Adresse : </span>
-            {[street, [zipCode, city].join(" ")].filter(Boolean).join(" — ") || "—"}
+          <div className="flex flex-col gap-1 text-sm">
+            <div>
+              <span className="text-muted-foreground">Nom : </span>
+              {name || "—"}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Adresse : </span>
+              {[street, [zipCode, city].join(" ")].filter(Boolean).join(" — ") || "—"}
+            </div>
           </div>
         )}
       </CardContent>

@@ -108,6 +108,15 @@ export async function updateGeranceAddress(id: string, address: Address) {
   await updateDoc(doc(db, "gerances", id), { address })
 }
 
+// Édition ciblée du nom affiché seul, même exposition directe qu'
+// updateGeranceAddress sur OwnAgencyPage (GeranceFormDialog reste réservé au
+// répertoire Superadmin, il expose aussi l'activation/désactivation des
+// services et la révocation de comptes - hors de portée d'une simple Agence
+// éditant sa propre fiche).
+export async function updateGeranceName(id: string, name: string) {
+  await updateDoc(doc(db, "gerances", id), { name })
+}
+
 // Édition manuelle du SIRET/responsable légal, sans passer par la
 // recherche - un utilisateur peut vouloir corriger le résultat auto ou le
 // saisir directement.
