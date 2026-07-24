@@ -5,7 +5,6 @@ import { toast } from "sonner"
 import { ArrowLeft, Eye, MessageCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PostCommentsCard } from "@/components/PostCommentsCard"
-import { SinistreMediaViewer } from "@/components/SinistreMediaViewer"
 import { db } from "@/firebase"
 import { subscribeToCommunication } from "@/lib/communications"
 import { subscribeToUser } from "@/lib/users"
@@ -119,15 +118,6 @@ export default function CommunicationDetailPage() {
           </div>
 
           <div className="flex flex-col gap-6">
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-              <CardHeader>
-                <CardTitle className="text-base">Photo / vidéo</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <SinistreMediaViewer pathImage={communication.pathImage} className="aspect-video w-full rounded-lg" />
-              </CardContent>
-            </Card>
-
             <PostCommentsCard residenceId={residenceId} postId={postId} />
           </div>
         </div>
