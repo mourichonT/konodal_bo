@@ -824,7 +824,16 @@ function LotsSection({
   }
 
   function updateRow(key: string, patch: Partial<LotRow>, options?: { immediate?: boolean }) {
-    setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+    setRows((prev) => {
+      const next = prev.map((row) => (row.key === key ? { ...row, ...patch } : row))
+      // Synchronisé ICI, pas seulement via l'effect [rows] : pour une
+      // sauvegarde immédiate (typeLot/batiment/isLinkable), persistRow tourne
+      // sur le même tick que ce setRows, avant que l'effect n'ait eu la
+      // chance de se déclencher - sans cette ligne, rowsRef.current restait
+      // sur la valeur PRÉCÉDENTE et persistRow réécrivait l'ancienne valeur.
+      rowsRef.current = next
+      return next
+    })
     schedulePersist(key, options?.immediate ?? false)
   }
 
