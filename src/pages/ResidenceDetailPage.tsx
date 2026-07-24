@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
 import { ArrowLeft, ChevronDown, GripVertical, Plus, Trash2, X } from "lucide-react"
@@ -53,7 +53,7 @@ import {
   updateStructure,
   type StructureInput,
 } from "@/lib/structures"
-import { createLot, deleteLot, subscribeToLots, updateLot, type LotInput } from "@/lib/lots"
+import { createLot, deleteLot, reorderLots, subscribeToLots, updateLot, type LotInput } from "@/lib/lots"
 import { subscribeToGerances } from "@/lib/gerances"
 import { resolveUsersByUids } from "@/lib/users"
 import { emptyAddress, type Residence } from "@/types/residence"
@@ -666,8 +666,24 @@ function LotsSection({
 }) {
   const [rows, setRows] = useState<LotRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  // Miroir synchrone de `rows`, lu depuis les callbacks différés
+  // (setTimeout de schedulePersist) ou depuis handleDragEnd juste après un
+  // setRows - un `rows` capturé dans une closure au moment du rendu y serait
+  // périmé au moment où le timer se déclenche.
+  const rowsRef = useRef<LotRow[]>([])
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+  useEffect(() => {
+    rowsRef.current = rows
+  }, [rows])
+
+  useEffect(() => {
+    const timers = saveTimers.current
+    return () => {
+      Object.values(timers).forEach(clearTimeout)
+    }
+  }, [])
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -676,7 +692,15 @@ function LotsSection({
       const oldIndex = prev.findIndex((r) => r.key === active.id)
       const newIndex = prev.findIndex((r) => r.key === over.id)
       if (oldIndex === -1 || newIndex === -1) return prev
-      return arrayMove(prev, oldIndex, newIndex)
+      const next = arrayMove(prev, oldIndex, newIndex)
+      // Enregistré immédiatement (pas de bouton "Enregistrer" séparé) - tous
+      // les lots affichés sont déjà persistés à ce stade (addRow crée en
+      // base tout de suite), donc chaque row.id est fiable ici.
+      const orderedIds = next.map((r) => r.id).filter((id): id is string => !!id)
+      reorderLots(residenceId, orderedIds).catch((err) => {
+        toast.error("Échec de la réorganisation : " + (err as Error).message)
+      })
+      return next
     })
   }
 
@@ -684,8 +708,11 @@ function LotsSection({
     return subscribeToLots(
       residenceId,
       (lots) => {
-        setRows((prev) => [
-          ...lots.map((lot) => ({
+        // Remplacement complet : chaque lot affiché est désormais toujours
+        // persisté dès sa création (addRow), plus de brouillon local sans id
+        // à préserver entre deux synchronisations Firestore.
+        setRows(
+          lots.map((lot) => ({
             key: lot.id,
             id: lot.id,
             refLot: lot.refLot,
@@ -694,11 +721,8 @@ function LotsSection({
             typeLot: lot.typeLot,
             isLinkable: lot.isLinkable,
             idProprietaire: lot.idProprietaire,
-          })),
-          // Les brouillons pas encore enregistrés (sans id) sont conservés
-          // tels quels d'une synchronisation Firestore à l'autre.
-          ...prev.filter((row) => !row.id),
-        ])
+          }))
+        )
         setLoading(false)
       },
       (error) => {
@@ -710,126 +734,117 @@ function LotsSection({
 
   const buildingOptions = structures.map((s) => `${s.type} ${s.name}`.trim())
 
-  function addRow() {
-    setRows((prev) => [
-      ...prev,
-      {
-        key: crypto.randomUUID(),
+  // Un lot qui reprendrait la référence ou le bâtiment+numéro d'un autre lot
+  // déjà affiché n'est jamais persisté - revérifié à chaque tentative
+  // d'enregistrement de cette ligne (donc dès que l'utilisateur corrige).
+  function findConflict(row: LotRow): string | null {
+    const refLot = row.refLot.trim()
+    const batiment = row.batiment.trim()
+    const lot = row.lot.trim()
+    const others = rowsRef.current.filter((r) => r.key !== row.key)
+    if (refLot && others.some((r) => r.refLot.trim() === refLot)) {
+      return `Référence en double : ${refLot}`
+    }
+    if (batiment && lot && others.some((r) => r.batiment.trim() === batiment && r.lot.trim() === lot)) {
+      return `Doublon : bâtiment "${batiment}", lot "${lot}"`
+    }
+    return null
+  }
+
+  async function persistRow(key: string) {
+    const row = rowsRef.current.find((r) => r.key === key)
+    if (!row?.id) return
+    const refLot = row.refLot.trim()
+    const batiment = row.batiment.trim()
+    const lot = row.lot.trim()
+    // Ligne encore incomplète (saisie en cours) : on attend simplement,
+    // aucune erreur tant que l'utilisateur n'a pas fini de la remplir.
+    if (!refLot || !batiment || !lot) return
+    const conflict = findConflict(row)
+    if (conflict) {
+      toast.error(conflict)
+      return
+    }
+    const input: LotInput = {
+      refLot,
+      batiment,
+      lot,
+      typeLot: row.typeLot,
+      isLinkable: row.isLinkable,
+      order: rowsRef.current.findIndex((r) => r.key === key),
+    }
+    try {
+      await updateLot(residenceId, row.id, input)
+    } catch (err) {
+      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+    }
+  }
+
+  // Champs texte (refLot/lot) : attend une pause dans la saisie avant
+  // d'écrire, pour ne pas envoyer une requête à chaque frappe. Select/case à
+  // cocher (batiment/typeLot/isLinkable) : écriture immédiate, ce sont des
+  // choix discrets, pas une saisie continue.
+  function schedulePersist(key: string, immediate: boolean) {
+    clearTimeout(saveTimers.current[key])
+    if (immediate) {
+      void persistRow(key)
+      return
+    }
+    saveTimers.current[key] = setTimeout(() => {
+      void persistRow(key)
+    }, 600)
+  }
+
+  async function addRow() {
+    try {
+      const id = await createLot(residenceId, {
+        refLot: "",
+        batiment: "",
+        lot: "",
+        typeLot: "",
+        isLinkable: false,
+        order: rowsRef.current.length,
+      })
+      // Ajout optimiste, mais seulement si subscribeToLots n'a pas déjà
+      // ramené ce même lot entre-temps (sinon deux lignes partageraient la
+      // même key/id, faussant rows.length pour le prochain addRow).
+      setRows((prev) => (prev.some((r) => r.id === id) ? prev : [...prev, {
+        key: id,
+        id,
         refLot: "",
         batiment: "",
         lot: "",
         typeLot: "",
         isLinkable: false,
         idProprietaire: [],
-      },
-    ])
+      }]))
+    } catch (err) {
+      toast.error("Échec de la création : " + (err as Error).message)
+    }
   }
 
-  function updateRow(key: string, patch: Partial<LotRow>) {
+  function updateRow(key: string, patch: Partial<LotRow>, options?: { immediate?: boolean }) {
     setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+    schedulePersist(key, options?.immediate ?? false)
   }
 
   async function removeRow(row: LotRow) {
-    if (row.id) {
-      if (row.idProprietaire.length > 0) {
-        toast.error(
-          "Ce lot est déjà rattaché à un propriétaire, il n'est plus possible de le supprimer."
-        )
-        return
-      }
-      try {
-        await deleteLot(residenceId, row.id)
-        toast.success("Lot supprimé")
-      } catch (err) {
-        toast.error("Échec de la suppression : " + (err as Error).message)
-        return
-      }
-    }
-    setRows((prev) => prev.filter((r) => r.key !== row.key))
-  }
-
-  async function handleSaveAll() {
-    const relevantRows = rows.filter((row) => {
-      const isBlank =
-        !row.refLot.trim() && !row.batiment.trim() && !row.lot.trim() && !row.typeLot.trim()
-      return !(row.id === undefined && isBlank)
-    })
-
-    const refLotSeen = new Set<string>()
-    const comboSeen = new Set<string>()
-    const errors: string[] = []
-
-    relevantRows.forEach((row, index) => {
-      const refLot = row.refLot.trim()
-      const batiment = row.batiment.trim()
-      const lot = row.lot.trim()
-
-      if (!refLot) {
-        errors.push(`Le lot n°${index + 1} n'a pas de référence.`)
-      } else if (refLotSeen.has(refLot)) {
-        errors.push(`Référence en double : ${refLot}`)
-      } else {
-        refLotSeen.add(refLot)
-      }
-
-      if (!batiment || !lot) {
-        errors.push(`Le lot n°${index + 1} est incomplet (bâtiment ou numéro manquant).`)
-      } else {
-        const combo = `${batiment}-${lot}`
-        if (comboSeen.has(combo)) {
-          errors.push(`Doublon : bâtiment "${batiment}", lot "${lot}"`)
-        } else {
-          comboSeen.add(combo)
-        }
-      }
-    })
-
-    if (errors.length > 0) {
-      toast.error(errors.join(" "))
+    if (row.idProprietaire.length > 0) {
+      toast.error(
+        "Ce lot est déjà rattaché à un propriétaire, il n'est plus possible de le supprimer."
+      )
       return
     }
-
-    setSaving(true)
+    if (!row.id) return
+    clearTimeout(saveTimers.current[row.key])
     try {
-      for (const [index, row] of relevantRows.entries()) {
-        const input: LotInput = {
-          refLot: row.refLot.trim(),
-          batiment: row.batiment.trim(),
-          lot: row.lot.trim(),
-          typeLot: row.typeLot,
-          isLinkable: row.isLinkable,
-          // Reflète l'ordre visuel actuel (réorganisation click-and-déplace,
-          // cf. handleDragEnd) - réécrit à chaque sauvegarde, même pour un
-          // lot dont rien d'autre n'a changé.
-          order: index,
-        }
-        if (row.id) {
-          await updateLot(residenceId, row.id, input)
-        } else {
-          await createLot(residenceId, input)
-        }
-      }
-      // Filtre l'état COURANT (functional update), jamais `relevantRows` (la
-      // capture d'avant la boucle) : subscribeToLots reçoit déjà en temps
-      // réel les ids des lots tout juste créés pendant les `await`
-      // ci-dessus, souvent avant même la fin de cette boucle. Écraser `rows`
-      // avec la capture figée (toujours sans id pour ces lignes) annulait ce
-      // rattachement - au clic suivant sur "Enregistrer", ces mêmes lignes
-      // repassaient par createLot() faute d'id local, dupliquant le lot à
-      // chaque nouvel enregistrement.
-      setRows((prev) =>
-        prev.filter((row) => {
-          const isBlank =
-            !row.refLot.trim() && !row.batiment.trim() && !row.lot.trim() && !row.typeLot.trim()
-          return !(row.id === undefined && isBlank)
-        })
-      )
-      toast.success("Lots enregistrés")
+      await deleteLot(residenceId, row.id)
+      toast.success("Lot supprimé")
     } catch (err) {
-      toast.error("Échec de l'enregistrement : " + (err as Error).message)
-    } finally {
-      setSaving(false)
+      toast.error("Échec de la suppression : " + (err as Error).message)
+      return
     }
+    setRows((prev) => prev.filter((r) => r.key !== row.key))
   }
 
   return (
@@ -837,8 +852,8 @@ function LotsSection({
       <CardHeader>
         <CardTitle>Lots</CardTitle>
         <CardDescription>
-          Ajoutez autant de lignes que nécessaire, puis enregistrez-les en une seule fois. Glissez une
-          ligne par sa poignée pour réordonner.
+          Les modifications sont enregistrées automatiquement. Glissez une ligne par sa poignée pour
+          réordonner.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -880,13 +895,10 @@ function LotsSection({
           </Table>
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end">
           <Button type="button" variant="outline" onClick={addRow}>
             <Plus />
             Ajouter une ligne
-          </Button>
-          <Button type="button" onClick={handleSaveAll} disabled={saving}>
-            Enregistrer les lots
           </Button>
         </div>
       </CardContent>
@@ -902,7 +914,7 @@ function SortableLotRow({
 }: {
   row: LotRow
   buildingOptions: string[]
-  updateRow: (key: string, patch: Partial<LotRow>) => void
+  updateRow: (key: string, patch: Partial<LotRow>, options?: { immediate?: boolean }) => void
   removeRow: (row: LotRow) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -929,7 +941,7 @@ function SortableLotRow({
         <SearchableSelect
           className="min-w-32"
           value={row.batiment}
-          onChange={(v) => updateRow(row.key, { batiment: v })}
+          onChange={(v) => updateRow(row.key, { batiment: v }, { immediate: true })}
           emptyLabel="—"
           groups={[{ options: buildingOptions.map((opt) => ({ value: opt, label: opt })) }]}
         />
@@ -949,10 +961,11 @@ function SortableLotRow({
           className="min-w-40"
           value={row.typeLot}
           onChange={(v) =>
-            updateRow(row.key, {
-              typeLot: v,
-              isLinkable: defaultIsLinkableForType(v),
-            })
+            updateRow(
+              row.key,
+              { typeLot: v, isLinkable: defaultIsLinkableForType(v) },
+              { immediate: true }
+            )
           }
           emptyLabel="—"
           groups={[{ options: typeLotOptions.map((opt) => ({ value: opt, label: opt })) }]}
@@ -963,7 +976,7 @@ function SortableLotRow({
           type="checkbox"
           className="size-4 rounded border-input"
           checked={row.isLinkable}
-          onChange={(e) => updateRow(row.key, { isLinkable: e.target.checked })}
+          onChange={(e) => updateRow(row.key, { isLinkable: e.target.checked }, { immediate: true })}
         />
       </TableCell>
       <TableCell className="text-right">

@@ -5,6 +5,7 @@ import {
   onSnapshot,
   query,
   setDoc,
+  writeBatch,
   type Unsubscribe,
 } from "firebase/firestore"
 import { db } from "@/firebase"
@@ -79,16 +80,31 @@ function toFirestoreLotData(input: LotInput) {
 }
 
 // Nouveau lot : ID auto-généré, reporté dans le champ `id` du document lui
-// même (convention Lot.id côté app mobile).
-export async function createLot(residenceId: string, input: LotInput) {
+// même (convention Lot.id côté app mobile). Retourne l'id pour permettre un
+// ajout de ligne enregistré immédiatement côté BO (LotsSection) - plus de
+// brouillon local sans id qui attendrait un clic "Enregistrer" séparé.
+export async function createLot(residenceId: string, input: LotInput): Promise<string> {
   const ref = doc(lotsCollection(residenceId))
   await setDoc(ref, { ...toFirestoreLotData(input), id: ref.id, idProprietaire: [] })
+  return ref.id
 }
 
 export async function updateLot(residenceId: string, id: string, input: LotInput) {
   await setDoc(doc(db, "residences", residenceId, "lots", id), toFirestoreLotData(input), {
     merge: true,
   })
+}
+
+// Réorganisation click-and-déplace (LotsSection) - même patron que
+// reorderStructures (lib/structures.ts) : écrit `order` en une seule fois
+// pour toute la liste, appelé immédiatement après un drop plutôt qu'au
+// moment d'un enregistrement groupé.
+export async function reorderLots(residenceId: string, orderedIds: string[]) {
+  const batch = writeBatch(db)
+  orderedIds.forEach((id, index) => {
+    batch.update(doc(db, "residences", residenceId, "lots", id), { order: index })
+  })
+  await batch.commit()
 }
 
 export async function deleteLot(residenceId: string, id: string) {
