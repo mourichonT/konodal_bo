@@ -28,13 +28,16 @@ export function subscribeToStructures(
   return onSnapshot(
     structuresCollection(residenceId),
     (snapshot) => {
+      // `id: d.id` après le spread : même précaution que subscribeToLots
+      // (lib/lots.ts) - un champ `id` stocké dans le document divergent du
+      // vrai id Firestore écraserait sinon silencieusement la valeur fiable.
       const structures = snapshot.docs.map((d) => ({
-        id: d.id,
         name: "",
         type: "",
         etage: [],
         hasUnderground: false,
         ...(d.data() as Partial<Omit<StructureResidence, "id">>),
+        id: d.id,
       }))
       structures.sort((a, b) => {
         const orderDiff = (a.order ?? Infinity) - (b.order ?? Infinity)

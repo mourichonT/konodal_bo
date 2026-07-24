@@ -23,8 +23,11 @@ export function subscribeToResidences(
   return onSnapshot(
     q,
     (snapshot) => {
+      // `id` posé après le spread : même précaution que subscribeToLots
+      // (lib/lots.ts) - un champ `id` stocké dans le document divergent du
+      // vrai id Firestore écraserait sinon silencieusement la valeur fiable.
       onData(
-        snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Residence, "id">) }))
+        snapshot.docs.map((d) => ({ ...(d.data() as Omit<Residence, "id">), id: d.id }))
       )
     },
     onError
@@ -40,7 +43,7 @@ export function subscribeToResidence(
     doc(residencesCollection, id),
     (snapshot) => {
       onData(
-        snapshot.exists() ? { id: snapshot.id, ...(snapshot.data() as Omit<Residence, "id">) } : null
+        snapshot.exists() ? { ...(snapshot.data() as Omit<Residence, "id">), id: snapshot.id } : null
       )
     },
     onError
@@ -61,7 +64,8 @@ export function subscribeToResidencesForGerance(
   const q = query(residencesCollection, where("geranceRef.geranceId", "==", geranceId))
   return onSnapshot(
     q,
-    (snapshot) => onData(snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Residence, "id">) }))),
+    (snapshot) =>
+      onData(snapshot.docs.map((d) => ({ ...(d.data() as Omit<Residence, "id">), id: d.id }))),
     onError
   )
 }
