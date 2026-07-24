@@ -35,6 +35,7 @@ function toCommunication(residenceId: string, d: DocumentSnapshot<DocumentData>)
     creationDate: toDateOrNull(dates.creationDate ?? dates.timeStamp),
     user: (data.user as string) ?? "",
     audience: data.audience === "proprietaires" ? "proprietaires" : "all",
+    groupId: (data.communicationGroupId as string) || d.id,
   }
 }
 
@@ -72,6 +73,10 @@ export type CommunicationInput = {
   title: string
   description: string
   audience: CommunicationAudience
+  // Un seul id généré par soumission du formulaire (CommunicationFormDialog),
+  // partagé par toutes les résidences cochées - permet de regrouper les
+  // copies d'une même publication dans la liste BO (useAllCommunications).
+  groupId: string
 }
 
 // Réservé isProfessionnelResidence()/isSuperAdmin() côté firestore.rules
@@ -80,6 +85,10 @@ export type CommunicationInput = {
 // volontairement sans upload, cf. demande utilisateur). `audience` omis si
 // "all" (valeur par défaut relue par toCommunication) - seul "proprietaires"
 // est écrit explicitement, cf. Post.audience côté app (toMap()).
+// `communicationGroupId` : champ backoffice uniquement, absent du modèle
+// Dart (Post.fromMap ignore silencieusement les clés inconnues, même
+// précaution que priority/interventionDate sur les sinistres) - jamais lu ni
+// écrit par l'app.
 export async function createCommunication(residenceId: string, uid: string, input: CommunicationInput) {
   await addDoc(collection(db, "residences", residenceId, "posts"), {
     type: "communication",
@@ -89,6 +98,7 @@ export async function createCommunication(residenceId: string, uid: string, inpu
     title: input.title,
     description: input.description,
     dates: { creationDate: serverTimestamp() },
+    communicationGroupId: input.groupId,
     ...(input.audience === "proprietaires" ? { audience: "proprietaires" } : {}),
   })
 }

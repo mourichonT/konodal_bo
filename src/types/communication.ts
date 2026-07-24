@@ -16,4 +16,10 @@ export type Communication = {
   creationDate: Date | null
   user: string
   audience: CommunicationAudience
+  // Regroupe les copies d'une même publication multi-résidences (une copie =
+  // un post par résidence choisie, cf. createCommunication) - partagé par
+  // toutes les copies créées en une seule soumission du formulaire BO.
+  // Retombe sur l'id du post lui-même si absent (anciennes communications,
+  // ou copie isolée), pour toujours former un groupe même minimal.
+  groupId: string
 }

@@ -94,7 +94,10 @@ function CommunicationFormDialogContent({
     }
     setSubmitting(true)
     try {
-      const input: CommunicationInput = { title, description, audience }
+      // Un seul groupId pour toute la soumission, quel que soit le nombre de
+      // résidences cochées - permet de regrouper les copies dans la liste BO
+      // (cf. Communication.groupId).
+      const input: CommunicationInput = { title, description, audience, groupId: crypto.randomUUID() }
       await Promise.all([...selectedResidenceIds].map((residenceId) => onSubmit(residenceId, input)))
       toast.success("Communication publiée")
       onDone()
