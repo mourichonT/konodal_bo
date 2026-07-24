@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { SearchableSelect } from "@/components/SearchableSelect"
 import type { CommunicationInput } from "@/lib/communications"
 import {
   COMMUNICATION_AUDIENCES,
@@ -19,6 +18,9 @@ type CommunicationFormDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   residences: ResidenceOption[]
+  // Une résidence choisie -> un post créé dans cette résidence (pas de post
+  // partagé entre résidences côté connectkasa) - appelé une fois par
+  // résidence sélectionnée.
   onSubmit: (residenceId: string, input: CommunicationInput) => Promise<void>
 }
 
@@ -28,7 +30,7 @@ type CommunicationFormDialogProps = {
 export function CommunicationFormDialog({ open, onOpenChange, residences, onSubmit }: CommunicationFormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         {open && (
           <CommunicationFormDialogContent
             residences={residences}
@@ -50,21 +52,34 @@ function CommunicationFormDialogContent({
   onSubmit: (residenceId: string, input: CommunicationInput) => Promise<void>
   onDone: () => void
 }) {
-  const [residenceId, setResidenceId] = useState("")
+  const [selectedResidenceIds, setSelectedResidenceIds] = useState<Set<string>>(new Set())
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [audience, setAudience] = useState<CommunicationAudience>("all")
   const [submitting, setSubmitting] = useState(false)
 
+  function toggleResidence(id: string) {
+    setSelectedResidenceIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    if (!residenceId) {
-      toast.error("Choisissez une résidence")
+    if (selectedResidenceIds.size === 0) {
+      toast.error("Choisissez au moins une résidence")
       return
     }
     setSubmitting(true)
     try {
-      await onSubmit(residenceId, { title, description, audience })
+      const input: CommunicationInput = { title, description, audience }
+      await Promise.all([...selectedResidenceIds].map((residenceId) => onSubmit(residenceId, input)))
       toast.success("Communication publiée")
       onDone()
     } catch (err) {
@@ -80,51 +95,63 @@ function CommunicationFormDialogContent({
         <DialogTitle>Communiquer</DialogTitle>
       </DialogHeader>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overflow-x-hidden pr-4 pl-1">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="communication-residence">Résidence</Label>
-          <SearchableSelect
-            id="communication-residence"
-            value={residenceId}
-            onChange={setResidenceId}
-            emptyLabel="Choisir une résidence"
-            groups={[{ options: residences.map((r) => ({ value: r.id, label: r.name })) }]}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="communication-title">Titre</Label>
-          <Input
-            id="communication-title"
-            required
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="communication-description">Description</Label>
-          <textarea
-            id="communication-description"
-            required
-            rows={5}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label>Destinataires</Label>
+      <div className="flex min-h-0 flex-1 gap-6 overflow-y-auto overflow-x-hidden pr-4 pl-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-6">
           <div className="flex flex-col gap-2">
-            {COMMUNICATION_AUDIENCES.map((value) => (
-              <label key={value} className="flex items-center gap-2 text-sm">
+            <Label htmlFor="communication-title">Titre</Label>
+            <Input
+              id="communication-title"
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="communication-description">Description</Label>
+            <textarea
+              id="communication-description"
+              required
+              rows={5}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label>Destinataires</Label>
+            <div className="flex flex-col gap-2">
+              {COMMUNICATION_AUDIENCES.map((value) => (
+                <label key={value} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="communication-audience"
+                    value={value}
+                    checked={audience === value}
+                    onChange={() => setAudience(value)}
+                    className="size-4 border-input accent-primary"
+                  />
+                  {communicationAudienceLabels[value]}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex w-56 shrink-0 flex-col gap-2">
+          <Label>Résidences ({selectedResidenceIds.size})</Label>
+          <div className="flex max-h-80 flex-col gap-1.5 overflow-y-auto rounded-lg border border-input p-2.5">
+            {residences.length === 0 && (
+              <p className="text-sm text-muted-foreground">Aucune résidence disponible.</p>
+            )}
+            {residences.map((r) => (
+              <label key={r.id} className="flex items-center gap-2 text-sm">
                 <input
-                  type="radio"
-                  name="communication-audience"
-                  value={value}
-                  checked={audience === value}
-                  onChange={() => setAudience(value)}
-                  className="size-4 border-input accent-primary"
+                  type="checkbox"
+                  checked={selectedResidenceIds.has(r.id)}
+                  onChange={() => toggleResidence(r.id)}
+                  className="size-4 shrink-0 rounded border-input accent-primary"
                 />
-                {communicationAudienceLabels[value]}
+                <span className="truncate">{r.name}</span>
               </label>
             ))}
           </div>
