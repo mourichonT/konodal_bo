@@ -826,12 +826,6 @@ function LotsSection({
           Ajoutez autant de lignes que nécessaire, puis enregistrez-les en une seule fois. Glissez une
           ligne par sa poignée pour réordonner.
         </CardDescription>
-        <CardAction>
-          <Button type="button" variant="outline" onClick={addRow}>
-            <Plus />
-            Ajouter une ligne
-          </Button>
-        </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
@@ -872,7 +866,11 @@ function LotsSection({
           </Table>
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={addRow}>
+            <Plus />
+            Ajouter une ligne
+          </Button>
           <Button type="button" onClick={handleSaveAll} disabled={saving}>
             Enregistrer les lots
           </Button>
