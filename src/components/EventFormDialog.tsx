@@ -7,6 +7,7 @@ import { DateInput } from "@/components/DateInput"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DescriptionTextarea } from "@/components/DescriptionTextarea"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -461,13 +462,12 @@ function EventFormDialogContent({
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="event-desc">Description</Label>
-            <textarea
+            <DescriptionTextarea
               id="event-desc"
               rows={4}
               disabled={restDisabled}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              onChange={setDescription}
             />
           </div>
         </div>

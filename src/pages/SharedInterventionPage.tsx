@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { DateInput } from "@/components/DateInput"
+import { DescriptionTextarea } from "@/components/DescriptionTextarea"
 import { KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
 
 const GET_SHARED_INTERVENTION_URL =
@@ -402,12 +403,11 @@ export default function SharedInterventionPage() {
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor="rapport-desc">Description</Label>
-                      <textarea
+                      <DescriptionTextarea
                         id="rapport-desc"
                         rows={3}
                         value={rapportDescription}
-                        onChange={(e) => setRapportDescription(e.target.value)}
-                        className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                        onChange={setRapportDescription}
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
