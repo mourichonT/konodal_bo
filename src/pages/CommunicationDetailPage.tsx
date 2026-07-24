@@ -110,7 +110,9 @@ export default function CommunicationDetailPage() {
                 </div>
                 <div className="flex flex-col gap-1 border-t pt-3">
                   <span className="text-muted-foreground">Description :</span>
-                  <span>{communication.description || "Aucune description."}</span>
+                  <span className="whitespace-pre-wrap">
+                    {communication.description || "Aucune description."}
+                  </span>
                 </div>
               </CardContent>
             </Card>
