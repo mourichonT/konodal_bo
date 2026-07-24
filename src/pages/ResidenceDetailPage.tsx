@@ -809,7 +809,21 @@ function LotsSection({
           await createLot(residenceId, input)
         }
       }
-      setRows(relevantRows)
+      // Filtre l'état COURANT (functional update), jamais `relevantRows` (la
+      // capture d'avant la boucle) : subscribeToLots reçoit déjà en temps
+      // réel les ids des lots tout juste créés pendant les `await`
+      // ci-dessus, souvent avant même la fin de cette boucle. Écraser `rows`
+      // avec la capture figée (toujours sans id pour ces lignes) annulait ce
+      // rattachement - au clic suivant sur "Enregistrer", ces mêmes lignes
+      // repassaient par createLot() faute d'id local, dupliquant le lot à
+      // chaque nouvel enregistrement.
+      setRows((prev) =>
+        prev.filter((row) => {
+          const isBlank =
+            !row.refLot.trim() && !row.batiment.trim() && !row.lot.trim() && !row.typeLot.trim()
+          return !(row.id === undefined && isBlank)
+        })
+      )
       toast.success("Lots enregistrés")
     } catch (err) {
       toast.error("Échec de l'enregistrement : " + (err as Error).message)
