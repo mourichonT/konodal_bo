@@ -858,6 +858,11 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
+              {name.length >= AGENCY_NAME_MAX_LENGTH && (
+                <p className="text-xs text-red-600">
+                  Limite de {AGENCY_NAME_MAX_LENGTH} caractères atteinte
+                </p>
+              )}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5 sm:col-span-2">
