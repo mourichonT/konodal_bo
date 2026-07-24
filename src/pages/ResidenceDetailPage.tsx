@@ -53,7 +53,15 @@ import {
   updateStructure,
   type StructureInput,
 } from "@/lib/structures"
-import { createLot, deleteLot, reorderLots, subscribeToLots, updateLot, type LotInput } from "@/lib/lots"
+import {
+  createLot,
+  deleteLot,
+  linkLot,
+  reorderLots,
+  subscribeToLots,
+  updateLot,
+  type LotInput,
+} from "@/lib/lots"
 import { subscribeToGerances } from "@/lib/gerances"
 import { resolveUsersByUids } from "@/lib/users"
 import { emptyAddress, type Residence } from "@/types/residence"
@@ -655,6 +663,10 @@ type LotRow = {
   typeLot: string
   isLinkable: boolean
   idProprietaire: string[]
+  // Lot principal (isLinkable=false) auquel CE lot est rattaché - null si
+  // aucun. Sélectionnable uniquement quand isLinkable est coché (cf.
+  // SortableLotRow, colonne "Rattaché à").
+  parentLotId: string | null
 }
 
 function LotsSection({
@@ -721,6 +733,7 @@ function LotsSection({
             typeLot: lot.typeLot,
             isLinkable: lot.isLinkable,
             idProprietaire: lot.idProprietaire,
+            parentLotId: lot.parentLotId ?? null,
           }))
         )
         setLoading(false)
@@ -817,6 +830,7 @@ function LotsSection({
         typeLot: "",
         isLinkable: false,
         idProprietaire: [],
+        parentLotId: null,
       }]))
     } catch (err) {
       toast.error("Échec de la création : " + (err as Error).message)
@@ -856,6 +870,26 @@ function LotsSection({
     setRows((prev) => prev.filter((r) => r.key !== row.key))
   }
 
+  async function handleLinkLot(row: LotRow, parentLotId: string | null) {
+    if (!row.id) return
+    const previous = row.parentLotId
+    setRows((prev) => {
+      const next = prev.map((r) => (r.key === row.key ? { ...r, parentLotId } : r))
+      rowsRef.current = next
+      return next
+    })
+    try {
+      await linkLot(residenceId, row.id, parentLotId)
+    } catch (err) {
+      toast.error("Échec du rattachement : " + (err as Error).message)
+      setRows((prev) => {
+        const next = prev.map((r) => (r.key === row.key ? { ...r, parentLotId: previous } : r))
+        rowsRef.current = next
+        return next
+      })
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -876,6 +910,7 @@ function LotsSection({
                 <TableHead>Référence</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Rattachable</TableHead>
+                <TableHead>Rattaché à</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -886,16 +921,18 @@ function LotsSection({
                     <SortableLotRow
                       key={row.key}
                       row={row}
+                      allRows={rows}
                       buildingOptions={buildingOptions}
                       updateRow={updateRow}
                       removeRow={removeRow}
+                      onLink={handleLinkLot}
                     />
                   ))}
                 </SortableContext>
               </DndContext>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                     Aucun lot pour l'instant.
                   </TableCell>
                 </TableRow>
@@ -917,15 +954,24 @@ function LotsSection({
 
 function SortableLotRow({
   row,
+  allRows,
   buildingOptions,
   updateRow,
   removeRow,
+  onLink,
 }: {
   row: LotRow
+  allRows: LotRow[]
   buildingOptions: string[]
   updateRow: (key: string, patch: Partial<LotRow>, options?: { immediate?: boolean }) => void
   removeRow: (row: LotRow) => void
+  onLink: (row: LotRow, parentLotId: string | null) => void
 }) {
+  // Lots "principaux" (isLinkable non coché) pouvant servir de parent -
+  // jamais la ligne elle-même.
+  const parentOptions = allRows.filter(
+    (r): r is LotRow & { id: string } => !!r.id && r.id !== row.id && !r.isLinkable
+  )
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.key,
   })
@@ -987,6 +1033,27 @@ function SortableLotRow({
           checked={row.isLinkable}
           onChange={(e) => updateRow(row.key, { isLinkable: e.target.checked }, { immediate: true })}
         />
+      </TableCell>
+      <TableCell>
+        {row.isLinkable && (
+          <SearchableSelect
+            className="min-w-40"
+            value={row.parentLotId ?? ""}
+            onChange={(v) => onLink(row, v || null)}
+            emptyLabel="— Aucun —"
+            groups={[
+              {
+                options: [
+                  { value: "", label: "— Aucun —" },
+                  ...parentOptions.map((r) => ({
+                    value: r.id,
+                    label: `${r.batiment} - Lot ${r.lot} (${r.refLot})`,
+                  })),
+                ],
+              },
+            ]}
+          />
+        )}
       </TableCell>
       <TableCell className="text-right">
         <Button

@@ -1,10 +1,12 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   onSnapshot,
   query,
   setDoc,
+  updateDoc,
   writeBatch,
   type Unsubscribe,
 } from "firebase/firestore"
@@ -66,8 +68,9 @@ export type LotInput = {
 
 // Mêmes clés que Lot.toJsonForDb() côté app mobile (connectkasa) : on
 // n'écrit que les champs gérés depuis cet écran, jamais idLocataire,
-// syndicAgency, parentLotId... pour ne pas écraser des données gérées
-// ailleurs (attribution de lot, rattachement parent-enfant).
+// syndicAgency... pour ne pas écraser des données gérées ailleurs
+// (attribution de lot). Le rattachement parent-enfant (parentLotId) a sa
+// propre fonction dédiée, linkLot, plus bas.
 function toFirestoreLotData(input: LotInput) {
   return {
     ...(input.refLot ? { refLot: input.refLot } : {}),
@@ -109,4 +112,18 @@ export async function reorderLots(residenceId: string, orderedIds: string[]) {
 
 export async function deleteLot(residenceId: string, id: string) {
   await deleteDoc(doc(db, "residences", residenceId, "lots", id))
+}
+
+// Rattache (ou détache si parentLotId est null) un lot dépendant
+// (isLinkable=true, ex: parking/cave) à un lot principal (ex: appartement) -
+// déclenche sync_lot_tenants côté serveur (functions_python/main.py), qui
+// recopie idProprietaire du parent vers l'enfant (et idLocataire puisque
+// groupedWithParent est toujours vrai ici, pas de granularité exposée côté
+// BO). Action consciente, pas un simple champ descriptif - fonction séparée
+// de updateLot/toFirestoreLotData à dessein.
+export async function linkLot(residenceId: string, childLotId: string, parentLotId: string | null) {
+  await updateDoc(doc(db, "residences", residenceId, "lots", childLotId), {
+    parentLotId: parentLotId ?? deleteField(),
+    groupedWithParent: parentLotId !== null,
+  })
 }
