@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Save } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -70,6 +70,22 @@ function CommunicationFormDialogContent({
     })
   }
 
+  const allSelected = residences.length > 0 && selectedResidenceIds.size === residences.length
+  const someSelected = selectedResidenceIds.size > 0 && !allSelected
+
+  // "Toutes les résidences" (case parente) : coché si tout est sélectionné,
+  // indéterminé si une partie seulement - un <input type="checkbox"> ne
+  // supporte l'état indéterminé que par la propriété DOM, pas un attribut
+  // JSX, d'où le ref.
+  const selectAllRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected
+  }, [someSelected])
+
+  function toggleAllResidences() {
+    setSelectedResidenceIds(allSelected ? new Set() : new Set(residences.map((r) => r.id)))
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (selectedResidenceIds.size === 0) {
@@ -139,21 +155,35 @@ function CommunicationFormDialogContent({
 
         <div className="flex w-56 shrink-0 flex-col gap-2">
           <Label>Résidences ({selectedResidenceIds.size})</Label>
-          <div className="flex max-h-80 flex-col gap-1.5 overflow-y-auto rounded-lg border border-input p-2.5">
+          <div className="flex max-h-80 flex-col overflow-y-auto rounded-lg border border-input p-2.5">
             {residences.length === 0 && (
               <p className="text-sm text-muted-foreground">Aucune résidence disponible.</p>
             )}
-            {residences.map((r) => (
-              <label key={r.id} className="flex items-center gap-2 text-sm">
+            {residences.length > 0 && (
+              <label className="flex items-center gap-2 border-b pb-1.5 text-sm font-medium">
                 <input
+                  ref={selectAllRef}
                   type="checkbox"
-                  checked={selectedResidenceIds.has(r.id)}
-                  onChange={() => toggleResidence(r.id)}
+                  checked={allSelected}
+                  onChange={toggleAllResidences}
                   className="size-4 shrink-0 rounded border-input accent-primary"
                 />
-                <span className="truncate">{r.name}</span>
+                Toutes les résidences
               </label>
-            ))}
+            )}
+            <div className="flex flex-col gap-1.5 pt-1.5 pl-4">
+              {residences.map((r) => (
+                <label key={r.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedResidenceIds.has(r.id)}
+                    onChange={() => toggleResidence(r.id)}
+                    className="size-4 shrink-0 rounded border-input accent-primary"
+                  />
+                  <span className="truncate">{r.name}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
       </div>
