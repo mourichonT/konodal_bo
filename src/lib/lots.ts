@@ -27,8 +27,16 @@ export function subscribeToLots(
   return onSnapshot(
     q,
     (snapshot) => {
+      // `id: d.id` APRÈS le spread : le champ `id` stocké dans le document
+      // (écrit par l'app mobile, cf. commentaire "ID corrompu par des
+      // espaces parasites" dans firestore_lot_repository.dart -
+      // createOrUpdateLot) peut diverger du vrai id du document (espace
+      // parasite, valeur jamais migrée...). Le laisser gagner sur d.id
+      // faisait pointer updateLot() vers un chemin Firestore inexistant
+      // (doc "fantôme"), recréant silencieusement le lot en double à chaque
+      // enregistrement - même précaution que _postFromDoc côté app
+      // (firestore_post_repository.dart) pour la même classe de bug.
       const lots = snapshot.docs.map((d) => ({
-        id: d.id,
         refLot: "",
         batiment: "",
         lot: "",
@@ -37,6 +45,7 @@ export function subscribeToLots(
         idProprietaire: [],
         idLocataire: [],
         ...(d.data() as Partial<Omit<Lot, "id">>),
+        id: d.id,
       }))
       lots.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity))
       onData(lots)
