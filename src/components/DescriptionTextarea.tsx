@@ -2,8 +2,10 @@ import { cn } from "@/lib/utils"
 
 // Limite partagée par tous les champs "Description" du BO (communication,
 // intervention, compte-rendu...) - demandé explicitement, avec un compteur
-// visible sous le champ plutôt qu'une simple troncature silencieuse.
-export const DESCRIPTION_MAX_LENGTH = 850
+// visible sous le champ plutôt qu'une simple troncature silencieuse. 850
+// abaissé à 700 : sur l'app mobile (max 20 lignes affichées), un texte de
+// ~900 caractères déborde déjà - constaté empiriquement par l'utilisateur.
+export const DESCRIPTION_MAX_LENGTH = 700
 
 export function DescriptionTextarea({
   id,
