@@ -54,6 +54,12 @@ import type { KonodalUser } from "@/types/user"
 
 const serviceTypes: ServiceType[] = ["serviceSyndic", "geranceLocative"]
 
+// Nom affiché de l'agence : limite demandée explicitement, avec blocage à
+// l'enregistrement (pas seulement une troncature silencieuse via maxLength,
+// qui ne rattrape pas un nom déjà trop long chargé depuis Firestore avant
+// l'ajout de cette limite).
+const AGENCY_NAME_MAX_LENGTH = 20
+
 function geranceToInput(gerance: Gerance): GeranceInput {
   return {
     name: gerance.name,
@@ -817,6 +823,10 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
   }, [gerance.id, gerance.name, gerance.address.street, gerance.address.zipCode, gerance.address.city])
 
   async function handleSave() {
+    if (name.trim().length > AGENCY_NAME_MAX_LENGTH) {
+      toast.error(`Le nom de l'agence ne peut pas dépasser ${AGENCY_NAME_MAX_LENGTH} caractères`)
+      return
+    }
     setSaving(true)
     try {
       await Promise.all([
@@ -841,7 +851,13 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="agency-name">Nom de l'agence</Label>
-              <Input id="agency-name" required value={name} onChange={(e) => setName(e.target.value)} />
+              <Input
+                id="agency-name"
+                required
+                maxLength={AGENCY_NAME_MAX_LENGTH}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5 sm:col-span-2">
