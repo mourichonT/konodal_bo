@@ -72,10 +72,18 @@ export type ResidenceInput = {
   mail_contact?: string
 }
 
-export async function createResidence(input: ResidenceInput) {
+// geranceRef : requis côté règle Firestore pour qu'une Agence (pas un
+// simple Agent) crée sa propre résidence - isProfessionnelResidence()
+// dépend de ce champ, une résidence créée sans lui resterait invisible/
+// non modifiable ensuite pour son créateur (ni CS member, ni Super Admin,
+// ni Professionnel tant que geranceRef est absent). Absent pour une
+// création Super Admin (assignation de gérance faite séparément depuis la
+// fiche résidence, cf. updateResidenceGeranceRef).
+export async function createResidence(input: ResidenceInput, geranceRef?: GeranceRef) {
   await addDoc(residencesCollection, {
     ...input,
     totalLot: 0,
+    ...(geranceRef ? { geranceRef } : {}),
   })
 }
 

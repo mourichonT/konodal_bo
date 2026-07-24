@@ -35,6 +35,8 @@ import { geocodeAddress } from "@/lib/geocode"
 import { emptyAddress, type Residence } from "@/types/residence"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
+import { useAccountRole } from "@/hooks/useAccountRole"
+import { useAuth } from "@/lib/auth-context"
 
 // maplibre-gl pèse ~600 Ko gzippé : chargé à la demande, seulement par les
 // visiteurs de cette page, plutôt que gonfler le bundle principal partagé
@@ -63,6 +65,13 @@ export default function ResidencesPage() {
   const [search, setSearch] = useState("")
   const { scopedResidenceIds } = useScopedResidenceIds()
   const { isSuperAdmin } = useIsSuperAdmin()
+  const { user } = useAuth()
+  // Une Agence (pas un simple Agent) peut créer sa propre résidence, mais
+  // seulement côté serviceSyndic - une gérance locative n'a jamais accès à
+  // une résidence entière (isProfessionnelResidence côté firestore.rules,
+  // cf. useScopedResidenceIds), seulement à des lots précis.
+  const { isAgence, geranceId, serviceType } = useAccountRole()
+  const canCreateResidence = isSuperAdmin || (isAgence && serviceType === "serviceSyndic")
 
   useEffect(() => {
     setLoading(true)
@@ -216,7 +225,7 @@ export default function ResidencesPage() {
             className="pl-8"
           />
         </div>
-        {isSuperAdmin && (
+        {canCreateResidence && (
           <Button className="rounded-full" onClick={() => setCreating(true)}>
             <Plus />
             Ajouter une résidence
@@ -280,7 +289,14 @@ export default function ResidencesPage() {
         open={creating}
         onOpenChange={setCreating}
         onSubmit={async (input) => {
-          await createResidence(input)
+          // geranceRef requis côté règle Firestore pour qu'une Agence crée sa
+          // propre résidence (cf. commentaire lib/residences.ts) - absent
+          // pour un Super Admin, qui assigne la gérance séparément ensuite.
+          const geranceRef =
+            !isSuperAdmin && isAgence && geranceId && user
+              ? { geranceId, serviceType: "serviceSyndic" as const, agentUid: user.uid }
+              : undefined
+          await createResidence(input, geranceRef)
           toast.success("Résidence créée")
           setCreating(false)
         }}
