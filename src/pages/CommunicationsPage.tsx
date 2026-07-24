@@ -1,11 +1,10 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { ChevronDown, Eye, MessageCircle, Plus, Search } from "lucide-react"
+import { ChevronDown, ChevronRight, Eye, MessageCircle, Plus, Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { CommunicationFormDialog } from "@/components/CommunicationFormDialog"
 import { SearchableSelect } from "@/components/SearchableSelect"
 import {
@@ -35,7 +34,8 @@ type CommunicationGroup = {
 
 // Regroupe les copies d'une même publication multi-résidences (cf.
 // Communication.groupId) - une copie isolée (groupId == son propre id) forme
-// un groupe à elle seule, même rendu que les autres.
+// un groupe à elle seule, affichée comme une ligne normale (cf. rendu plus
+// bas : seuls les groupes à plusieurs résidences sont dépliables).
 function groupCommunications(list: CommunicationWithResidence[]): CommunicationGroup[] {
   const byGroup = new Map<string, CommunicationWithResidence[]>()
   for (const c of list) {
@@ -85,14 +85,6 @@ export default function CommunicationsPage() {
   })
 
   const groups = groupCommunications(filteredCommunications)
-  // Une publication faite sur une seule résidence n'a pas de raison d'être
-  // repliée (rien à dérouler) - affichée à plat dans un tableau, comme avant
-  // l'introduction du groupage. Seules les publications multi-résidences
-  // gardent la card dépliable.
-  const multiResidenceGroups = groups.filter((g) => g.items.length > 1)
-  const singleResidenceCommunications = groups
-    .filter((g) => g.items.length === 1)
-    .map((g) => g.items[0])
 
   function toggleGroup(groupId: string) {
     setExpandedGroupIds((prev) => {
@@ -142,19 +134,6 @@ export default function CommunicationsPage() {
         />
       </div>
 
-      {multiResidenceGroups.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {multiResidenceGroups.map((group) => (
-            <CommunicationGroupCard
-              key={group.groupId}
-              group={group}
-              expanded={expandedGroupIds.has(group.groupId)}
-              onToggle={() => toggleGroup(group.groupId)}
-            />
-          ))}
-        </div>
-      )}
-
       <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
         <Table>
           <TableHeader className="bg-muted/40">
@@ -168,14 +147,23 @@ export default function CommunicationsPage() {
             </TableRow>
           </TableHeader>
           <TableBody className="bg-white">
-            {singleResidenceCommunications.map((communication) => (
-              <CommunicationRow
-                key={`${communication.residenceId}-${communication.id}`}
-                communication={communication}
-                showTitle
-              />
-            ))}
-            {!loading && multiResidenceGroups.length === 0 && singleResidenceCommunications.length === 0 && (
+            {groups.map((group) =>
+              group.items.length > 1 ? (
+                <CommunicationGroupRows
+                  key={group.groupId}
+                  group={group}
+                  expanded={expandedGroupIds.has(group.groupId)}
+                  onToggle={() => toggleGroup(group.groupId)}
+                />
+              ) : (
+                <CommunicationRow
+                  key={`${group.items[0].residenceId}-${group.items[0].id}`}
+                  communication={group.items[0]}
+                  showTitle
+                />
+              )
+            )}
+            {!loading && groups.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                   Aucune communication pour l'instant.
@@ -199,7 +187,10 @@ export default function CommunicationsPage() {
   )
 }
 
-function CommunicationGroupCard({
+// Ligne parente (repliable) + ses lignes enfants (une par résidence) quand
+// dépliée - un fragment de <TableRow> est valide directement dans un
+// <TableBody>, pas besoin d'une card ni d'un tableau imbriqué séparé.
+function CommunicationGroupRows({
   group,
   expanded,
   onToggle,
@@ -209,67 +200,59 @@ function CommunicationGroupCard({
   onToggle: () => void
 }) {
   return (
-    <Card className="overflow-hidden rounded-xl bg-white p-0 shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium">{group.title || "Sans titre"}</span>
-          {group.audience === "proprietaires" && (
-            <Badge variant="outline" className="shrink-0 border-transparent bg-muted text-muted-foreground">
-              Propriétaires
-            </Badge>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-3 text-sm text-muted-foreground">
-          <span>
-            {group.items.length} résidence{group.items.length > 1 ? "s" : ""}
-          </span>
-          <span>{group.creationDate ? group.creationDate.toLocaleDateString("fr-FR") : "—"}</span>
-          <ChevronDown className={cn("size-4 transition-transform", expanded && "rotate-180")} />
-        </div>
-      </button>
-      {expanded && (
-        <div className="border-t">
-          <Table>
-            <TableHeader className="bg-muted/40">
-              <TableRow>
-                <TableHead>Résidence</TableHead>
-                <TableHead>Publiée le</TableHead>
-                <TableHead>Commentaires</TableHead>
-                <TableHead>Vues uniques</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="bg-white">
-              {group.items.map((communication) => (
-                <CommunicationRow
-                  key={`${communication.residenceId}-${communication.id}`}
-                  communication={communication}
-                />
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-    </Card>
+    <>
+      <TableRow className="cursor-pointer bg-muted/30 hover:bg-muted/40" onClick={onToggle}>
+        <TableCell className="font-medium">
+          <div className="flex items-center gap-1.5">
+            {expanded ? (
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            )}
+            {group.title || "Sans titre"}
+            {group.audience === "proprietaires" && (
+              <Badge variant="outline" className="border-transparent bg-muted text-muted-foreground">
+                Propriétaires
+              </Badge>
+            )}
+          </div>
+        </TableCell>
+        <TableCell className="text-muted-foreground">
+          {group.items.length} résidences
+        </TableCell>
+        <TableCell className="text-muted-foreground">
+          {group.creationDate ? group.creationDate.toLocaleDateString("fr-FR") : "—"}
+        </TableCell>
+        <TableCell />
+        <TableCell />
+        <TableCell />
+      </TableRow>
+      {expanded &&
+        group.items.map((communication) => (
+          <CommunicationRow
+            key={`${communication.residenceId}-${communication.id}`}
+            communication={communication}
+            nested
+          />
+        ))}
+    </>
   )
 }
 
 function CommunicationRow({
   communication,
   showTitle,
+  nested,
 }: {
   communication: CommunicationWithResidence
   showTitle?: boolean
+  nested?: boolean
 }) {
   const commentStats = useCommentStats(communication.residenceId, communication.id)
   const uniqueViewCount = useUniqueViewCount(communication.residenceId, communication.id)
 
   return (
-    <TableRow>
+    <TableRow className={cn(nested && "bg-muted/10")}>
       {showTitle && (
         <TableCell className="font-medium">
           <div className="flex items-center gap-1.5">
@@ -282,7 +265,8 @@ function CommunicationRow({
           </div>
         </TableCell>
       )}
-      <TableCell>{communication.residenceName}</TableCell>
+      {nested && <TableCell />}
+      <TableCell className={cn(nested && "pl-8")}>{communication.residenceName}</TableCell>
       <TableCell className="text-muted-foreground">
         {communication.creationDate ? communication.creationDate.toLocaleDateString("fr-FR") : "—"}
       </TableCell>
