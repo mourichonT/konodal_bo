@@ -11,7 +11,7 @@ import { subscribeToCommunication } from "@/lib/communications"
 import { subscribeToUser } from "@/lib/users"
 import { useCommentStats } from "@/hooks/useCommentCount"
 import { useUniqueViewCount } from "@/hooks/useUniqueViewCount"
-import type { Communication } from "@/types/communication"
+import { communicationAudienceLabels, type Communication } from "@/types/communication"
 import type { KonodalUser } from "@/types/user"
 
 export default function CommunicationDetailPage() {
@@ -93,6 +93,10 @@ export default function CommunicationDetailPage() {
                 <div>
                   <span className="text-muted-foreground">Publiée le : </span>
                   {communication.creationDate ? communication.creationDate.toLocaleDateString("fr-FR") : "—"}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Destinataires : </span>
+                  {communicationAudienceLabels[communication.audience]}
                 </div>
                 <div className="flex items-center gap-4 border-t pt-3">
                   <div className="flex items-center gap-1.5">

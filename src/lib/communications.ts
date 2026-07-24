@@ -1,15 +1,17 @@
 import {
+  addDoc,
   collection,
   doc,
   onSnapshot,
   query,
+  serverTimestamp,
   where,
   type DocumentData,
   type DocumentSnapshot,
   type Unsubscribe,
 } from "firebase/firestore"
 import { db } from "@/firebase"
-import type { Communication } from "@/types/communication"
+import type { Communication, CommunicationAudience } from "@/types/communication"
 
 function toDateOrNull(value: unknown): Date | null {
   return value && typeof (value as { toDate?: unknown }).toDate === "function"
@@ -32,6 +34,7 @@ function toCommunication(residenceId: string, d: DocumentSnapshot<DocumentData>)
     isVideo: (data.isVideo as boolean) ?? false,
     creationDate: toDateOrNull(dates.creationDate ?? dates.timeStamp),
     user: (data.user as string) ?? "",
+    audience: data.audience === "proprietaires" ? "proprietaires" : "all",
   }
 }
 
@@ -63,5 +66,30 @@ export function subscribeToCommunication(
     (snapshot) => onData(snapshot.exists() ? toCommunication(residenceId, snapshot) : null),
     onError
   )
+}
+
+export type CommunicationInput = {
+  title: string
+  description: string
+  audience: CommunicationAudience
+}
+
+// Réservé isProfessionnelResidence()/isSuperAdmin() côté firestore.rules
+// (posts/{id}.create, bypass déjà existant, pas de restriction sur `type`) -
+// même patron que createEvent (lib/events.ts). Pas d'image (formulaire BO
+// volontairement sans upload, cf. demande utilisateur). `audience` omis si
+// "all" (valeur par défaut relue par toCommunication) - seul "proprietaires"
+// est écrit explicitement, cf. Post.audience côté app (toMap()).
+export async function createCommunication(residenceId: string, uid: string, input: CommunicationInput) {
+  await addDoc(collection(db, "residences", residenceId, "posts"), {
+    type: "communication",
+    refResidence: residenceId,
+    user: uid,
+    hideUser: false,
+    title: input.title,
+    description: input.description,
+    dates: { creationDate: serverTimestamp() },
+    ...(input.audience === "proprietaires" ? { audience: "proprietaires" } : {}),
+  })
 }
 

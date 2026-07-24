@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/firebase"
 import { subscribeToResidences } from "@/lib/residences"
 import { subscribeToResidenceCommunications } from "@/lib/communications"
 import type { Residence } from "@/types/residence"
@@ -52,12 +54,38 @@ export function useAllCommunications(
     [residences]
   )
 
-  const communications: CommunicationWithResidence[] = useMemo(() => {
+  const rawCommunications: CommunicationWithResidence[] = useMemo(() => {
     return Object.values(byResidence)
       .flat()
       .map((c) => ({ ...c, residenceName: residenceNameById.get(c.residenceId) ?? c.residenceId }))
-      .sort((a, b) => (b.creationDate?.getTime() ?? 0) - (a.creationDate?.getTime() ?? 0))
   }, [byResidence, residenceNameById])
 
-  return { communications, loading }
+  // Un résident peut aussi publier un post "communication" depuis l'app
+  // (AskingNeighbordsForm) - cette page BO n'est destinée qu'aux annonces
+  // officielles publiées par l'agence/gérance (accountType agence/agent),
+  // pas au fil de discussion résident->résident. Rôle résolu par uid, une
+  // fois (accountType ne change pas assez souvent pour justifier un
+  // onSnapshot dédié par auteur).
+  const [authorRoles, setAuthorRoles] = useState<Record<string, string>>({})
+  useEffect(() => {
+    const missing = [...new Set(rawCommunications.map((c) => c.user))].filter(
+      (uid) => uid && !(uid in authorRoles)
+    )
+    if (missing.length === 0) return
+    missing.forEach((uid) => {
+      getDoc(doc(db, "users", uid)).then((snap) => {
+        const accountType = snap.exists() ? ((snap.data().accountType as string) ?? "utilisateur") : "utilisateur"
+        setAuthorRoles((prev) => ({ ...prev, [uid]: accountType }))
+      })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawCommunications])
+
+  const communications: CommunicationWithResidence[] = useMemo(() => {
+    return rawCommunications
+      .filter((c) => authorRoles[c.user] === "agence" || authorRoles[c.user] === "agent")
+      .sort((a, b) => (b.creationDate?.getTime() ?? 0) - (a.creationDate?.getTime() ?? 0))
+  }, [rawCommunications, authorRoles])
+
+  return { communications, residences: scopedResidences, loading }
 }

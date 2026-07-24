@@ -1,9 +1,11 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { Eye, MessageCircle, Search } from "lucide-react"
+import { Eye, MessageCircle, Plus, Search } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { CommunicationFormDialog } from "@/components/CommunicationFormDialog"
 import { SearchableSelect } from "@/components/SearchableSelect"
 import { SinistreThumbnail } from "@/components/SinistreThumbnail"
 import {
@@ -18,15 +20,19 @@ import { useAllCommunications, type CommunicationWithResidence } from "@/hooks/u
 import { useCommentStats } from "@/hooks/useCommentCount"
 import { useUniqueViewCount } from "@/hooks/useUniqueViewCount"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
+import { useAuth } from "@/lib/auth-context"
+import { createCommunication } from "@/lib/communications"
 
 export default function CommunicationsPage() {
+  const { user } = useAuth()
   const { scopedResidenceIds } = useScopedResidenceIds()
-  const { communications, loading } = useAllCommunications(
+  const { communications, residences, loading } = useAllCommunications(
     (message) => toast.error(message),
     scopedResidenceIds
   )
   const [search, setSearch] = useState("")
   const [residenceFilter, setResidenceFilter] = useState("all")
+  const [communicating, setCommunicating] = useState(false)
 
   const normalizedSearch = search.trim().toLowerCase()
   const residenceOptions = [...new Map(communications.map((c) => [c.residenceId, c.residenceName])).entries()]
@@ -42,7 +48,13 @@ export default function CommunicationsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Communication</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Communication</h1>
+        <Button onClick={() => setCommunicating(true)}>
+          <Plus />
+          Communiquer
+        </Button>
+      </div>
 
       <div className="flex items-center gap-3">
         <div className="relative max-w-sm flex-1">
@@ -100,6 +112,16 @@ export default function CommunicationsPage() {
           </TableBody>
         </Table>
       </div>
+
+      <CommunicationFormDialog
+        open={communicating}
+        onOpenChange={setCommunicating}
+        residences={residences}
+        onSubmit={async (residenceId, input) => {
+          if (!user) return
+          await createCommunication(residenceId, user.uid, input)
+        }}
+      />
     </div>
   )
 }
@@ -113,7 +135,16 @@ function CommunicationRow({ communication }: { communication: CommunicationWithR
       <TableCell>
         <SinistreThumbnail pathImage={communication.pathImage} className="size-10 rounded-md" />
       </TableCell>
-      <TableCell className="font-medium">{communication.title || "Sans titre"}</TableCell>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-1.5">
+          {communication.title || "Sans titre"}
+          {communication.audience === "proprietaires" && (
+            <Badge variant="outline" className="border-transparent bg-muted text-muted-foreground">
+              Propriétaires
+            </Badge>
+          )}
+        </div>
+      </TableCell>
       <TableCell>{communication.residenceName}</TableCell>
       <TableCell className="text-muted-foreground">
         {communication.creationDate ? communication.creationDate.toLocaleDateString("fr-FR") : "—"}
