@@ -85,6 +85,14 @@ export default function CommunicationsPage() {
   })
 
   const groups = groupCommunications(filteredCommunications)
+  // Une publication faite sur une seule résidence n'a pas de raison d'être
+  // repliée (rien à dérouler) - affichée à plat dans un tableau, comme avant
+  // l'introduction du groupage. Seules les publications multi-résidences
+  // gardent la card dépliable.
+  const multiResidenceGroups = groups.filter((g) => g.items.length > 1)
+  const singleResidenceCommunications = groups
+    .filter((g) => g.items.length === 1)
+    .map((g) => g.items[0])
 
   function toggleGroup(groupId: string) {
     setExpandedGroupIds((prev) => {
@@ -134,20 +142,48 @@ export default function CommunicationsPage() {
         />
       </div>
 
-      <div className="flex flex-col gap-3">
-        {groups.map((group) => (
-          <CommunicationGroupCard
-            key={group.groupId}
-            group={group}
-            expanded={expandedGroupIds.has(group.groupId)}
-            onToggle={() => toggleGroup(group.groupId)}
-          />
-        ))}
-        {!loading && groups.length === 0 && (
-          <div className="rounded-xl bg-white py-8 text-center text-muted-foreground shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
-            Aucune communication pour l'instant.
-          </div>
-        )}
+      {multiResidenceGroups.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {multiResidenceGroups.map((group) => (
+            <CommunicationGroupCard
+              key={group.groupId}
+              group={group}
+              expanded={expandedGroupIds.has(group.groupId)}
+              onToggle={() => toggleGroup(group.groupId)}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+        <Table>
+          <TableHeader className="bg-muted/40">
+            <TableRow>
+              <TableHead>Titre</TableHead>
+              <TableHead>Résidence</TableHead>
+              <TableHead>Publiée le</TableHead>
+              <TableHead>Commentaires</TableHead>
+              <TableHead>Vues uniques</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="bg-white">
+            {singleResidenceCommunications.map((communication) => (
+              <CommunicationRow
+                key={`${communication.residenceId}-${communication.id}`}
+                communication={communication}
+                showTitle
+              />
+            ))}
+            {!loading && multiResidenceGroups.length === 0 && singleResidenceCommunications.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  Aucune communication pour l'instant.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <CommunicationFormDialog
@@ -222,12 +258,30 @@ function CommunicationGroupCard({
   )
 }
 
-function CommunicationRow({ communication }: { communication: CommunicationWithResidence }) {
+function CommunicationRow({
+  communication,
+  showTitle,
+}: {
+  communication: CommunicationWithResidence
+  showTitle?: boolean
+}) {
   const commentStats = useCommentStats(communication.residenceId, communication.id)
   const uniqueViewCount = useUniqueViewCount(communication.residenceId, communication.id)
 
   return (
     <TableRow>
+      {showTitle && (
+        <TableCell className="font-medium">
+          <div className="flex items-center gap-1.5">
+            {communication.title || "Sans titre"}
+            {communication.audience === "proprietaires" && (
+              <Badge variant="outline" className="border-transparent bg-muted text-muted-foreground">
+                Propriétaires
+              </Badge>
+            )}
+          </div>
+        </TableCell>
+      )}
       <TableCell>{communication.residenceName}</TableCell>
       <TableCell className="text-muted-foreground">
         {communication.creationDate ? communication.creationDate.toLocaleDateString("fr-FR") : "—"}
