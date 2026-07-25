@@ -47,6 +47,8 @@ export type GeranceBilling = {
 export type BillingPaymentMethod = {
   brand: string | null
   last4: string | null
+  expMonth: number | null
+  expYear: number | null
 }
 
 export const INVOICE_STATUSES = ["draft", "open", "paid", "uncollectible", "void"] as const

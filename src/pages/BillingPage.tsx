@@ -173,6 +173,12 @@ export default function BillingPage() {
                 <p className="text-sm">
                   <span className="font-medium capitalize">{paymentMethod.brand ?? "Carte"}</span>{" "}
                   <span className="text-muted-foreground">•••• {paymentMethod.last4 ?? "----"}</span>
+                  {paymentMethod.expMonth && paymentMethod.expYear && (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · exp. {String(paymentMethod.expMonth).padStart(2, "0")}/{paymentMethod.expYear}
+                    </span>
+                  )}
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">Aucun moyen de paiement enregistré.</p>

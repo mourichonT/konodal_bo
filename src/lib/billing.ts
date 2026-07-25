@@ -74,7 +74,12 @@ export async function createBillingPortalSession(geranceId: string): Promise<{ u
 // (get_billing_overview), pas un listener temps réel : interrogé chez
 // Stripe à la demande (page /facturation), pas dénormalisé en Firestore.
 type BillingOverviewResponse = {
-  paymentMethod: { brand: string | null; last4: string | null } | null
+  paymentMethod: {
+    brand: string | null
+    last4: string | null
+    expMonth: number | null
+    expYear: number | null
+  } | null
   invoices: {
     id: string
     date: number | null
