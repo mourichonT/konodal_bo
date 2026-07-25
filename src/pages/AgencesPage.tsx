@@ -1,6 +1,19 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
-import { Briefcase, Check, Home, Landmark, Mail, Pencil, Plus, Save, Search, ShieldOff } from "lucide-react"
+import {
+  Briefcase,
+  Check,
+  CreditCard,
+  Home,
+  Landmark,
+  Mail,
+  Pencil,
+  Plus,
+  Save,
+  Search,
+  ShieldOff,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -38,10 +51,12 @@ import {
   type GeranceInput,
 } from "@/lib/gerances"
 import { resolveUsersByUids } from "@/lib/users"
+import { createBillingPortalSession, createCheckoutSession, subscribeToGeranceBilling } from "@/lib/billing"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useAuth } from "@/lib/auth-context"
 import { emptyAddress } from "@/types/residence"
+import { billingStatusBadgeClass, billingStatusLabels, type GeranceBilling } from "@/types/billing"
 import {
   AGENT_UID_FIELD,
   emptyAgencyDept,
@@ -87,6 +102,26 @@ export default function AgencesPage() {
   const [search, setSearch] = useState("")
   const [serviceFilter, setServiceFilter] = useState<ServiceType | null>(null)
   const { isSuperAdmin, isAgence, isAgent, geranceId: ownGeranceId } = useAccountRole()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Retour de Stripe Checkout (success_url/cancel_url, cf.
+  // create_checkout_session) - pas de page de retour dédiée : l'utilisateur
+  // reste connecté au BO pendant tout l'aller-retour, le statut réel arrive
+  // via subscribeToGeranceBilling (webhook Stripe) dès qu'il est traité, pas
+  // besoin de le lire depuis l'URL elle-même.
+  useEffect(() => {
+    const checkout = searchParams.get("checkout")
+    if (!checkout) return
+    if (checkout === "success") {
+      toast.success("Paiement en cours de confirmation…")
+    } else if (checkout === "cancel") {
+      toast.error("Paiement annulé")
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete("checkout")
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -797,6 +832,7 @@ function OwnAgencyPage({
       {gerance && (
         <>
           <AgencyInfoCard gerance={gerance} canEdit={canEdit} />
+          <AgencyBillingCard gerance={gerance} canEdit={canEdit} />
           {serviceTypes
             .filter((type) => gerance.services[type])
             .map((type) => (
@@ -907,6 +943,86 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
               <span className="text-muted-foreground">Adresse : </span>
               {[street, [zipCode, city].join(" ")].filter(Boolean).join(" — ") || "—"}
             </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// Statut d'abonnement Stripe (licence par siège) - lecture seule pour un
+// Agent (même principe que le reste de la page, `canEdit` gate les actions
+// pas la lecture : un Agent doit pouvoir voir si son agence est à jour de
+// paiement). Les deux boutons (S'abonner/Gérer l'abonnement) redirigent
+// vers une page hébergée Stripe (Checkout ou Billing Portal) - jamais de
+// formulaire de carte bancaire dans ce BO.
+function AgencyBillingCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boolean }) {
+  const [billing, setBilling] = useState<GeranceBilling>({ status: "none", seatCount: 0, currentPeriodEnd: null })
+  const [redirecting, setRedirecting] = useState(false)
+
+  useEffect(() => {
+    return subscribeToGeranceBilling(
+      gerance.id,
+      setBilling,
+      (error) => toast.error("Impossible de charger l'abonnement : " + error.message)
+    )
+  }, [gerance.id])
+
+  const hasSubscription = billing.status !== "none"
+
+  async function handleSubscribe() {
+    setRedirecting(true)
+    try {
+      const { url } = await createCheckoutSession(gerance.id)
+      window.location.href = url
+    } catch (err) {
+      toast.error("Échec de l'ouverture du paiement : " + (err as Error).message)
+      setRedirecting(false)
+    }
+  }
+
+  async function handleManage() {
+    setRedirecting(true)
+    try {
+      const { url } = await createBillingPortalSession(gerance.id)
+      window.location.href = url
+    } catch (err) {
+      toast.error("Échec de l'ouverture de la gestion de l'abonnement : " + (err as Error).message)
+      setRedirecting(false)
+    }
+  }
+
+  return (
+    <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+      <CardHeader>
+        <CardTitle className="text-base">Abonnement</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge variant="outline" className={billingStatusBadgeClass[billing.status]}>
+            {billingStatusLabels[billing.status]}
+          </Badge>
+          {hasSubscription && (
+            <span className="text-sm text-muted-foreground">
+              {billing.seatCount} siège{billing.seatCount > 1 ? "s" : ""}
+              {billing.currentPeriodEnd &&
+                ` · ${billing.cancelAtPeriodEnd ? "se termine" : "renouvellement"} le ${billing.currentPeriodEnd.toLocaleDateString("fr-FR")}`}
+            </span>
+          )}
+        </div>
+        {canEdit && (
+          <div>
+            {hasSubscription ? (
+              <Button type="button" variant="outline" size="sm" disabled={redirecting} onClick={handleManage}>
+                <CreditCard />
+                Gérer l'abonnement
+              </Button>
+            ) : (
+              <Button type="button" size="sm" disabled={redirecting} onClick={handleSubscribe}>
+                <CreditCard />
+                S'abonner
+              </Button>
+            )}
           </div>
         )}
       </CardContent>
