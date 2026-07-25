@@ -88,6 +88,9 @@ type BillingOverviewResponse = {
     status: string
     hostedInvoiceUrl: string | null
   }[]
+  customerEmail: string | null
+  pricePerSeatCents: number | null
+  priceCurrency: string | null
 }
 
 export async function getBillingOverview(geranceId: string): Promise<BillingOverview> {
@@ -106,5 +109,8 @@ export async function getBillingOverview(geranceId: string): Promise<BillingOver
       status: inv.status as InvoiceStatus,
       hostedInvoiceUrl: inv.hostedInvoiceUrl,
     })),
+    customerEmail: data.customerEmail,
+    pricePerSeatCents: data.pricePerSeatCents,
+    priceCurrency: data.priceCurrency,
   }
 }

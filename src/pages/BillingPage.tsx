@@ -40,6 +40,9 @@ export default function BillingPage() {
   const [billing, setBilling] = useState<GeranceBilling>(NO_BILLING)
   const [paymentMethod, setPaymentMethod] = useState<BillingPaymentMethod | null>(null)
   const [invoices, setInvoices] = useState<BillingInvoice[]>([])
+  const [customerEmail, setCustomerEmail] = useState<string | null>(null)
+  const [pricePerSeatCents, setPricePerSeatCents] = useState<number | null>(null)
+  const [priceCurrency, setPriceCurrency] = useState<string | null>(null)
   const [overviewLoading, setOverviewLoading] = useState(true)
   const [redirecting, setRedirecting] = useState(false)
 
@@ -79,9 +82,12 @@ export default function BillingPage() {
     if (!geranceId) return
     setOverviewLoading(true)
     getBillingOverview(geranceId)
-      .then(({ paymentMethod, invoices }) => {
+      .then(({ paymentMethod, invoices, customerEmail, pricePerSeatCents, priceCurrency }) => {
         setPaymentMethod(paymentMethod)
         setInvoices(invoices)
+        setCustomerEmail(customerEmail)
+        setPricePerSeatCents(pricePerSeatCents)
+        setPriceCurrency(priceCurrency)
       })
       .catch((error: Error) => toast.error("Impossible de charger les factures : " + error.message))
       .finally(() => setOverviewLoading(false))
@@ -133,15 +139,50 @@ export default function BillingPage() {
             <Badge variant="outline" className={billingStatusBadgeClass[billing.status]}>
               {billingStatusLabels[billing.status]}
             </Badge>
-            {hasSubscription && (
-              <span className="text-sm text-muted-foreground">
-                Licence KONODAL · {billing.seatCount} siège{billing.seatCount > 1 ? "s" : ""} actif
-                {billing.seatCount > 1 ? "s" : ""}
-                {billing.currentPeriodEnd &&
-                  ` · ${billing.cancelAtPeriodEnd ? "se termine" : "renouvellement"} le ${billing.currentPeriodEnd.toLocaleDateString("fr-FR")}`}
-              </span>
-            )}
+            {hasSubscription && <span className="text-sm text-muted-foreground">Licence KONODAL</span>}
           </div>
+          {hasSubscription && (
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+              <div>
+                <dt className="text-muted-foreground">Email de facturation</dt>
+                <dd className="font-medium">{overviewLoading ? "…" : (customerEmail ?? "—")}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">
+                  Sièges actif{billing.seatCount > 1 ? "s" : ""}
+                </dt>
+                <dd className="font-medium">{billing.seatCount}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Prix / licence</dt>
+                <dd className="font-medium">
+                  {overviewLoading
+                    ? "…"
+                    : pricePerSeatCents != null && priceCurrency
+                      ? `${formatAmount(pricePerSeatCents, priceCurrency)} / mois`
+                      : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Montant total</dt>
+                <dd className="font-medium">
+                  {overviewLoading
+                    ? "…"
+                    : pricePerSeatCents != null && priceCurrency
+                      ? `${formatAmount(pricePerSeatCents * billing.seatCount, priceCurrency)} / mois`
+                      : "—"}
+                </dd>
+              </div>
+              {billing.currentPeriodEnd && (
+                <div>
+                  <dt className="text-muted-foreground">
+                    {billing.cancelAtPeriodEnd ? "Se termine le" : "Renouvellement"}
+                  </dt>
+                  <dd className="font-medium">{billing.currentPeriodEnd.toLocaleDateString("fr-FR")}</dd>
+                </div>
+              )}
+            </dl>
+          )}
           {canEdit && (
             <div>
               {hasSubscription ? (

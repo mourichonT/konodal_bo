@@ -74,4 +74,7 @@ export type BillingInvoice = {
 export type BillingOverview = {
   paymentMethod: BillingPaymentMethod | null
   invoices: BillingInvoice[]
+  customerEmail: string | null
+  pricePerSeatCents: number | null
+  priceCurrency: string | null
 }
