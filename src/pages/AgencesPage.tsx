@@ -24,6 +24,7 @@ import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -680,6 +681,7 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
   const [loadingProfiles, setLoadingProfiles] = useState(false)
   const [newAgentEmail, setNewAgentEmail] = useState("")
   const [inviting, setInviting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   useEffect(() => {
     if (agentUids.length === 0) {
@@ -707,6 +709,7 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
     try {
       await inviteAgencyAccount(gerance.id, type, email, "agent")
       setNewAgentEmail("")
+      setConfirmOpen(false)
       toast.success(`Invitation envoyée à ${email}`)
     } catch (err) {
       toast.error("Échec de l'invitation : " + (err as Error).message)
@@ -769,12 +772,42 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
             value={newAgentEmail}
             onChange={(e) => setNewAgentEmail(e.target.value)}
           />
-          <Button type="button" size="sm" onClick={handleInvite} disabled={inviting}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setConfirmOpen(true)}
+            disabled={inviting || !newAgentEmail.trim()}
+          >
             <Mail />
             Inviter
           </Button>
         </div>
       )}
+
+      {/* Un nouvel agent (uid pas déjà compté sur l'autre service de cette
+          gérance) ajoute immédiatement un siège facturé - prévenir avant
+          l'action plutôt qu'après, cf. demande explicite. */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmer l'invitation</DialogTitle>
+          </DialogHeader>
+          <DialogDescription>
+            Si <strong>{newAgentEmail.trim()}</strong> n'a pas déjà accès à un autre service de
+            cette gérance, cette invitation ajoutera un nouveau siège facturé à l'abonnement
+            Stripe de l'agence, au prorata et dès maintenant.
+          </DialogDescription>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)} disabled={inviting}>
+              Annuler
+            </Button>
+            <Button type="button" onClick={handleInvite} disabled={inviting}>
+              <Mail />
+              Confirmer l'invitation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
