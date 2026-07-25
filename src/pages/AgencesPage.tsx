@@ -793,9 +793,9 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
             <DialogTitle>Confirmer l'invitation</DialogTitle>
           </DialogHeader>
           <DialogDescription>
-            Si <strong>{newAgentEmail.trim()}</strong> n'a pas déjà accès à un autre service de
-            cette gérance, cette invitation ajoutera un nouveau siège facturé à l'abonnement
-            Stripe de l'agence, au prorata et dès maintenant.
+            Si <strong>{newAgentEmail.trim()}</strong> n'a pas déjà accès à konodal, cette
+            invitation ajoutera un nouveau siège facturé à votre abonnement, au prorata et dès
+            maintenant.
           </DialogDescription>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)} disabled={inviting}>
