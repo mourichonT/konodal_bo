@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { CreditCard, ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -132,29 +132,41 @@ export default function BillingPage() {
 
       <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
         <CardHeader>
-          <CardTitle className="text-base">Abonnement</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-3">
+            <CardTitle className="text-base">Abonnement</CardTitle>
             <Badge variant="outline" className={billingStatusBadgeClass[billing.status]}>
               {billingStatusLabels[billing.status]}
             </Badge>
-            {hasSubscription && <span className="text-sm text-muted-foreground">Licence KONODAL</span>}
           </div>
-          {hasSubscription && (
+          {canEdit && (
+            <CardAction>
+              {hasSubscription ? (
+                <Button type="button" variant="outline" size="sm" disabled={redirecting} onClick={handleManage}>
+                  <CreditCard />
+                  Gérer l'abonnement
+                </Button>
+              ) : (
+                <Button type="button" size="sm" disabled={redirecting} onClick={handleSubscribe}>
+                  <CreditCard />
+                  S'abonner
+                </Button>
+              )}
+            </CardAction>
+          )}
+        </CardHeader>
+        {hasSubscription && (
+          <CardContent>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
               <div>
-                <dt className="text-muted-foreground">Email de facturation</dt>
+                <dt className="text-muted-foreground">Email agence/agent</dt>
                 <dd className="font-medium">{overviewLoading ? "…" : (customerEmail ?? "—")}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">
-                  Sièges actif{billing.seatCount > 1 ? "s" : ""}
-                </dt>
+                <dt className="text-muted-foreground">Total des sièges</dt>
                 <dd className="font-medium">{billing.seatCount}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Prix / licence</dt>
+                <dt className="text-muted-foreground">Prix / licence HT</dt>
                 <dd className="font-medium">
                   {overviewLoading
                     ? "…"
@@ -164,7 +176,7 @@ export default function BillingPage() {
                 </dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Montant total</dt>
+                <dt className="text-muted-foreground">Total HT</dt>
                 <dd className="font-medium">
                   {overviewLoading
                     ? "…"
@@ -182,23 +194,8 @@ export default function BillingPage() {
                 </div>
               )}
             </dl>
-          )}
-          {canEdit && (
-            <div>
-              {hasSubscription ? (
-                <Button type="button" variant="outline" size="sm" disabled={redirecting} onClick={handleManage}>
-                  <CreditCard />
-                  Gérer l'abonnement
-                </Button>
-              ) : (
-                <Button type="button" size="sm" disabled={redirecting} onClick={handleSubscribe}>
-                  <CreditCard />
-                  S'abonner
-                </Button>
-              )}
-            </div>
-          )}
-        </CardContent>
+          </CardContent>
+        )}
       </Card>
 
       {hasSubscription && (
