@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
-import { useSearchParams } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import {
   Briefcase,
@@ -51,7 +51,7 @@ import {
   type GeranceInput,
 } from "@/lib/gerances"
 import { resolveUsersByUids } from "@/lib/users"
-import { createBillingPortalSession, createCheckoutSession, subscribeToGeranceBilling } from "@/lib/billing"
+import { subscribeToGeranceBilling } from "@/lib/billing"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useAuth } from "@/lib/auth-context"
@@ -102,26 +102,6 @@ export default function AgencesPage() {
   const [search, setSearch] = useState("")
   const [serviceFilter, setServiceFilter] = useState<ServiceType | null>(null)
   const { isSuperAdmin, isAgence, isAgent, geranceId: ownGeranceId } = useAccountRole()
-  const [searchParams, setSearchParams] = useSearchParams()
-
-  // Retour de Stripe Checkout (success_url/cancel_url, cf.
-  // create_checkout_session) - pas de page de retour dédiée : l'utilisateur
-  // reste connecté au BO pendant tout l'aller-retour, le statut réel arrive
-  // via subscribeToGeranceBilling (webhook Stripe) dès qu'il est traité, pas
-  // besoin de le lire depuis l'URL elle-même.
-  useEffect(() => {
-    const checkout = searchParams.get("checkout")
-    if (!checkout) return
-    if (checkout === "success") {
-      toast.success("Paiement en cours de confirmation…")
-    } else if (checkout === "cancel") {
-      toast.error("Paiement annulé")
-    }
-    const next = new URLSearchParams(searchParams)
-    next.delete("checkout")
-    setSearchParams(next, { replace: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -832,7 +812,7 @@ function OwnAgencyPage({
       {gerance && (
         <>
           <AgencyInfoCard gerance={gerance} canEdit={canEdit} />
-          <AgencyBillingCard gerance={gerance} canEdit={canEdit} />
+          <AgencyBillingCard gerance={gerance} />
           {serviceTypes
             .filter((type) => gerance.services[type])
             .map((type) => (
@@ -950,15 +930,13 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
   )
 }
 
-// Statut d'abonnement Stripe (licence par siège) - lecture seule pour un
-// Agent (même principe que le reste de la page, `canEdit` gate les actions
-// pas la lecture : un Agent doit pouvoir voir si son agence est à jour de
-// paiement). Les deux boutons (S'abonner/Gérer l'abonnement) redirigent
-// vers une page hébergée Stripe (Checkout ou Billing Portal) - jamais de
-// formulaire de carte bancaire dans ce BO.
-function AgencyBillingCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boolean }) {
+// Simple rappel de l'offre souscrite (statut + nombre de sièges actifs) -
+// toute la gestion (souscrire, changer de carte, factures) vit désormais
+// sur la page dédiée /facturation (BillingPage.tsx, menu Profil), pas ici.
+// Lecture seule pour un Agent comme pour le reste de la page : `canEdit`
+// contrôlerait une action, il n'y en a plus sur cette card.
+function AgencyBillingCard({ gerance }: { gerance: Gerance }) {
   const [billing, setBilling] = useState<GeranceBilling>({ status: "none", seatCount: 0, currentPeriodEnd: null })
-  const [redirecting, setRedirecting] = useState(false)
 
   useEffect(() => {
     return subscribeToGeranceBilling(
@@ -968,63 +946,26 @@ function AgencyBillingCard({ gerance, canEdit }: { gerance: Gerance; canEdit: bo
     )
   }, [gerance.id])
 
-  const hasSubscription = billing.status !== "none"
-
-  async function handleSubscribe() {
-    setRedirecting(true)
-    try {
-      const { url } = await createCheckoutSession(gerance.id)
-      window.location.href = url
-    } catch (err) {
-      toast.error("Échec de l'ouverture du paiement : " + (err as Error).message)
-      setRedirecting(false)
-    }
-  }
-
-  async function handleManage() {
-    setRedirecting(true)
-    try {
-      const { url } = await createBillingPortalSession(gerance.id)
-      window.location.href = url
-    } catch (err) {
-      toast.error("Échec de l'ouverture de la gestion de l'abonnement : " + (err as Error).message)
-      setRedirecting(false)
-    }
-  }
-
   return (
     <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
       <CardHeader>
         <CardTitle className="text-base">Abonnement</CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <Badge variant="outline" className={billingStatusBadgeClass[billing.status]}>
             {billingStatusLabels[billing.status]}
           </Badge>
-          {hasSubscription && (
+          {billing.status !== "none" && (
             <span className="text-sm text-muted-foreground">
-              {billing.seatCount} siège{billing.seatCount > 1 ? "s" : ""}
-              {billing.currentPeriodEnd &&
-                ` · ${billing.cancelAtPeriodEnd ? "se termine" : "renouvellement"} le ${billing.currentPeriodEnd.toLocaleDateString("fr-FR")}`}
+              {billing.seatCount} siège{billing.seatCount > 1 ? "s" : ""} actif{billing.seatCount > 1 ? "s" : ""}
             </span>
           )}
         </div>
-        {canEdit && (
-          <div>
-            {hasSubscription ? (
-              <Button type="button" variant="outline" size="sm" disabled={redirecting} onClick={handleManage}>
-                <CreditCard />
-                Gérer l'abonnement
-              </Button>
-            ) : (
-              <Button type="button" size="sm" disabled={redirecting} onClick={handleSubscribe}>
-                <CreditCard />
-                S'abonner
-              </Button>
-            )}
-          </div>
-        )}
+        <Button variant="outline" size="sm" render={<Link to="/facturation" />}>
+          <CreditCard />
+          Voir la facturation
+        </Button>
       </CardContent>
     </Card>
   )

@@ -40,3 +40,36 @@ export type GeranceBilling = {
   currentPeriodEnd: Date | null
   cancelAtPeriodEnd?: boolean
 }
+
+// Renvoyés par get_billing_overview (functions_python/main.py) - interrogés
+// en direct chez Stripe à l'ouverture de /facturation, jamais dénormalisés
+// en Firestore (contrairement à GeranceBilling ci-dessus).
+export type BillingPaymentMethod = {
+  brand: string | null
+  last4: string | null
+}
+
+export const INVOICE_STATUSES = ["draft", "open", "paid", "uncollectible", "void"] as const
+export type InvoiceStatus = (typeof INVOICE_STATUSES)[number]
+
+export const invoiceStatusLabels: Record<InvoiceStatus, string> = {
+  draft: "Brouillon",
+  open: "En attente",
+  paid: "Payée",
+  uncollectible: "Impayée",
+  void: "Annulée",
+}
+
+export type BillingInvoice = {
+  id: string
+  date: Date | null
+  totalCents: number
+  currency: string
+  status: InvoiceStatus
+  hostedInvoiceUrl: string | null
+}
+
+export type BillingOverview = {
+  paymentMethod: BillingPaymentMethod | null
+  invoices: BillingInvoice[]
+}

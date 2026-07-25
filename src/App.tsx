@@ -24,6 +24,7 @@ import ContactsPage from "@/pages/ContactsPage"
 import ContactDetailPage from "@/pages/ContactDetailPage"
 import DocumentsPage from "@/pages/DocumentsPage"
 import ProfilePage from "@/pages/ProfilePage"
+import BillingPage from "@/pages/BillingPage"
 import SharedInterventionPage from "@/pages/SharedInterventionPage"
 import PublicitesPage from "@/pages/PublicitesPage"
 import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
@@ -65,6 +66,7 @@ function App() {
         <Route path="contacts/:id" element={<ContactDetailPage />} />
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="profil" element={<ProfilePage />} />
+        <Route path="facturation" element={<BillingPage />} />
         <Route
           path="publicites"
           element={

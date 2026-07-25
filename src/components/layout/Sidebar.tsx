@@ -15,6 +15,7 @@ import {
   ChevronsUpDown,
   ChevronDown,
   UserCircle,
+  CreditCard,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
@@ -298,6 +299,16 @@ export function Sidebar() {
               <UserCircle />
               Profil
             </DropdownMenuItem>
+            {/* Facturation propre à l'agence de ce compte (abonnement Stripe
+                par siège) - n'a de sens que pour agence/agent (rattachés à
+                une gérance), jamais pour Super Admin. Lecture seule pour un
+                Agent, même principe que la card Abonnement (AgencesPage). */}
+            {(isAgence || isAgent) && (
+              <DropdownMenuItem render={<Link to="/facturation" />}>
+                <CreditCard />
+                Facturation
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem variant="destructive" onClick={() => logout()}>
               <LogOut />
               Déconnexion

@@ -1,7 +1,7 @@
 import { doc, onSnapshot, type DocumentData, type DocumentSnapshot, type Unsubscribe } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
-import type { BillingStatus, GeranceBilling } from "@/types/billing"
+import type { BillingOverview, BillingStatus, InvoiceStatus, GeranceBilling } from "@/types/billing"
 
 function billingRef(geranceId: string) {
   return doc(db, "gerances", geranceId, "billing", "current")
@@ -68,4 +68,38 @@ export async function createBillingPortalSession(geranceId: string): Promise<{ u
   )
   const result = await call({ geranceId, origin: window.location.origin })
   return result.data
+}
+
+// Moyen de paiement + historique de factures - un seul appel côté serveur
+// (get_billing_overview), pas un listener temps réel : interrogé chez
+// Stripe à la demande (page /facturation), pas dénormalisé en Firestore.
+type BillingOverviewResponse = {
+  paymentMethod: { brand: string | null; last4: string | null } | null
+  invoices: {
+    id: string
+    date: number | null
+    totalCents: number
+    currency: string
+    status: string
+    hostedInvoiceUrl: string | null
+  }[]
+}
+
+export async function getBillingOverview(geranceId: string): Promise<BillingOverview> {
+  const call = httpsCallable<{ geranceId: string }, BillingOverviewResponse>(
+    functions,
+    "get_billing_overview"
+  )
+  const { data } = await call({ geranceId })
+  return {
+    paymentMethod: data.paymentMethod,
+    invoices: data.invoices.map((inv) => ({
+      id: inv.id,
+      date: inv.date ? new Date(inv.date * 1000) : null,
+      totalCents: inv.totalCents,
+      currency: inv.currency,
+      status: inv.status as InvoiceStatus,
+      hostedInvoiceUrl: inv.hostedInvoiceUrl,
+    })),
+  }
 }
