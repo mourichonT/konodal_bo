@@ -812,7 +812,7 @@ function OwnAgencyPage({
       {gerance && (
         <>
           <AgencyInfoCard gerance={gerance} canEdit={canEdit} />
-          <AgencyBillingCard gerance={gerance} />
+          <AgencyBillingCard gerance={gerance} canEdit={canEdit} />
           {serviceTypes
             .filter((type) => gerance.services[type])
             .map((type) => (
@@ -933,9 +933,10 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
 // Simple rappel de l'offre souscrite (statut + nombre de sièges actifs) -
 // toute la gestion (souscrire, changer de carte, factures) vit désormais
 // sur la page dédiée /facturation (BillingPage.tsx, menu Profil), pas ici.
-// Lecture seule pour un Agent comme pour le reste de la page : `canEdit`
-// contrôlerait une action, il n'y en a plus sur cette card.
-function AgencyBillingCard({ gerance }: { gerance: Gerance }) {
+// Page /facturation réservée à l'agence (jamais un Agent, cf. Sidebar.tsx) :
+// le bouton d'accès n'est donc affiché que pour canEdit=true, un Agent ne
+// voit que le statut/nombre de sièges en lecture seule sur cette card.
+function AgencyBillingCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boolean }) {
   const [billing, setBilling] = useState<GeranceBilling>({ status: "none", seatCount: 0, currentPeriodEnd: null })
 
   useEffect(() => {
@@ -962,10 +963,12 @@ function AgencyBillingCard({ gerance }: { gerance: Gerance }) {
             </span>
           )}
         </div>
-        <Button variant="outline" size="sm" render={<Link to="/facturation" />}>
-          <CreditCard />
-          Voir la facturation
-        </Button>
+        {canEdit && (
+          <Button variant="outline" size="sm" render={<Link to="/facturation" />}>
+            <CreditCard />
+            Voir la facturation
+          </Button>
+        )}
       </CardContent>
     </Card>
   )

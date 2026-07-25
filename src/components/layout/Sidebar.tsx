@@ -300,10 +300,12 @@ export function Sidebar() {
               Profil
             </DropdownMenuItem>
             {/* Facturation propre à l'agence de ce compte (abonnement Stripe
-                par siège) - n'a de sens que pour agence/agent (rattachés à
-                une gérance), jamais pour Super Admin. Lecture seule pour un
-                Agent, même principe que la card Abonnement (AgencesPage). */}
-            {(isAgence || isAgent) && (
+                par siège) - réservée à l'agence elle-même, jamais à un
+                simple Agent (action sensible : paiement, moyen de paiement,
+                résiliation - même logique que les autres actions réservées
+                à l'agence dans ce BO) ni à Super Admin (pas de gérance
+                propre). */}
+            {isAgence && (
               <DropdownMenuItem render={<Link to="/facturation" />}>
                 <CreditCard />
                 Facturation

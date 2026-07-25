@@ -34,7 +34,7 @@ function formatAmount(cents: number, currency: string): string {
 const NO_BILLING: GeranceBilling = { status: "none", seatCount: 0, currentPeriodEnd: null }
 
 export default function BillingPage() {
-  const { isAgence, isAgent, geranceId, loading: roleLoading } = useAccountRole()
+  const { isAgence, geranceId, loading: roleLoading } = useAccountRole()
   const [searchParams, setSearchParams] = useSearchParams()
   const [gerance, setGerance] = useState<Gerance | null>(null)
   const [billing, setBilling] = useState<GeranceBilling>(NO_BILLING)
@@ -88,7 +88,7 @@ export default function BillingPage() {
   }, [geranceId])
 
   if (roleLoading) return null
-  if (!isAgence && !isAgent) return <Navigate to="/" replace />
+  if (!isAgence) return <Navigate to="/" replace />
 
   const canEdit = isAgence
   const hasSubscription = billing.status !== "none"
