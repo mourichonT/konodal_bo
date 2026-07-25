@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, ChevronDown, GripVertical, Plus, Trash2, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, GripVertical, Plus, Trash2, Upload, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -56,12 +56,14 @@ import {
 import {
   createLot,
   deleteLot,
+  importLots,
   linkLot,
   reorderLots,
   subscribeToLots,
   updateLot,
   type LotInput,
 } from "@/lib/lots"
+import { LotImportDialog } from "@/components/LotImportDialog"
 import { subscribeToGerances } from "@/lib/gerances"
 import { resolveUsersByUids } from "@/lib/users"
 import { emptyAddress, type Residence } from "@/types/residence"
@@ -678,6 +680,7 @@ function LotsSection({
 }) {
   const [rows, setRows] = useState<LotRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [importing, setImporting] = useState(false)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   // Miroir synchrone de `rows`, lu depuis les callbacks différés
   // (setTimeout de schedulePersist) ou depuis handleDragEnd juste après un
@@ -898,6 +901,12 @@ function LotsSection({
           Les modifications sont enregistrées automatiquement. Glissez une ligne par sa poignée pour
           réordonner.
         </CardDescription>
+        <CardAction>
+          <Button type="button" variant="outline" onClick={() => setImporting(true)}>
+            <Upload />
+            Importer
+          </Button>
+        </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
@@ -948,6 +957,15 @@ function LotsSection({
           </Button>
         </div>
       </CardContent>
+
+      <LotImportDialog
+        open={importing}
+        onOpenChange={setImporting}
+        existingLots={rows}
+        onImport={async (validation) => {
+          await importLots(residenceId, validation.toCreate, rowsRef.current.length)
+        }}
+      />
     </Card>
   )
 }

@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore"
 import { db } from "@/firebase"
 import type { Lot } from "@/types/lot"
+import type { LotImportInput } from "@/lib/lotImportExport"
 
 function lotsCollection(residenceId: string) {
   return collection(db, "residences", residenceId, "lots")
@@ -112,6 +113,34 @@ export async function reorderLots(residenceId: string, orderedIds: string[]) {
 
 export async function deleteLot(residenceId: string, id: string) {
   await deleteDoc(doc(db, "residences", residenceId, "lots", id))
+}
+
+// Import en masse (LotImportDialog) - les lignes ont déjà été validées et
+// dédupliquées contre l'existant côté client (validateLotImportRows,
+// lib/lotImportExport.ts) avant d'arriver ici : aucune vérification
+// supplémentaire, uniquement des créations (jamais d'update, donc jamais
+// d'écrasement d'un lot déjà en base). `startOrder` = nombre de lots déjà
+// affichés au moment de la confirmation, pour ajouter les nouveaux à la
+// suite plutôt que de réécraser l'ordre existant. Chunké à 400 (limite
+// Firestore : 500 opérations par batch).
+export async function importLots(
+  residenceId: string,
+  inputs: LotImportInput[],
+  startOrder: number
+): Promise<void> {
+  for (let i = 0; i < inputs.length; i += 400) {
+    const chunk = inputs.slice(i, i + 400)
+    const batch = writeBatch(db)
+    chunk.forEach((input, j) => {
+      const ref = doc(lotsCollection(residenceId))
+      batch.set(ref, {
+        ...toFirestoreLotData({ ...input, order: startOrder + i + j }),
+        id: ref.id,
+        idProprietaire: [],
+      })
+    })
+    await batch.commit()
+  }
 }
 
 // Rattache (ou détache si parentLotId est null) un lot dépendant
