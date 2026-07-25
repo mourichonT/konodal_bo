@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Navigate, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import { CreditCard, ExternalLink } from "lucide-react"
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { subscribeToGerance } from "@/lib/gerances"
+import { resolveUsersByUids } from "@/lib/users"
 import {
   createBillingPortalSession,
   createCheckoutSession,
@@ -23,7 +24,10 @@ import {
 } from "@/lib/billing"
 import { billingStatusBadgeClass, billingStatusLabels, invoiceStatusLabels } from "@/types/billing"
 import type { BillingInvoice, BillingPaymentMethod, GeranceBilling } from "@/types/billing"
-import type { Gerance } from "@/types/gerance"
+import { serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
+import type { KonodalUser } from "@/types/user"
+
+const SERVICE_TYPES: ServiceType[] = ["serviceSyndic", "geranceLocative"]
 
 function formatAmount(cents: number, currency: string): string {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: currency.toUpperCase() }).format(
@@ -40,7 +44,7 @@ export default function BillingPage() {
   const [billing, setBilling] = useState<GeranceBilling>(NO_BILLING)
   const [paymentMethod, setPaymentMethod] = useState<BillingPaymentMethod | null>(null)
   const [invoices, setInvoices] = useState<BillingInvoice[]>([])
-  const [customerEmail, setCustomerEmail] = useState<string | null>(null)
+  const [billedProfiles, setBilledProfiles] = useState<KonodalUser[]>([])
   const [pricePerSeatCents, setPricePerSeatCents] = useState<number | null>(null)
   const [priceCurrency, setPriceCurrency] = useState<string | null>(null)
   const [overviewLoading, setOverviewLoading] = useState(true)
@@ -82,16 +86,53 @@ export default function BillingPage() {
     if (!geranceId) return
     setOverviewLoading(true)
     getBillingOverview(geranceId)
-      .then(({ paymentMethod, invoices, customerEmail, pricePerSeatCents, priceCurrency }) => {
+      .then(({ paymentMethod, invoices, pricePerSeatCents, priceCurrency }) => {
         setPaymentMethod(paymentMethod)
         setInvoices(invoices)
-        setCustomerEmail(customerEmail)
         setPricePerSeatCents(pricePerSeatCents)
         setPriceCurrency(priceCurrency)
       })
       .catch((error: Error) => toast.error("Impossible de charger les factures : " + error.message))
       .finally(() => setOverviewLoading(false))
   }, [geranceId])
+
+  // Comptes réellement facturés (mêmes uids que le "Total des sièges" =
+  // union serviceSyndicAgentUids/geranceLocativeAgentUids, dédupliquée côté
+  // serveur dans _deduped_seat_uids) - couvre aussi bien les comptes
+  // "agence" (adresse générique d'un service) que les agents nommés, cf.
+  // demande explicite (une seule adresse ne suffit pas, il peut y en avoir
+  // plusieurs des deux types).
+  const seatUids = useMemo(
+    () => [
+      ...new Set([
+        ...(gerance?.serviceSyndicAgentUids ?? []),
+        ...(gerance?.geranceLocativeAgentUids ?? []),
+      ]),
+    ],
+    [gerance]
+  )
+
+  useEffect(() => {
+    if (seatUids.length === 0) {
+      setBilledProfiles([])
+      return
+    }
+    let cancelled = false
+    resolveUsersByUids(seatUids).then((users) => {
+      if (!cancelled) setBilledProfiles(users)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [seatUids])
+
+  function roleLabelFor(uid: string): string {
+    if (!gerance) return "Agent"
+    const services = SERVICE_TYPES.filter((type) => gerance.services[type]?.uid === uid).map(
+      (type) => serviceTypeLabels[type]
+    )
+    return services.length > 0 ? `Agence · ${services.join(", ")}` : "Agent"
+  }
 
   if (roleLoading) return null
   if (!isAgence) return <Navigate to="/" replace />
@@ -158,10 +199,6 @@ export default function BillingPage() {
           <CardContent>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
               <div>
-                <dt className="text-muted-foreground">Email agence/agent</dt>
-                <dd className="font-medium">{overviewLoading ? "…" : (customerEmail ?? "—")}</dd>
-              </div>
-              <div>
                 <dt className="text-muted-foreground">Total des sièges</dt>
                 <dd className="font-medium">{billing.seatCount}</dd>
               </div>
@@ -194,6 +231,22 @@ export default function BillingPage() {
                 </div>
               )}
             </dl>
+
+            <div className="mt-4 flex flex-col gap-1.5 border-t pt-4">
+              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Comptes facturés
+              </span>
+              {billedProfiles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Chargement…</p>
+              ) : (
+                billedProfiles.map((profile) => (
+                  <div key={profile.uid} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span>{profile.email}</span>
+                    <span className="text-xs text-muted-foreground">{roleLabelFor(profile.uid)}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </CardContent>
         )}
       </Card>
