@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import { ChevronDown } from "lucide-react"
+import { Popover } from "@base-ui/react/popover"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
@@ -21,6 +22,12 @@ export type SearchableSelectGroup = {
 // qu'un select classique, plus un champ de recherche qui filtre les options
 // affichées. `groups` accepte soit une liste à plat (un seul groupe sans
 // label), soit plusieurs groupes avec en-tête (équivalent <optgroup>).
+//
+// Le menu passe par Popover.Portal/Positioner (base-ui) plutôt qu'un simple
+// <div absolute> dans le flux normal : un menu positionné "en place" se fait
+// rogner par le premier ancêtre overflow-hidden qu'il traverse (ex: Card,
+// qui l'a par défaut pour ses coins arrondis) - le portail sort entièrement
+// du flux/de l'empilement du parent, qui n'a alors plus aucune prise dessus.
 export function SearchableSelect({
   id,
   value,
@@ -44,18 +51,6 @@ export function SearchableSelect({
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [open])
 
   const selected = groups.flatMap((g) => g.options).find((o) => o.value === value)
 
@@ -78,57 +73,66 @@ export function SearchableSelect({
   }
 
   return (
-    <div ref={containerRef} className={cn("relative", className)}>
-      <button
-        type="button"
+    <Popover.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setQuery("")
+      }}
+    >
+      <Popover.Trigger
         id={id}
         disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
-        className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+        className={cn(
+          "flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+          className
+        )}
       >
         <span className={cn("truncate", !selected && "text-muted-foreground")}>
           {selected?.label ?? emptyLabel}
         </span>
         <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
-      </button>
-      {open && (
-        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border bg-white shadow-lg">
-          <div className="border-b p-1.5">
-            <Input
-              autoFocus
-              placeholder={placeholder}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="h-7"
-            />
-          </div>
-          <div className="max-h-56 overflow-y-auto py-1">
-            {!hasResults && <p className="px-3 py-2 text-sm text-muted-foreground">{noResultsLabel}</p>}
-            {filteredGroups.map((group, i) => (
-              <div key={group.label ?? i}>
-                {group.label && (
-                  <p className="px-3 pt-1.5 pb-1 text-xs font-medium text-muted-foreground">{group.label}</p>
-                )}
-                {group.options.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    disabled={option.disabled}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => handleSelect(option)}
-                    className={cn(
-                      "block w-full truncate px-3 py-1.5 text-left text-sm hover:bg-muted disabled:pointer-events-none disabled:text-muted-foreground",
-                      option.value === value && "bg-muted font-medium"
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner className="z-20 outline-none" align="start" side="bottom" sideOffset={4}>
+          <Popover.Popup className="w-(--anchor-width) overflow-hidden rounded-lg border bg-white shadow-lg">
+            <div className="border-b p-1.5">
+              <Input
+                autoFocus
+                placeholder={placeholder}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="h-7"
+              />
+            </div>
+            <div className="max-h-56 overflow-y-auto py-1">
+              {!hasResults && <p className="px-3 py-2 text-sm text-muted-foreground">{noResultsLabel}</p>}
+              {filteredGroups.map((group, i) => (
+                <div key={group.label ?? i}>
+                  {group.label && (
+                    <p className="px-3 pt-1.5 pb-1 text-xs font-medium text-muted-foreground">{group.label}</p>
+                  )}
+                  {group.options.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      disabled={option.disabled}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleSelect(option)}
+                      className={cn(
+                        "block w-full truncate px-3 py-1.5 text-left text-sm hover:bg-muted disabled:pointer-events-none disabled:text-muted-foreground",
+                        option.value === value && "bg-muted font-medium"
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   )
 }
