@@ -355,7 +355,7 @@ function ResidenceFormDialog({
             <DialogTitle>Ajouter une résidence</DialogTitle>
           </DialogHeader>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="res-name">Nom de la résidence</Label>
               <Input id="res-name" required value={name} onChange={(e) => setName(e.target.value)} />

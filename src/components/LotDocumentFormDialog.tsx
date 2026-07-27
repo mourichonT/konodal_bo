@@ -110,7 +110,7 @@ export function LotDocumentFormDialog({
             <DialogTitle>Ajouter un document de lot {lot ? `— ${lot.refLot || lot.lot}` : ""}</DialogTitle>
           </DialogHeader>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
             {noRecipientsAtAll ? (
               <p className="rounded-lg border border-dashed border-input p-4 text-sm text-muted-foreground">
                 Aucun propriétaire ni locataire rattaché à ce lot pour l'instant. Attribuez d'abord un

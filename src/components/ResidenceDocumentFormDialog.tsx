@@ -80,7 +80,7 @@ export function ResidenceDocumentFormDialog({
             <DialogTitle>Ajouter un document de résidence</DialogTitle>
           </DialogHeader>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
             <div className="flex flex-col gap-1.5">
               <Label>Résidence</Label>
               <DropdownMenu>

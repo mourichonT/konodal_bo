@@ -94,7 +94,7 @@ function LotImportDialogContent({
         <DialogTitle>Importer des lots</DialogTitle>
       </DialogHeader>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overflow-x-hidden pr-4 pl-1">
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium">1. Téléchargez le modèle à remplir</p>
           <div className="flex gap-2">
