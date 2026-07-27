@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Ban, Check, Eye, FileText, RefreshCw, Save, X } from "lucide-react"
+import { ArrowLeft, Ban, Check, Eye, FileText, ImageOff, Play, RefreshCw, Save, X } from "lucide-react"
 import { getDownloadURL, ref } from "firebase/storage"
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
@@ -19,12 +19,14 @@ import {
 import { storage, db } from "@/firebase"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
+import { useSinistreMedia } from "@/hooks/useSinistreMedia"
 import { cn } from "@/lib/utils"
 import {
   approveUserLot,
   rejectUser,
   setUserApproved,
   subscribeToUser,
+  subscribeToUserDocuments,
   subscribeToUserLotDocuments,
   subscribeToUserLots,
   updateUserIdentity,
@@ -41,6 +43,7 @@ export default function ResidentDetailPage() {
   const [user, setUser] = useState<KonodalUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [lots, setLots] = useState<UserLot[]>([])
+  const [identityDocuments, setIdentityDocuments] = useState<UserDocument[]>([])
   const [savingApproval, setSavingApproval] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
@@ -61,6 +64,19 @@ export default function ResidentDetailPage() {
       }
     )
   }, [uid])
+
+  useEffect(() => {
+    // users/{uid}/documents (pièce d'identité déposée à l'inscription) n'est
+    // lisible que par isSuperAdmin côté firestore.rules - souscrire sans ce
+    // garde renverrait une erreur de permission pour Agence/Agent, qui
+    // consultent pourtant cette fiche (identité en lecture seule pour eux).
+    if (!uid || !isSuperAdmin) return
+    return subscribeToUserDocuments(
+      uid,
+      (data) => setIdentityDocuments(data),
+      (error) => toast.error("Impossible de charger la pièce d'identité : " + error.message)
+    )
+  }, [uid, isSuperAdmin])
 
   useEffect(() => {
     // Attend la résolution du périmètre (agence/agent) avant de souscrire :
@@ -127,65 +143,85 @@ export default function ResidentDetailPage() {
 
       {user && (
         <>
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-            <CardHeader>
-              <CardTitle className="text-lg">Compte</CardTitle>
-              <CardDescription>
-                Vérifier les documents ci-dessous avant d'approuver l'accès à l'application.
-              </CardDescription>
-              <CardAction className="flex items-center gap-3">
-                {user.isApproved ? (
-                  <Badge variant="default">Identité approuvée</Badge>
-                ) : user.rejectionReason ? (
-                  <Badge variant="destructive">Refusée</Badge>
-                ) : (
-                  <Badge variant="outline" className="border-transparent bg-amber-100 text-amber-800">
-                    En attente d'approbation
-                  </Badge>
+          <div className={cn("grid gap-6", isSuperAdmin ? "lg:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1")}>
+            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+              <CardHeader>
+                <CardTitle className="text-lg">Compte</CardTitle>
+                <CardDescription>
+                  Vérifier la pièce d'identité ci-contre avant d'approuver l'accès à l'application.
+                </CardDescription>
+                <CardAction className="flex items-center gap-3">
+                  {user.isApproved ? (
+                    <Badge variant="default">Identité approuvée</Badge>
+                  ) : user.rejectionReason ? (
+                    <Badge variant="destructive">Refusée</Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-transparent bg-amber-100 text-amber-800">
+                      En attente d'approbation
+                    </Badge>
+                  )}
+                  {/* Validation d'identité (isApproved) réservée Superadmin -
+                      ni Agence ni Agent, cf. matrice de droits BO : c'est une
+                      vérification de pièce d'identité, pas une correction de
+                      fiche courante. */}
+                  {isSuperAdmin && (
+                    <Button
+                      variant={user.isApproved ? "outline" : "default"}
+                      size="sm"
+                      disabled={savingApproval}
+                      onClick={handleToggleApproved}
+                    >
+                      {user.isApproved ? <X /> : <Check />}
+                      {user.isApproved ? "Révoquer l'identité" : "Approuver l'identité"}
+                    </Button>
+                  )}
+                  {isSuperAdmin && !user.isApproved && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="bg-destructive text-white hover:bg-destructive/90"
+                      onClick={() => setRejecting(true)}
+                    >
+                      <Ban />
+                      Refuser
+                    </Button>
+                  )}
+                </CardAction>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                {user.rejectionReason && !user.isApproved && (
+                  <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                    <span className="font-medium">Motif du refus : </span>
+                    {user.rejectionReason}
+                  </div>
                 )}
-                {/* Validation d'identité (isApproved) réservée Superadmin -
-                    ni Agence ni Agent, cf. matrice de droits BO : c'est une
-                    vérification de pièce d'identité, pas une correction de
-                    fiche courante. */}
-                {isSuperAdmin && (
-                  <Button
-                    variant={user.isApproved ? "outline" : "default"}
-                    size="sm"
-                    disabled={savingApproval}
-                    onClick={handleToggleApproved}
-                  >
-                    {user.isApproved ? <X /> : <Check />}
-                    {user.isApproved ? "Révoquer l'identité" : "Approuver l'identité"}
-                  </Button>
-                )}
-                {isSuperAdmin && !user.isApproved && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="bg-destructive text-white hover:bg-destructive/90"
-                    onClick={() => setRejecting(true)}
-                  >
-                    <Ban />
-                    Refuser
-                  </Button>
-                )}
-              </CardAction>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              {user.rejectionReason && !user.isApproved && (
-                <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                  <span className="font-medium">Motif du refus : </span>
-                  {user.rejectionReason}
-                </div>
-              )}
-              {/* Identité (nom/prénom/date de naissance/pièce...) réservée
-                  superAdmin - une Agence reste en lecture seule ici, même
-                  traitement qu'un Agent (correction d'une identité mal
-                  reconnue = action superAdmin, distincte de la gestion de
-                  ses propres lots/agents). */}
-              <IdentityFields user={user} canEdit={isSuperAdmin} />
-            </CardContent>
-          </Card>
+                {/* Identité (nom/prénom/date de naissance/pièce...) réservée
+                    superAdmin - une Agence reste en lecture seule ici, même
+                    traitement qu'un Agent (correction d'une identité mal
+                    reconnue = action superAdmin, distincte de la gestion de
+                    ses propres lots/agents). */}
+                <IdentityFields user={user} canEdit={isSuperAdmin} />
+              </CardContent>
+            </Card>
+
+            {/* Carte séparée plutôt qu'empilée dans "Compte" : la pièce
+                d'identité se consulte d'un coup d'œil pendant qu'on corrige
+                les champs à gauche, pas en scrollant au-dessus. Même
+                restriction de lecture que la sous-collection Firestore dont
+                elle dépend (cf. l'useEffect de subscribeToUserDocuments) -
+                absente pour Agence/Agent, pas juste vide. */}
+            {isSuperAdmin && (
+              <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+                <CardHeader>
+                  <CardTitle className="text-lg">Pièce d'identité</CardTitle>
+                  <CardDescription>Déposée à l'inscription.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <IdentityDocuments documents={identityDocuments} />
+                </CardContent>
+              </Card>
+            )}
+          </div>
 
           <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
             <CardHeader>
@@ -398,6 +434,86 @@ function IdentityFields({ user, canEdit }: { user: KonodalUser; canEdit: boolean
         </Button>
       </div>
     </div>
+  )
+}
+
+function IdentityDocuments({ documents }: { documents: UserDocument[] }) {
+  return (
+    <div className="flex flex-col items-center gap-4">
+      {documents.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Aucune pièce d'identité déposée.</p>
+      ) : (
+        documents.map((document) => (
+          <div key={document.id} className="flex flex-col items-center gap-1.5">
+            {document.type && (
+              <span className="text-xs font-medium text-muted-foreground">{document.type}</span>
+            )}
+            <div className="flex flex-col items-center gap-3">
+              <IdentityDocumentThumbnail path={document.documentPathRecto} label="Recto" />
+              {document.documentPathVerso && (
+                <IdentityDocumentThumbnail path={document.documentPathVerso} label="Verso" />
+              )}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+// Vignette cliquable ouvrant l'original en overlay (Dialog), pas dans un
+// nouvel onglet : une pièce d'identité se vérifie sans quitter la fiche en
+// cours d'examen, contrairement au simple bouton "Ouvrir" de DocumentRow
+// ci-dessous.
+function IdentityDocumentThumbnail({ path, label }: { path: string; label: string }) {
+  const state = useSinistreMedia(path)
+  const url = state.status === "ready" ? state.url : undefined
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={!url}
+        onClick={() => setOpen(true)}
+        className="flex max-w-64 flex-col items-center gap-1.5 disabled:cursor-default"
+      >
+        {state.status === "ready" && !state.isVideo ? (
+          // Pas de hauteur fixée ni object-cover : la vignette suit le ratio
+          // réel du document (portrait ou paysage selon la pièce déposée)
+          // plutôt que de le rogner dans une boîte imposée. Pas de w-full non
+          // plus : sans ça l'image s'étirerait jusqu'au plafond max-w-64 même
+          // sur un document naturellement plus étroit, au lieu de rester à sa
+          // taille réelle et centrée (cf. items-center sur les parents).
+          <img src={state.url} alt={label} className="max-w-full rounded-lg border" />
+        ) : (
+          <div className="flex h-40 w-64 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+            {state.status === "loading" && <div className="size-full animate-pulse" />}
+            {state.status === "error" && <ImageOff className="size-5 text-muted-foreground" />}
+            {state.status === "ready" && state.isVideo && <Play className="size-5 text-muted-foreground" />}
+          </div>
+        )}
+        <span className="text-xs text-muted-foreground">{label}</span>
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader className="pb-4">
+            <DialogTitle>{label}</DialogTitle>
+          </DialogHeader>
+          {url &&
+            (state.status === "ready" && state.isVideo ? (
+              <video
+                src={url}
+                controls
+                className="max-h-[75vh] w-full rounded-lg bg-black object-contain"
+              />
+            ) : (
+              <img src={url} alt={label} className="max-h-[75vh] w-full rounded-lg object-contain" />
+            ))}
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
