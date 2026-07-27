@@ -100,10 +100,34 @@ async function parseXlsxFile(file: File): Promise<{ headers: string[]; rows: str
   return { headers: headers ?? [], rows: dataRows }
 }
 
+// File.text() décode toujours en UTF-8 et remplace les octets invalides par
+// U+FFFD : un CSV enregistré par Excel en Windows-1252 (le défaut de "CSV
+// (séparateur: point-virgule)" en France) y perdait ses accents, "Bâtiment"
+// devenait "B�timent" et normalizeHeader() n'y reconnaissait plus la
+// colonne - l'import échouait sur "Colonne Bâtiment introuvable". On décode
+// donc les octets nous-mêmes : BOM s'il y en a un, sinon UTF-8 strict avec
+// repli sur windows-1252 dès qu'une séquence est invalide.
+async function decodeCsvFile(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return new TextDecoder("utf-8").decode(bytes)
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder("utf-16le").decode(bytes)
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder("utf-16be").decode(bytes)
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+  } catch {
+    // Un fichier UTF-8 valide n'est presque jamais du windows-1252 valide et
+    // réciproquement : le repli ne se déclenche donc pas sur de l'UTF-8 bien
+    // formé.
+    return new TextDecoder("windows-1252").decode(bytes)
+  }
+}
+
 export async function parseLotImportFile(file: File): Promise<{ headers: string[]; rows: string[][] }> {
   const isCsv = file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv"
   if (isCsv) {
-    return parseCsvText(await file.text())
+    return parseCsvText(await decodeCsvFile(file))
   }
   return parseXlsxFile(file)
 }
