@@ -22,6 +22,7 @@ import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { subscribeToUser } from "@/lib/users"
 import { cn } from "@/lib/utils"
+import { EnvBadge } from "./EnvBadge"
 import logoKWhite from "@/assets/logo-k-white.png"
 import logoHorizontal from "@/assets/logo-horizontal.png"
 import {
@@ -159,6 +160,7 @@ export function Sidebar() {
 
       <div className="relative flex items-center px-5 py-6">
         <img src={logoHorizontal} alt="Konodal" className="h-[30px] w-auto" />
+        <EnvBadge />
       </div>
 
       <nav className="mt-[50px] flex flex-1 flex-col gap-0 py-1 pr-[52px]">
