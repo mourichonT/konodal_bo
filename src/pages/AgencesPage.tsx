@@ -53,6 +53,7 @@ import {
 } from "@/lib/gerances"
 import { resolveUsersByUids } from "@/lib/users"
 import { subscribeToGeranceBilling } from "@/lib/billing"
+import { searchCompanies, type CompanySearchResult } from "@/lib/companySearch"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useAuth } from "@/lib/auth-context"
@@ -334,10 +335,21 @@ function GeranceFormDialog({
   const [street, setStreet] = useState(initial?.address.street ?? emptyAddress.street)
   const [zipCode, setZipCode] = useState(initial?.address.zipCode ?? emptyAddress.zipCode)
   const [city, setCity] = useState(initial?.address.city ?? emptyAddress.city)
+  const [siret, setSiret] = useState(initial?.siret ?? "")
+  const [responsableLegal, setResponsableLegal] = useState(initial?.responsableLegal ?? "")
   const [services, setServices] = useState<Partial<Record<ServiceType, AgencyDept>>>(
     initial?.services ?? {}
   )
   const [submitting, setSubmitting] = useState(false)
+
+  // Recherche recherche-entreprises.api.gouv.fr (cf. companySearch.ts) - même
+  // usage que ProfilePage (agence éditant sa propre fiche), mais ici pas de
+  // gerance.id à l'écriture directe : une agence pas encore créée n'a pas de
+  // document Firestore à mettre à jour, donc un résultat choisi ne fait que
+  // préremplir les champs ci-dessous, revus/corrigibles avant "Enregistrer".
+  const [companyQuery, setCompanyQuery] = useState("")
+  const [companyResults, setCompanyResults] = useState<CompanySearchResult[]>([])
+  const [searching, setSearching] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -345,9 +357,39 @@ function GeranceFormDialog({
       setStreet(initial?.address.street ?? emptyAddress.street)
       setZipCode(initial?.address.zipCode ?? emptyAddress.zipCode)
       setCity(initial?.address.city ?? emptyAddress.city)
+      setSiret(initial?.siret ?? "")
+      setResponsableLegal(initial?.responsableLegal ?? "")
       setServices(initial?.services ?? {})
+      setCompanyQuery("")
+      setCompanyResults([])
     }
   }, [open, initial])
+
+  async function handleSearchCompany() {
+    if (!companyQuery.trim()) return
+    setSearching(true)
+    try {
+      const results = await searchCompanies(companyQuery)
+      setCompanyResults(results)
+      if (results.length === 0) toast.error("Aucun résultat pour cette recherche")
+    } catch (err) {
+      toast.error("Recherche impossible : " + (err as Error).message)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  function handleApplyCompanyResult(result: CompanySearchResult) {
+    setName(result.name)
+    setStreet(result.address.street)
+    setZipCode(result.address.zipCode)
+    setCity(result.address.city)
+    setResponsableLegal(result.responsableLegal)
+    setSiret(result.siret)
+    setCompanyResults([])
+    setCompanyQuery("")
+    toast.success("Informations reprises depuis la recherche - vérifiez avant d'enregistrer")
+  }
 
   function toggleService(type: ServiceType, enabled: boolean) {
     setServices((prev) => {
@@ -373,6 +415,8 @@ function GeranceFormDialog({
         name,
         address: { ...emptyAddress, street, zipCode, city },
         services,
+        siret,
+        responsableLegal,
       })
     } catch (err) {
       toast.error("Échec de l'enregistrement : " + (err as Error).message)
@@ -390,7 +434,53 @@ function GeranceFormDialog({
           </DialogHeader>
 
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
-            <div className="flex flex-col gap-1.5">
+            <div className="mb-1 flex flex-col gap-2 rounded-lg border border-dashed bg-muted/40 p-3 shadow-[0_4px_12px_rgb(0,0,0,0.2)]">
+              <Label htmlFor="ger-company-search">Rechercher l'entreprise (SIREN, SIRET ou nom)</Label>
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  id="ger-company-search"
+                  placeholder="Rechercher (nom, SIRET, SIREN)…"
+                  className="max-w-xs"
+                  value={companyQuery}
+                  onChange={(e) => setCompanyQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSearchCompany())}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={handleSearchCompany} disabled={searching}>
+                  <Search />
+                  Rechercher
+                </Button>
+              </div>
+              {companyResults.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {companyResults.map((result) => (
+                    <div
+                      key={result.siret || result.siren}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 p-2 text-sm"
+                    >
+                      <div>
+                        <span className="font-medium">{result.name}</span>
+                        <span className="text-muted-foreground">
+                          {" — "}
+                          {[result.address.street, [result.address.zipCode, result.address.city].join(" ")]
+                            .filter(Boolean)
+                            .join(" — ") || "—"}
+                          {result.responsableLegal ? ` · ${result.responsableLegal}` : ""}
+                        </span>
+                      </div>
+                      <Button type="button" size="sm" onClick={() => handleApplyCompanyResult(result)}>
+                        Utiliser ces informations
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Préremplit le nom, l'adresse, le SIRET et le responsable légal ci-dessous - à vérifier avant
+                d'enregistrer, ou à saisir/corriger manuellement sans passer par la recherche.
+              </p>
+            </div>
+
+            <div className="mt-[20px] flex flex-col gap-1.5">
               <Label htmlFor="ger-name">Nom de l'agence</Label>
               <Input id="ger-name" required value={name} onChange={(e) => setName(e.target.value)} />
             </div>
@@ -422,6 +512,25 @@ function GeranceFormDialog({
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ger-city">Ville</Label>
                 <Input id="ger-city" required value={city} onChange={(e) => setCity(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ger-siret">SIRET / SIREN</Label>
+                <Input
+                  id="ger-siret"
+                  placeholder="123 456 789 00012"
+                  value={siret}
+                  onChange={(e) => setSiret(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ger-responsable">Responsable légal</Label>
+                <Input
+                  id="ger-responsable"
+                  value={responsableLegal}
+                  onChange={(e) => setResponsableLegal(e.target.value)}
+                />
               </div>
             </div>
 

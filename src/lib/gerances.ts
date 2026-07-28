@@ -65,6 +65,11 @@ export type GeranceInput = {
   name: string
   address: Address
   services: Partial<Record<ServiceType, AgencyDept>>
+  // Optionnels dès la création (pas seulement via updateGeranceLegalInfo/
+  // applyCompanySearchResult sur une fiche déjà existante) - remplis à la
+  // main ou via recherche-entreprises.api.gouv.fr dans GeranceFormDialog.
+  siret?: string
+  responsableLegal?: string
 }
 
 // `uid` (posé par inviteAgencyAccount) est préservé tel quel s'il existe
@@ -89,6 +94,8 @@ export async function createGerance(input: GeranceInput) {
     name: input.name,
     address: input.address,
     services: sanitizeServices(input.services),
+    siret: input.siret ?? "",
+    responsableLegal: input.responsableLegal ?? "",
   })
 }
 
@@ -97,6 +104,8 @@ export async function updateGerance(id: string, input: GeranceInput) {
     name: input.name,
     address: input.address,
     services: sanitizeServices(input.services),
+    siret: input.siret ?? "",
+    responsableLegal: input.responsableLegal ?? "",
   })
 }
 
