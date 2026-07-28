@@ -144,7 +144,7 @@ function KpiCard({
 }: Kpi & { loading: boolean }) {
   return (
     <Link to={to} className="group">
-      <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-shadow group-hover:shadow-md">
+      <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none transition-shadow group-hover:shadow-md">
         <CardContent className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
@@ -170,17 +170,17 @@ function KpiCard({
                 </Badge>
               )}
             </div>
-            <span className="text-3xl font-semibold tabular-nums">
+            <span className="text-2xl font-extrabold tabular-nums">
               {loading ? "…" : value}
               {!loading && unit && (
-                <span className="ml-1 text-base font-normal text-muted-foreground">{unit}</span>
+                <span className="ml-1 text-sm font-semibold text-muted-foreground">{unit}</span>
               )}
             </span>
           </div>
           <div
-            className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${accentClass ?? "bg-accent text-accent-foreground"}`}
+            className={`flex size-[30px] shrink-0 items-center justify-center rounded-[9px] ${accentClass ?? "bg-accent text-accent-foreground"}`}
           >
-            <Icon className="size-5" />
+            <Icon className="size-[15px]" />
           </div>
         </CardContent>
       </Card>
@@ -608,14 +608,16 @@ export default function DashboardPage() {
     <TooltipProvider delay={150}>
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-2xl font-semibold">Bonjour{displayName ? `, ${displayName}` : ""}</h1>
-        <p className="text-muted-foreground">
-          Bienvenue dans votre espace KONODAL BO, vous pourrez gérer et piloter facilement
+        <h1 className="text-[26px] font-extrabold tracking-tight">
+          Bonjour{displayName ? `, ${displayName}` : ""}
+        </h1>
+        <p className="mt-1 text-[14.5px] text-muted-foreground">
+          Bienvenue dans votre espace <strong>KONODAL BO</strong>, vous pourrez gérer et piloter facilement
           l'application KONODAL APP dans vos résidences
         </p>
       </div>
 
-      <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+      <Card>
         <CardContent className="flex flex-wrap items-center gap-3">
           <DropdownMenu>
             <DropdownMenuTrigger className="flex h-9 w-72 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
@@ -653,8 +655,8 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardContent className="flex flex-col gap-4">
-            <h2 className="flex items-center gap-2 text-lg">
-              <TriangleAlert className="size-5 text-muted-foreground" />
+            <h2 className="flex items-center gap-2 text-[15.5px] font-bold text-foreground">
+              <TriangleAlert className="size-[18px] text-primary" />
               Sinistres
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -663,7 +665,7 @@ export default function DashboardPage() {
               ))}
             </div>
 
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
               <CardContent className="flex flex-col gap-4">
                 <h3 className="pb-2 text-sm font-medium">Répartition par statut</h3>
                 <div className="flex flex-col gap-3">
@@ -771,8 +773,8 @@ export default function DashboardPage() {
 
         <Card>
           <CardContent className="flex flex-col gap-4">
-            <h2 className="flex items-center gap-2 text-lg">
-              <Wrench className="size-5 text-muted-foreground" />
+            <h2 className="flex items-center gap-2 text-[15.5px] font-bold text-foreground">
+              <Wrench className="size-[18px] text-primary" />
               Interventions
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -781,7 +783,7 @@ export default function DashboardPage() {
               ))}
             </div>
 
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
               <CardContent className="flex flex-col gap-4">
                 <h3 className="text-sm font-medium">Interventions créées / clôturées</h3>
                 <div className="flex items-stretch gap-4">
@@ -823,7 +825,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
               <CardContent className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
@@ -844,7 +846,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
               <CardContent className="flex flex-col gap-3">
                 <h3 className="text-sm font-medium">Prestataires qui reprogramment le plus</h3>
                 {prestaReprogrammedCounts.length === 0 ? (
@@ -896,8 +898,8 @@ export default function DashboardPage() {
 
         <Card>
           <CardContent className="flex flex-col gap-4">
-            <h2 className="flex items-center gap-2 text-lg">
-              <Building2 className="size-5 text-muted-foreground" />
+            <h2 className="flex items-center gap-2 text-[15.5px] font-bold text-foreground">
+              <Building2 className="size-[18px] text-primary" />
               Résidences &amp; Utilisateurs
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -906,7 +908,7 @@ export default function DashboardPage() {
               ))}
             </div>
 
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
               <CardContent className="flex flex-col gap-4">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-medium">Évolution du remplissage</h3>
@@ -975,8 +977,8 @@ export default function DashboardPage() {
 
         <Card>
           <CardContent className="flex flex-col gap-4">
-            <h2 className="flex items-center gap-2 text-lg">
-              <BookUser className="size-5 text-muted-foreground" />
+            <h2 className="flex items-center gap-2 text-[15.5px] font-bold text-foreground">
+              <BookUser className="size-[18px] text-primary" />
               Contacts
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">

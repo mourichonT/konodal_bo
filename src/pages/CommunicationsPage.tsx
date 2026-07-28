@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Eye, MessageCircle, Plus, Search } from "luc
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { CommunicationFormDialog } from "@/components/CommunicationFormDialog"
 import { SearchableSelect } from "@/components/SearchableSelect"
 import {
@@ -21,7 +22,7 @@ import { useUniqueViewCount } from "@/hooks/useUniqueViewCount"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAuth } from "@/lib/auth-context"
 import { createCommunication } from "@/lib/communications"
-import { cn } from "@/lib/utils"
+import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 import type { CommunicationAudience } from "@/types/communication"
 
 type CommunicationGroup = {
@@ -102,39 +103,41 @@ export default function CommunicationsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Communication</h1>
-        <Button onClick={() => setCommunicating(true)}>
+        <Button onClick={() => setCommunicating(true)} className={PRIMARY_CTA_CLASS}>
           <Plus />
           Communiquer
         </Button>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher une communication..."
-            className="pl-8"
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher une communication..."
+              className="pl-8"
+            />
+          </div>
+          <SearchableSelect
+            value={residenceFilter}
+            onChange={setResidenceFilter}
+            className="w-56"
+            emptyLabel="Toutes les résidences"
+            groups={[
+              {
+                options: [
+                  { value: "all", label: "Toutes les résidences" },
+                  ...residenceOptions.map(([id, name]) => ({ value: id, label: name })),
+                ],
+              },
+            ]}
           />
-        </div>
-        <SearchableSelect
-          value={residenceFilter}
-          onChange={setResidenceFilter}
-          className="w-56"
-          emptyLabel="Toutes les résidences"
-          groups={[
-            {
-              options: [
-                { value: "all", label: "Toutes les résidences" },
-                ...residenceOptions.map(([id, name]) => ({ value: id, label: name })),
-              ],
-            },
-          ]}
-        />
-      </div>
+        </CardContent>
+      </Card>
 
-      <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+      <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
         <Table>
           <TableHeader className="bg-muted/40">
             <TableRow>

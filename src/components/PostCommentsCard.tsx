@@ -129,7 +129,7 @@ export function PostCommentsCard({ residenceId, postId }: { residenceId: string;
   }
 
   return (
-    <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+    <Card>
       <CardHeader>
         <CardTitle className="text-base">Commentaires</CardTitle>
       </CardHeader>

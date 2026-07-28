@@ -41,7 +41,7 @@ import {
 } from "@/lib/sinistres"
 import { exportElementToPdf, waitForImagesToLoad } from "@/lib/exportPdf"
 import { subscribeToUser, subscribeToUserLots, type UserLot } from "@/lib/users"
-import { cn } from "@/lib/utils"
+import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { useAllSinistres } from "@/hooks/useAllSinistres"
 import {
   SINISTRE_PRIORITIES,
@@ -311,7 +311,7 @@ export default function SinistreDetailPage() {
       {sinistre && (
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="flex flex-col gap-6">
-              <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+              <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Ticket</CardTitle>
                 </CardHeader>
@@ -452,7 +452,7 @@ export default function SinistreDetailPage() {
             </div>
 
             <div className="flex flex-col gap-6">
-              <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+              <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Photo / vidéo</CardTitle>
                 </CardHeader>
@@ -524,7 +524,7 @@ export default function SinistreDetailPage() {
           </div>
 
           <div className="flex flex-col gap-6 px-6">
-            <Card data-pdf-block className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <Card data-pdf-block>
               <CardHeader>
                 <CardTitle className="text-base">Ticket</CardTitle>
               </CardHeader>
@@ -598,7 +598,7 @@ export default function SinistreDetailPage() {
             ))}
 
             {mediaItems.map((item) => (
-              <div key={item.key} data-pdf-block className="flex flex-col gap-1.5 rounded-2xl bg-white p-4 shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+              <div key={item.key} data-pdf-block className="flex flex-col gap-1.5 rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-4 shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
                 <span className="text-sm font-medium">{item.label}</span>
                 <SinistreMediaViewer pathImage={item.pathImage} className="aspect-video w-full rounded-lg" />
               </div>
@@ -624,7 +624,7 @@ export default function SinistreDetailPage() {
             <Button variant="outline" onClick={() => setPendingStatus(null)}>
               Annuler
             </Button>
-            <Button onClick={handleConfirmPendingStatus}>Confirmer</Button>
+            <Button onClick={handleConfirmPendingStatus} className={PRIMARY_CTA_CLASS}>Confirmer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -717,7 +717,7 @@ function DeclarantCard({
   }, [residenceId, lot])
 
   return (
-    <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+    <Card>
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>

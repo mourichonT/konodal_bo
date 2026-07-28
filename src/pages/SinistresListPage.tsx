@@ -103,7 +103,7 @@ export default function SinistresListPage() {
       </div>
 
       <div className="flex flex-col">
-        <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+        <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>

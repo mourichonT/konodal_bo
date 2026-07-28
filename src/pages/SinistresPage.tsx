@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { ChevronDown, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Card, CardContent } from "@/components/ui/card"
 import { DateInput } from "@/components/DateInput"
 import {
   DropdownMenu,
@@ -113,69 +114,71 @@ export default function SinistresPage() {
         </div>
       </div>
 
-      <div className="mb-[30px] flex items-center gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un ticket par mot-clé..."
-            className="pl-8"
-          />
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            Résidence :{" "}
-            {residenceFilter === "all"
-              ? "Toutes"
-              : (residenceOptions.find(([id]) => id === residenceFilter)?.[1] ?? "Toutes")}
-            <ChevronDown className="size-4 text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuRadioGroup value={residenceFilter} onValueChange={setResidenceFilter}>
-              <DropdownMenuLabel>Résidence</DropdownMenuLabel>
-              <DropdownMenuRadioItem value="all">Toutes les résidences</DropdownMenuRadioItem>
-              {residenceOptions.map(([id, name]) => (
-                <DropdownMenuRadioItem key={id} value={id}>
-                  {name}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <span>Du</span>
-          <DateInput value={dateFrom} onChange={setDateFrom} />
-          <span>au</span>
-          <DateInput value={dateTo} onChange={setDateTo} />
-        </div>
-        {isListeTab && (
-          <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+      <Card className="mb-[30px]">
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher un ticket par mot-clé..."
+              className="pl-8"
+            />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              Résidence :{" "}
+              {residenceFilter === "all"
+                ? "Toutes"
+                : (residenceOptions.find(([id]) => id === residenceFilter)?.[1] ?? "Toutes")}
+              <ChevronDown className="size-4 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuRadioGroup value={residenceFilter} onValueChange={setResidenceFilter}>
+                <DropdownMenuLabel>Résidence</DropdownMenuLabel>
+                <DropdownMenuRadioItem value="all">Toutes les résidences</DropdownMenuRadioItem>
+                {residenceOptions.map(([id, name]) => (
+                  <DropdownMenuRadioItem key={id} value={id}>
+                    {name}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <span>Du</span>
+            <DateInput value={dateFrom} onChange={setDateFrom} />
+            <span>au</span>
+            <DateInput value={dateTo} onChange={setDateTo} />
+          </div>
+          {isListeTab && (
+            <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+                className="size-4 rounded border-input accent-primary"
+              />
+              Afficher les tickets archivés
+            </label>
+          )}
+          <Button variant="outline" size="sm" onClick={handleClearFilters}>
+            <X />
+            Effacer les filtres
+          </Button>
+          <label className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
             <input
               type="checkbox"
-              checked={showArchived}
-              onChange={(e) => setShowArchived(e.target.checked)}
+              checked={showNonDeclares}
+              onChange={(e) => setShowNonDeclares(e.target.checked)}
               className="size-4 rounded border-input accent-primary"
             />
-            Afficher les tickets archivés
+            Afficher les tickets non déclarés
           </label>
-        )}
-        <Button variant="outline" size="sm" onClick={handleClearFilters}>
-          <X />
-          Effacer les filtres
-        </Button>
-        <label className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={showNonDeclares}
-            onChange={(e) => setShowNonDeclares(e.target.checked)}
-            className="size-4 rounded border-input accent-primary"
-          />
-          Afficher les tickets non déclarés
-        </label>
-      </div>
+        </CardContent>
+      </Card>
 
       <Outlet context={{ sinistres, loading, filters } satisfies SinistresOutletContext} />
     </div>

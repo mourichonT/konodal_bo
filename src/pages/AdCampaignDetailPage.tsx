@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DateInput } from "@/components/DateInput"
 import { subscribeToResidences } from "@/lib/residences"
@@ -309,7 +310,7 @@ export default function AdCampaignDetailPage() {
       {campaign && (
         <div className="flex flex-col gap-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] [--card-spacing:--spacing(6)]">
+            <Card className="[--card-spacing:--spacing(6)]">
               <CardHeader>
                 <CardTitle className="text-base">Campagne</CardTitle>
               </CardHeader>
@@ -374,7 +375,7 @@ export default function AdCampaignDetailPage() {
                   </div>
 
                   <div className="flex justify-end">
-                    <Button type="submit" disabled={submitting}>
+                    <Button type="submit" disabled={submitting} className={PRIMARY_CTA_CLASS}>
                       <Save />
                       Enregistrer
                     </Button>
@@ -383,7 +384,7 @@ export default function AdCampaignDetailPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">
                   Résidences ciblées ({targetResidenceIds.length} sélectionnée
@@ -442,7 +443,7 @@ export default function AdCampaignDetailPage() {
           </div>
 
           <div ref={reportRef}>
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Rapport de campagne</CardTitle>
               <CardAction data-pdf-ignore>

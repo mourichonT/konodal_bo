@@ -26,6 +26,7 @@ import DocumentsPage from "@/pages/DocumentsPage"
 import ProfilePage from "@/pages/ProfilePage"
 import BillingPage from "@/pages/BillingPage"
 import SharedInterventionPage from "@/pages/SharedInterventionPage"
+import OfferPage from "@/pages/OfferPage"
 import PublicitesPage from "@/pages/PublicitesPage"
 import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
 
@@ -35,6 +36,7 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/partage/:token" element={<SharedInterventionPage />} />
+      <Route path="/offre/:token" element={<OfferPage />} />
       <Route
         element={
           <ProtectedRoute>

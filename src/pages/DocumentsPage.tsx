@@ -4,6 +4,8 @@ import { FileText, Plus, Search, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Card, CardContent } from "@/components/ui/card"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { SearchableSelect } from "@/components/SearchableSelect"
 import {
@@ -76,53 +78,55 @@ function ResidenceDocumentsSection() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg">Documents de résidence</h2>
-        <Button onClick={() => setCreating(true)}>
+        <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
           <Plus />
           Ajouter un document
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Rechercher un document…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8"
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher un document…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          <SearchableSelect
+            className="w-56"
+            value={residenceFilter}
+            onChange={setResidenceFilter}
+            groups={[
+              {
+                options: [
+                  { value: "all", label: "Toutes les résidences" },
+                  ...[...residences]
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((r) => ({ value: r.id, label: r.name })),
+                ],
+              },
+            ]}
           />
-        </div>
-        <SearchableSelect
-          className="w-56"
-          value={residenceFilter}
-          onChange={setResidenceFilter}
-          groups={[
-            {
-              options: [
-                { value: "all", label: "Toutes les résidences" },
-                ...[...residences]
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((r) => ({ value: r.id, label: r.name })),
-              ],
-            },
-          ]}
-        />
-        <SearchableSelect
-          className="w-64"
-          value={categoryFilter}
-          onChange={setCategoryFilter}
-          groups={[
-            {
-              options: [
-                { value: "all", label: "Toutes les catégories" },
-                ...RESIDENCE_DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: c })),
-              ],
-            },
-          ]}
-        />
-      </div>
+          <SearchableSelect
+            className="w-64"
+            value={categoryFilter}
+            onChange={setCategoryFilter}
+            groups={[
+              {
+                options: [
+                  { value: "all", label: "Toutes les catégories" },
+                  ...RESIDENCE_DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: c })),
+                ],
+              },
+            ]}
+          />
+        </CardContent>
+      </Card>
 
-      <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+      <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
         <Table>
           <TableHeader className="bg-muted/40">
             <TableRow>
@@ -277,7 +281,7 @@ function LotDocumentsSection() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg">Documents de lot</h2>
-        <Button onClick={() => setCreating(true)} disabled={!selectedLot}>
+        <Button onClick={() => setCreating(true)} disabled={!selectedLot} className={PRIMARY_CTA_CLASS}>
           <Plus />
           Ajouter un document
         </Button>
@@ -314,7 +318,7 @@ function LotDocumentsSection() {
           Choisissez une résidence puis un lot pour voir ses documents.
         </p>
       ) : (
-        <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+        <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>

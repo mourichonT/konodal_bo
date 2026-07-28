@@ -11,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
+import googleLogo from "@/assets/google-logo.png"
 
 function firebaseAuthErrorMessage(error: unknown): string {
   const code = (error as { code?: string })?.code
@@ -87,6 +89,7 @@ export default function RegisterPage() {
                 type="email"
                 autoComplete="email"
                 required
+                className="h-11 px-3.5"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -99,6 +102,7 @@ export default function RegisterPage() {
                 autoComplete="new-password"
                 required
                 minLength={6}
+                className="h-11 px-3.5"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -111,12 +115,13 @@ export default function RegisterPage() {
                 autoComplete="new-password"
                 required
                 minLength={6}
+                className="h-11 px-3.5"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" disabled={submitting} className="w-full">
+            <Button type="submit" disabled={submitting} className={`h-11 w-full px-4 ${PRIMARY_CTA_CLASS}`}>
               Créer le compte
             </Button>
           </form>
@@ -130,8 +135,9 @@ export default function RegisterPage() {
             variant="outline"
             disabled={submitting}
             onClick={handleGoogleSignIn}
-            className="w-full"
+            className="h-11 w-full px-4"
           >
+            <img src={googleLogo} alt="" className="size-4" />
             Continuer avec Google
           </Button>
           <p className="text-center text-sm text-muted-foreground">

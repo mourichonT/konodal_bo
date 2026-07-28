@@ -32,6 +32,7 @@ import {
   type ResidenceInput,
 } from "@/lib/residences"
 import { geocodeAddress } from "@/lib/geocode"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { emptyAddress, type Residence } from "@/types/residence"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
@@ -136,14 +137,14 @@ export default function ResidencesPage() {
 
       <div className="flex gap-4">
         <div className="flex w-72 shrink-0 flex-col gap-4">
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <Card>
             <CardContent className="flex flex-col gap-1">
               <span className="text-sm text-muted-foreground">Total résidences</span>
               <span className="text-3xl font-semibold">{residences.length}</span>
             </CardContent>
           </Card>
 
-          <Card className="flex-1 rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <Card className="flex-1">
             <CardHeader>
               <CardTitle className="text-base">Top 5 des villes</CardTitle>
             </CardHeader>
@@ -189,7 +190,7 @@ export default function ResidencesPage() {
           </Card>
         </div>
 
-        <Card className="flex-1 overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+        <Card className="flex-1 overflow-hidden">
           <CardHeader>
             <CardTitle className="text-lg">Carte des résidences</CardTitle>
             <CardDescription>Localisation géographique de toutes les résidences.</CardDescription>
@@ -215,26 +216,28 @@ export default function ResidencesPage() {
         <p className="text-sm text-muted-foreground">Rechercher, filtrer et gérer toutes les résidences.</p>
       </div>
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Rechercher une résidence…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        {canCreateResidence && (
-          <Button className="rounded-full" onClick={() => setCreating(true)}>
-            <Plus />
-            Ajouter une résidence
-          </Button>
-        )}
-      </div>
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher une résidence…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          {canCreateResidence && (
+            <Button className={`ml-auto ${PRIMARY_CTA_CLASS}`} onClick={() => setCreating(true)}>
+              <Plus />
+              Ajouter une résidence
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="flex flex-col">
-        <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+        <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
@@ -351,7 +354,8 @@ function ResidenceFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
-          <DialogHeader className="pb-4">
+          <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+            <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Résidence</span>
             <DialogTitle>Ajouter une résidence</DialogTitle>
           </DialogHeader>
 
@@ -402,7 +406,10 @@ function ResidenceFormDialog({
           </div>
 
           <DialogFooter>
-            <Button type="submit" disabled={submitting}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" disabled={submitting} className={PRIMARY_CTA_CLASS}>
               <Save />
               Enregistrer
             </Button>

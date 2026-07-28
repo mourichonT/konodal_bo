@@ -25,7 +25,7 @@ import { resolveUsersByUids } from "@/lib/users"
 import { CONTACT_SERVICE_ICON_FILENAMES, type Contact } from "@/types/contact"
 import type { GeranceRef } from "@/types/residence"
 import type { StructureResidence } from "@/types/structure"
-import { cn } from "@/lib/utils"
+import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 
 // Seuls id/name/contactRefs/geranceRef sont utilisés ici (sélecteur de
 // résidence + liste des prestataires rattachés + gérance de la résidence) -
@@ -132,7 +132,7 @@ export function EventFormDialog({ open, onOpenChange, ...formProps }: EventFormD
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        {open && <EventFormDialogContent {...formProps} />}
+        {open && <EventFormDialogContent {...formProps} onClose={() => onOpenChange(false)} />}
       </DialogContent>
     </Dialog>
   )
@@ -148,8 +148,9 @@ function EventFormDialogContent({
   linkedSinistreId,
   onSubmit,
   onCancel,
+  onClose,
   readOnly,
-}: Omit<EventFormDialogProps, "open" | "onOpenChange">) {
+}: Omit<EventFormDialogProps, "open" | "onOpenChange"> & { onClose: () => void }) {
   const [residenceId, setResidenceId] = useState(initialResidenceId ?? "")
   const [eventTitle, setEventTitle] = useState(initial?.title ?? prefillFromSinistre?.title ?? "")
   const [description, setDescription] = useState(initial?.description ?? "")
@@ -318,7 +319,8 @@ function EventFormDialogContent({
 
   return (
     <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4 p-[3px]">
-      <DialogHeader className="pb-4">
+      <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+        <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Intervention</span>
         <DialogTitle>{title}</DialogTitle>
       </DialogHeader>
 
@@ -524,8 +526,11 @@ function EventFormDialogContent({
               Annuler l'intervention
             </Button>
           )}
+          <Button type="button" variant="outline" onClick={onClose}>
+            Fermer
+          </Button>
           {!readOnly && (
-            <Button type="submit" disabled={submitting || cancelling}>
+            <Button type="submit" disabled={submitting || cancelling} className={PRIMARY_CTA_CLASS}>
               <Save />
               Enregistrer
             </Button>

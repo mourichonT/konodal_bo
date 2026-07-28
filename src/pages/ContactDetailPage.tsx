@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
 import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
@@ -177,7 +178,7 @@ export default function ContactDetailPage() {
 
       {contact && (
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Fiche contact</CardTitle>
             </CardHeader>
@@ -255,7 +256,7 @@ export default function ContactDetailPage() {
                   <Input id="contact-web" type="url" value={web} onChange={(e) => setWeb(e.target.value)} />
                 </div>
                 <div className="flex justify-end">
-                  <Button type="submit" disabled={submitting}>
+                  <Button type="submit" disabled={submitting} className={PRIMARY_CTA_CLASS}>
                     <Save />
                     Enregistrer
                   </Button>
@@ -264,7 +265,7 @@ export default function ContactDetailPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Résidences</CardTitle>
             </CardHeader>

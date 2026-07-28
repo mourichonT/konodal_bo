@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
 import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import { toast } from "sonner"
@@ -81,7 +82,8 @@ export function ContactFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
-          <DialogHeader className="pb-4">
+          <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+            <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Contact</span>
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
 
@@ -155,7 +157,7 @@ export function ContactFormDialog({
 
             <div className="flex flex-col gap-1.5">
               <Label>Résidences</Label>
-              <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-lg border border-input p-2">
+              <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-[18px] border border-[oklch(93%_0.005_100)] p-[10px]">
                 {residences.length === 0 && (
                   <p className="px-1 py-1 text-sm text-muted-foreground">Aucune résidence.</p>
                 )}
@@ -168,7 +170,7 @@ export function ContactFormDialog({
                       type="checkbox"
                       checked={residencesIds.includes(residence.id)}
                       onChange={(e) => toggleResidence(residence.id, e.target.checked)}
-                      className="size-4 rounded border-input accent-primary"
+                      className="size-[17px] rounded border-input accent-primary"
                     />
                     {residence.name}
                   </label>
@@ -178,7 +180,10 @@ export function ContactFormDialog({
           </div>
 
           <DialogFooter>
-            <Button type="submit" disabled={submitting}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" disabled={submitting} className={PRIMARY_CTA_CLASS}>
               <Save />
               Enregistrer
             </Button>

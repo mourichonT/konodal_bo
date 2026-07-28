@@ -157,17 +157,28 @@ export type AgencyAccountRole = "agence" | "agent"
 // depuis le client, même pour une Agence éditant sa propre fiche (cf.
 // commentaire sur la règle) - évite qu'un compte compromis s'auto-octroie
 // l'accès à d'autres résidences.
+// pending: true (aucun `uid`) - la gérance n'a pas encore d'abonnement actif
+// et ce n'est pas une réactivation : le compte n'est PAS créé maintenant,
+// seul un email commercial (page d'offre publique) part à cette adresse.
+// L'activation réelle n'a lieu qu'à la confirmation du paiement Stripe (côté
+// serveur, cf. commentaire sur invite_agency_account) - pending: false quand
+// le compte a été activé immédiatement (siège déjà couvert).
+export type InviteAgencyAccountResult = { uid: string; pending: false } | { pending: true }
+
 export async function inviteAgencyAccount(
   geranceId: string,
   serviceType: ServiceType,
   email: string,
   role: AgencyAccountRole
-): Promise<{ uid: string }> {
+): Promise<InviteAgencyAccountResult> {
   const call = httpsCallable<
-    { geranceId: string; serviceType: ServiceType; email: string; role: AgencyAccountRole },
-    { uid: string }
+    { geranceId: string; serviceType: ServiceType; email: string; role: AgencyAccountRole; origin: string },
+    InviteAgencyAccountResult
   >(functions, "invite_agency_account")
-  const result = await call({ geranceId, serviceType, email, role })
+  // origin (window.location.origin) : même convention que createCheckoutSession
+  // (lib/billing.ts) - sert à invite_agency_account à construire le lien de la
+  // page d'offre publique (/offre/:token) sans domaine codé en dur côté serveur.
+  const result = await call({ geranceId, serviceType, email, role, origin: window.location.origin })
   return result.data
 }
 

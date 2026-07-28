@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { DateInput } from "@/components/DateInput"
 import { uploadAdCampaignImage } from "@/lib/adCampaigns"
 import { departmentLabel, groupResidencesByDepartment } from "@/lib/departments"
@@ -100,42 +101,61 @@ export function AdCampaignFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl">
         <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
-          <DialogHeader className="pb-4">
+          <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+            <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Publicité</span>
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
 
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ad-name" className="p-2.5">Nom de la campagne</Label>
-              <Input
-                id="ad-name"
-                required
-                placeholder="Ex : Promo été 2026"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+            <div className="grid grid-cols-[1.3fr_1fr] gap-3.5">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ad-name">Nom de la campagne</Label>
+                <Input
+                  id="ad-name"
+                  required
+                  placeholder="Ex : Promo été 2026"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ad-url">
+                  Lien cible <span className="font-medium text-muted-foreground">(optionnel)</span>
+                </Label>
+                <Input
+                  id="ad-url"
+                  type="url"
+                  placeholder="https://…"
+                  value={targetUrl}
+                  onChange={(e) => setTargetUrl(e.target.value)}
+                />
+              </div>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ad-image" className="p-2.5">Image (format carré recommandé)</Label>
+              <Label htmlFor="ad-image">
+                Image <span className="font-medium text-muted-foreground">(format carré recommandé)</span>
+              </Label>
               <label
                 htmlFor="ad-image"
-                className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-input p-4 text-sm text-muted-foreground hover:bg-muted/50"
+                className="flex cursor-pointer flex-col items-center gap-3 rounded-[14px] border-[1.5px] border-dashed border-input p-6 text-center text-muted-foreground hover:border-primary/50 hover:bg-[oklch(98%_0.003_100)]"
               >
-                {imageFile ? (
-                  <img
-                    src={URL.createObjectURL(imageFile)}
-                    alt=""
-                    className="size-32 rounded-md object-cover"
-                  />
-                ) : imageUrl ? (
-                  <img src={imageUrl} alt="" className="size-32 rounded-md object-cover" />
-                ) : (
-                  <ImagePlus className="size-6" />
-                )}
-                {imageFile?.name ?? (imageUrl ? "Remplacer l'image" : "Choisir une image")}
+                <div className="flex size-[52px] shrink-0 items-center justify-center overflow-hidden rounded-[12px] bg-[oklch(93%_0.05_150)]">
+                  {imageFile ? (
+                    <img src={URL.createObjectURL(imageFile)} alt="" className="size-full object-cover" />
+                  ) : imageUrl ? (
+                    <img src={imageUrl} alt="" className="size-full object-cover" />
+                  ) : (
+                    <ImagePlus className="size-5 text-[oklch(38%_0.09_155)]" />
+                  )}
+                </div>
+                <div className="text-[12.5px] font-semibold">
+                  {imageFile?.name ?? (imageUrl ? "Remplacer l'image" : "Choisir une image")}
+                  <br />
+                  <span className="font-medium text-muted-foreground">PNG/JPG, 2 Mo max</span>
+                </div>
               </label>
               <input
                 id="ad-image"
@@ -146,23 +166,12 @@ export function AdCampaignFormDialog({
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ad-url" className="p-2.5">Lien cible (optionnel)</Label>
-              <Input
-                id="ad-url"
-                type="url"
-                placeholder="https://…"
-                value={targetUrl}
-                onChange={(e) => setTargetUrl(e.target.value)}
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="p-2.5">Période de diffusion</Label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Du</span>
+            <div className="flex flex-col gap-2 rounded-[14px] border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] p-[14px_16px]">
+              <Label>Période de diffusion</Label>
+              <div className="flex items-center gap-2.5">
+                <span className="text-[13px] font-semibold text-muted-foreground">Du</span>
                 <DateInput value={startDate} onChange={setStartDate} />
-                <span className="text-sm text-muted-foreground">au</span>
+                <span className="text-[13px] font-semibold text-muted-foreground">au</span>
                 <DateInput value={endDate} onChange={setEndDate} />
               </div>
               <p className="text-xs text-muted-foreground">
@@ -171,50 +180,53 @@ export function AdCampaignFormDialog({
               </p>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <Label>
-                  Résidences ciblées ({targetResidenceIds.length} sélectionnée
-                  {targetResidenceIds.length > 1 ? "s" : ""})
-                </Label>
-                <label className="flex items-center gap-2 text-sm font-medium text-primary">
+            <div className="overflow-hidden rounded-2xl border border-[oklch(93%_0.005_100)]">
+              <div className="flex items-center justify-between gap-2 border-b border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] p-[14px_18px]">
+                <span className="text-[12.5px] font-bold text-[oklch(30%_0.01_150)]">
+                  Résidences ciblées{" "}
+                  <span className="font-medium text-muted-foreground">
+                    ({targetResidenceIds.length} sélectionnée{targetResidenceIds.length > 1 ? "s" : ""})
+                  </span>
+                </span>
+                <label className="flex items-center gap-1.5 text-[12.5px] font-bold text-primary">
                   <input
                     type="checkbox"
                     checked={residences.length > 0 && targetResidenceIds.length === residences.length}
                     onChange={(e) => toggleGroup(residences, e.target.checked)}
-                    className="size-4 rounded border-input accent-primary"
+                    className="size-[17px] rounded border-input accent-primary"
                   />
                   France entière
                 </label>
               </div>
-              <div className="flex max-h-72 flex-col gap-3 overflow-y-auto rounded-lg border border-input p-2">
+              <div className="flex max-h-72 flex-col gap-1 overflow-y-auto p-1.5">
                 {residences.length === 0 && (
                   <p className="px-1 py-1 text-sm text-muted-foreground">Aucune résidence.</p>
                 )}
                 {groupResidencesByDepartment(residences).map(([code, group]) => {
                   const allSelected = group.every((r) => targetResidenceIds.includes(r.id))
                   return (
-                    <div key={code} className="flex flex-col gap-1">
-                      <label className="flex items-center gap-2 rounded-md bg-muted/40 px-1.5 py-1 text-sm font-medium">
+                    <div key={code} className="flex flex-col gap-0.5">
+                      <label className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-bold hover:bg-[oklch(97%_0.005_100)]">
                         <input
                           type="checkbox"
                           checked={allSelected}
                           onChange={(e) => toggleGroup(group, e.target.checked)}
-                          className="size-4 rounded border-input accent-primary"
+                          className="size-[17px] rounded border-input accent-primary"
                         />
-                        {departmentLabel(code)} ({group.length})
+                        {departmentLabel(code)}{" "}
+                        <span className="font-medium text-muted-foreground">({group.length})</span>
                       </label>
-                      <div className="flex flex-col gap-0.5 pl-6">
+                      <div className="flex flex-col gap-0.5 pl-[22px]">
                         {group.map((residence) => (
                           <label
                             key={residence.id}
-                            className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted/50"
+                            className="flex items-center gap-2.5 rounded-[10px] px-3 py-1.5 text-[12.5px] font-semibold hover:bg-[oklch(97%_0.005_100)]"
                           >
                             <input
                               type="checkbox"
                               checked={targetResidenceIds.includes(residence.id)}
                               onChange={(e) => toggleResidence(residence.id, e.target.checked)}
-                              className="size-4 rounded border-input accent-primary"
+                              className="size-[17px] rounded border-input accent-primary"
                             />
                             {residence.name}
                           </label>
@@ -228,7 +240,10 @@ export function AdCampaignFormDialog({
           </div>
 
           <DialogFooter>
-            <Button type="submit" disabled={submitting}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" disabled={submitting} className={PRIMARY_CTA_CLASS}>
               <Save />
               Enregistrer
             </Button>

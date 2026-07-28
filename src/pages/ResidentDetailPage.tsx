@@ -20,7 +20,7 @@ import { storage, db } from "@/firebase"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useSinistreMedia } from "@/hooks/useSinistreMedia"
-import { cn } from "@/lib/utils"
+import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 import {
   approveUserLot,
   rejectUser,
@@ -35,6 +35,12 @@ import {
   type UserLot,
 } from "@/lib/users"
 import type { KonodalUser } from "@/types/user"
+
+function initialsFor(nameOrEmail: string): string {
+  const parts = nameOrEmail.trim().split(/\s+/)
+  if (parts.length >= 2 && parts[0] && parts[1]) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return (nameOrEmail[0] ?? "?").toUpperCase()
+}
 
 export default function ResidentDetailPage() {
   const { uid } = useParams<{ uid: string }>()
@@ -132,9 +138,7 @@ export default function ResidentDetailPage() {
           <ArrowLeft className="size-4" />
           Utilisateurs
         </Link>
-        <h1 className="text-2xl font-semibold">
-          {user ? `${user.name} ${user.surname}`.trim() || user.email : loading ? "…" : "Résident introuvable"}
-        </h1>
+        {!user && <h1 className="text-2xl font-semibold">{loading ? "…" : "Résident introuvable"}</h1>}
       </div>
 
       {!loading && !user && (
@@ -143,23 +147,40 @@ export default function ResidentDetailPage() {
 
       {user && (
         <>
-          <div className={cn("grid gap-6", isSuperAdmin ? "lg:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1")}>
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex size-[52px] shrink-0 items-center justify-center rounded-2xl bg-[oklch(93%_0.05_150)] text-lg font-extrabold text-[oklch(32%_0.09_155)]">
+              {initialsFor(`${user.name} ${user.surname}`.trim() || user.email)}
+            </div>
+            <div className="min-w-[200px] flex-1">
+              <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
+                {`${user.name} ${user.surname}`.trim() || user.email}
+              </h1>
+              <div className="mt-0.5 text-[13px] text-[oklch(52%_0.01_150)]">{user.email}</div>
+            </div>
+            {user.isApproved ? (
+              <Badge variant="default" className="gap-1.5 rounded-full">
+                Identité approuvée
+              </Badge>
+            ) : user.rejectionReason ? (
+              <Badge variant="destructive" className="gap-1.5 rounded-full">
+                Refusée
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="gap-1.5 rounded-full border-transparent bg-amber-100 text-amber-800">
+                <span className="size-[6px] rounded-full bg-current" />
+                En attente d'approbation
+              </Badge>
+            )}
+          </div>
+
+          <div className={cn("grid gap-5", isSuperAdmin ? "lg:grid-cols-[1.7fr_1fr]" : "grid-cols-1")}>
+            <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Compte</CardTitle>
+                <CardTitle className="text-lg">Informations du compte</CardTitle>
                 <CardDescription>
                   Vérifier la pièce d'identité ci-contre avant d'approuver l'accès à l'application.
                 </CardDescription>
-                <CardAction className="flex items-center gap-3">
-                  {user.isApproved ? (
-                    <Badge variant="default">Identité approuvée</Badge>
-                  ) : user.rejectionReason ? (
-                    <Badge variant="destructive">Refusée</Badge>
-                  ) : (
-                    <Badge variant="outline" className="border-transparent bg-amber-100 text-amber-800">
-                      En attente d'approbation
-                    </Badge>
-                  )}
+                <CardAction className="flex items-center gap-2">
                   {/* Validation d'identité (isApproved) réservée Superadmin -
                       ni Agence ni Agent, cf. matrice de droits BO : c'est une
                       vérification de pièce d'identité, pas une correction de
@@ -170,6 +191,7 @@ export default function ResidentDetailPage() {
                       size="sm"
                       disabled={savingApproval}
                       onClick={handleToggleApproved}
+                      className={user.isApproved ? undefined : PRIMARY_CTA_CLASS}
                     >
                       {user.isApproved ? <X /> : <Check />}
                       {user.isApproved ? "Révoquer l'identité" : "Approuver l'identité"}
@@ -177,9 +199,9 @@ export default function ResidentDetailPage() {
                   )}
                   {isSuperAdmin && !user.isApproved && (
                     <Button
-                      variant="destructive"
+                      variant="outline"
                       size="sm"
-                      className="bg-destructive text-white hover:bg-destructive/90"
+                      className="border-red-200 text-red-700 hover:bg-red-50"
                       onClick={() => setRejecting(true)}
                     >
                       <Ban />
@@ -211,7 +233,7 @@ export default function ResidentDetailPage() {
                 elle dépend (cf. l'useEffect de subscribeToUserDocuments) -
                 absente pour Agence/Agent, pas juste vide. */}
             {isSuperAdmin && (
-              <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+              <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Pièce d'identité</CardTitle>
                   <CardDescription>Déposée à l'inscription.</CardDescription>
@@ -223,7 +245,7 @@ export default function ResidentDetailPage() {
             )}
           </div>
 
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <Card>
             <CardHeader>
               <CardTitle className="text-lg">Lots</CardTitle>
               <CardDescription>
@@ -258,7 +280,8 @@ export default function ResidentDetailPage() {
       <Dialog open={rejecting} onOpenChange={setRejecting}>
         <DialogContent className="sm:max-w-md">
           <div className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
-            <DialogHeader className="pb-4">
+            <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+              <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Identité</span>
               <DialogTitle>Refuser l'identité</DialogTitle>
             </DialogHeader>
 
@@ -281,6 +304,9 @@ export default function ResidentDetailPage() {
             </div>
 
             <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setRejecting(false)}>
+                Annuler
+              </Button>
               <Button
                 variant="destructive"
                 className="bg-destructive text-white hover:bg-destructive/90"
@@ -428,7 +454,7 @@ function IdentityFields({ user, canEdit }: { user: KonodalUser; canEdit: boolean
       </p>
 
       <div className="mb-[20px] flex justify-end">
-        <Button size="sm" disabled={saving} onClick={canEdit ? handleSave : handleSavePhone}>
+        <Button size="sm" disabled={saving} onClick={canEdit ? handleSave : handleSavePhone} className={PRIMARY_CTA_CLASS}>
           <Save />
           {canEdit ? "Enregistrer les modifications" : "Enregistrer le téléphone"}
         </Button>
@@ -537,10 +563,12 @@ function DocumentRow({ document }: { document: UserDocument }) {
   }, [document.documentPathRecto])
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-      <div className="flex items-center gap-2 text-sm">
-        <FileText className="size-4 text-muted-foreground" />
-        <span className="font-medium">{document.type || document.name || "Document"}</span>
+    <div className="flex items-center justify-between gap-3 rounded-[10px] border border-[oklch(93%_0.005_100)] p-2.5">
+      <div className="flex items-center gap-2.5 text-sm">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-[9px] bg-[oklch(93%_0.05_150)]">
+          <FileText className="size-[15px] text-[oklch(38%_0.09_155)]" />
+        </div>
+        <span className="font-semibold">{document.type || document.name || "Document"}</span>
       </div>
       {url ? (
         <Button variant="outline" size="sm" render={<a href={url} target="_blank" rel="noreferrer" />}>
@@ -683,10 +711,10 @@ function LotRow({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-3">
-      <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-col overflow-hidden rounded-[18px] border border-[oklch(93%_0.005_100)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-[oklch(98%_0.003_100)] p-[14px_18px]">
         <div className="flex flex-col text-sm">
-          <span className="font-medium">
+          <span className="font-bold text-[oklch(22%_0.01_150)]">
             {residenceName ?? lot.residenceId}
             {lotInfo?.batiment ? ` — ${lotInfo.batiment}` : ""}
             {lotInfo?.lot ? ` — ${lotInfo.lot}` : ""}
@@ -706,16 +734,16 @@ function LotRow({
           {lot.statutResident || resolvedStatut || "—"}
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant={lot.isApprovedLot ? "default" : "destructive"}>
+          <Badge variant={lot.isApprovedLot ? "default" : "destructive"} className="rounded-full">
             {lot.isApprovedLot ? "Approuvé" : "En attente"}
           </Badge>
           {canApprove && (
             <Button
-              variant="outline"
               size="sm"
               disabled={approving || !userApproved}
               title={!userApproved ? "Approuve d'abord l'identité pour que la synchronisation fonctionne" : undefined}
               onClick={handleApprove}
+              className={PRIMARY_CTA_CLASS}
             >
               {lot.isApprovedLot ? <RefreshCw /> : <Check />}
               {lot.isApprovedLot ? "Actualiser" : "Approuver"}
@@ -725,7 +753,7 @@ function LotRow({
       </div>
 
       {groupedChildren.length > 0 && (
-        <div className="flex flex-col gap-1 border-t pt-3 text-sm">
+        <div className="flex flex-col gap-1 border-b border-[oklch(95%_0.003_100)] p-[14px_18px] text-sm">
           <span className="font-medium text-muted-foreground">Lots groupés avec celui-ci</span>
           {groupedChildren.map((child) => (
             <span key={child.id} className="pl-3 text-muted-foreground">
@@ -737,8 +765,8 @@ function LotRow({
         </div>
       )}
 
-      <div className="pr-[20px] flex flex-col gap-2 pt-[22px] pb-[20px]">
-        <Label className="mb-[20px]">Document(s)</Label>
+      <div className="flex flex-col gap-2 p-[14px_18px]">
+        <Label className="mb-1 font-bold">Document(s)</Label>
         {documents.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucun document déposé pour ce lot.</p>
         ) : (

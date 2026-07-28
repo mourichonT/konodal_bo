@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { AlertTriangle, CheckCircle2, Download, Upload, UploadCloud } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import {
   downloadLotImportTemplateCsv,
   downloadLotImportTemplateXlsx,
@@ -90,7 +91,8 @@ function LotImportDialogContent({
 
   return (
     <div className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4 p-[3px]">
-      <DialogHeader className="pb-4">
+      <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+        <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Lots</span>
         <DialogTitle>Importer des lots</DialogTitle>
       </DialogHeader>
 
@@ -116,7 +118,7 @@ function LotImportDialogContent({
           <p className="text-sm font-medium">2. Importez votre fichier rempli</p>
           <label
             htmlFor="lot-import-file"
-            className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-input p-4 text-center text-sm text-muted-foreground hover:bg-muted/50"
+            className="flex cursor-pointer flex-col items-center gap-2 rounded-[18px] border border-dashed border-input p-4 text-center text-sm text-muted-foreground hover:bg-muted/50"
           >
             <UploadCloud className="size-6" />
             {fileName ?? "Choisir un fichier .xlsx ou .csv (séparateur ;)"}
@@ -202,10 +204,14 @@ function LotImportDialogContent({
       </div>
 
       <DialogFooter>
+        <Button type="button" variant="outline" onClick={onDone}>
+          Annuler
+        </Button>
         <Button
           type="button"
           disabled={!validation || validation.toCreate.length === 0 || importing}
           onClick={handleConfirm}
+          className={PRIMARY_CTA_CLASS}
         >
           <Upload />
           Importer{validation && validation.toCreate.length > 0 ? ` (${validation.toCreate.length})` : ""}

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { subscribeToUser, updateOwnProfile, uploadOwnProfilePic } from "@/lib/users"
@@ -81,9 +82,7 @@ export default function ProfilePage() {
   )
 
   return (
-    <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-semibold">Mon profil</h1>
-
+    <div className="flex flex-col gap-6">
       {loading ? (
         <p className="text-muted-foreground">Chargement…</p>
       ) : (
@@ -91,14 +90,14 @@ export default function ProfilePage() {
       )}
 
       {(isAgence || isAgent) && (
-        <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">Agence rattachée</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-                <Briefcase className="size-5" />
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-[oklch(93%_0.05_150)]">
+                <Briefcase className="size-[19px] text-[oklch(38%_0.09_155)]" />
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="flex items-center gap-2 text-lg font-medium">
@@ -273,40 +272,47 @@ function ProfileForm({
   }
 
   return (
-    <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-      <CardHeader>
-        <CardTitle className="text-base">Informations</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex items-center gap-4">
-          <label
-            htmlFor="profile-pic"
-            className="group relative flex size-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-accent text-accent-foreground"
-          >
-            {photoFile ? (
-              <img src={URL.createObjectURL(photoFile)} alt="" className="size-full object-cover" />
-            ) : profile.profilePic ? (
-              <img src={profile.profilePic} alt="" className="size-full object-cover" />
-            ) : (
-              <span className="text-lg font-semibold">{initials(name, surname, profile.email)}</span>
-            )}
-            <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
-              Changer
+    <>
+      <div className="flex flex-wrap items-center gap-4">
+        <label
+          htmlFor="profile-pic"
+          className="group relative flex size-[52px] shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-[16px] bg-[oklch(93%_0.05_150)]"
+        >
+          {photoFile ? (
+            <img src={URL.createObjectURL(photoFile)} alt="" className="size-full object-cover" />
+          ) : profile.profilePic ? (
+            <img src={profile.profilePic} alt="" className="size-full object-cover" />
+          ) : (
+            <span className="text-[18px] font-extrabold text-[oklch(32%_0.09_155)]">
+              {initials(name, surname, profile.email)}
             </span>
-          </label>
-          <input
-            id="profile-pic"
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
-          />
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">Photo de profil</span>
-            <span className="text-xs text-muted-foreground">Cliquez sur l'avatar pour la changer.</span>
-          </div>
+          )}
+          <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-[10px] font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100">
+            Changer
+          </span>
+        </label>
+        <input
+          id="profile-pic"
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+        />
+        <div>
+          <h1 className="text-[26px] font-extrabold tracking-[-0.01em] text-[oklch(22%_0.01_150)]">
+            Mon profil
+          </h1>
+          <p className="mt-0.5 text-[13px] text-[oklch(52%_0.01_150)]">
+            Cliquez sur l'avatar pour changer votre photo.
+          </p>
         </div>
+      </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Informations</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="profile-email">Email</Label>
@@ -340,9 +346,9 @@ function ProfileForm({
         </div>
 
         {isAgence && (
-          <div className="flex flex-col gap-2 border-t pt-4">
+          <div className="rounded-[18px] border border-dashed border-[oklch(78%_0.07_155)] bg-[oklch(98%_0.008_155)] p-4">
             <Label htmlFor="profile-siret">SIRET / SIREN</Label>
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               <Input
                 id="profile-siret"
                 className="max-w-48"
@@ -350,20 +356,23 @@ function ProfileForm({
                 value={siret}
                 onChange={(e) => setSiret(e.target.value)}
               />
-              <Input
-                placeholder="Rechercher (nom, SIRET, SIREN)…"
-                className="max-w-xs"
-                value={companyQuery}
-                onChange={(e) => setCompanyQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSearchCompany())}
-              />
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher (nom, SIRET, SIREN)…"
+                  className="max-w-xs pl-8"
+                  value={companyQuery}
+                  onChange={(e) => setCompanyQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSearchCompany())}
+                />
+              </div>
               <Button type="button" variant="outline" size="sm" onClick={handleSearchCompany} disabled={searching}>
                 <Search />
                 Rechercher
               </Button>
             </div>
             {companyResults.length > 0 && (
-              <div className="flex flex-col gap-2">
+              <div className="mt-2 flex flex-col gap-2">
                 {companyResults.map((result) => (
                   <div
                     key={result.siret || result.siren}
@@ -391,17 +400,20 @@ function ProfileForm({
                 ))}
               </div>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="mt-2.5 text-xs text-[oklch(48%_0.06_155)]">
               La recherche remplit automatiquement le nom, l'adresse et le responsable légal de l'agence.
             </p>
           </div>
         )}
 
-        <Button className="w-fit" onClick={handleSave} disabled={saving}>
-          <Save />
-          Enregistrer
-        </Button>
-      </CardContent>
-    </Card>
+        <div className="flex justify-end border-t border-[oklch(95%_0.003_100)] pt-4">
+          <Button className={`w-fit ${PRIMARY_CTA_CLASS}`} onClick={handleSave} disabled={saving}>
+            <Save />
+            Enregistrer
+          </Button>
+        </div>
+        </CardContent>
+      </Card>
+    </>
   )
 }

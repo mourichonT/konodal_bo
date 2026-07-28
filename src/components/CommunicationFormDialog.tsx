@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { DescriptionTextarea } from "@/components/DescriptionTextarea"
 import type { CommunicationInput } from "@/lib/communications"
 import {
@@ -111,7 +112,8 @@ function CommunicationFormDialogContent({
 
   return (
     <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4 p-[3px]">
-      <DialogHeader className="pb-4">
+      <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+        <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Communication</span>
         <DialogTitle>Communiquer</DialogTitle>
       </DialogHeader>
 
@@ -158,7 +160,7 @@ function CommunicationFormDialogContent({
 
         <div className="flex w-56 shrink-0 flex-col gap-2">
           <Label>Résidences ({selectedResidenceIds.size})</Label>
-          <div className="flex max-h-80 flex-col overflow-y-auto rounded-lg border border-input p-2.5">
+          <div className="flex max-h-80 flex-col overflow-y-auto rounded-[18px] border border-[oklch(93%_0.005_100)] p-[14px]">
             {residences.length === 0 && (
               <p className="text-sm text-muted-foreground">Aucune résidence disponible.</p>
             )}
@@ -169,7 +171,7 @@ function CommunicationFormDialogContent({
                   type="checkbox"
                   checked={allSelected}
                   onChange={toggleAllResidences}
-                  className="size-4 shrink-0 rounded border-input accent-primary"
+                  className="size-[17px] shrink-0 rounded border-input accent-primary"
                 />
                 Toutes les résidences
               </label>
@@ -181,7 +183,7 @@ function CommunicationFormDialogContent({
                     type="checkbox"
                     checked={selectedResidenceIds.has(r.id)}
                     onChange={() => toggleResidence(r.id)}
-                    className="size-4 shrink-0 rounded border-input accent-primary"
+                    className="size-[17px] shrink-0 rounded border-input accent-primary"
                   />
                   <span className="truncate">{r.name}</span>
                 </label>
@@ -192,7 +194,10 @@ function CommunicationFormDialogContent({
       </div>
 
       <DialogFooter>
-        <Button type="submit" disabled={submitting}>
+        <Button type="button" variant="outline" onClick={onDone}>
+          Annuler
+        </Button>
+        <Button type="submit" disabled={submitting} className={PRIMARY_CTA_CLASS}>
           <Save />
           Publier
         </Button>

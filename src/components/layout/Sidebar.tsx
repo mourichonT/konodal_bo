@@ -150,20 +150,31 @@ export function Sidebar() {
   const [openSections, toggleSection] = useOpenSections(allNavItems)
 
   return (
-    <aside className="relative flex h-full w-[226px] shrink-0 flex-col overflow-hidden rounded-[30px] bg-sidebar text-sidebar-foreground">
+    <aside
+      className="relative flex h-full w-[226px] shrink-0 flex-col overflow-hidden text-sidebar-foreground"
+      style={{
+        background:
+          "linear-gradient(175deg, oklch(28% 0.045 155) 0%, oklch(38% 0.07 152) 60%, oklch(44% 0.085 148) 100%)",
+      }}
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-20 -left-14 h-[220px] w-[220px] rounded-full"
+        style={{ background: "radial-gradient(circle, oklch(70% 0.09 145 / 0.14), transparent 70%)" }}
+      />
       <img
         src={logoKWhite}
         alt=""
         aria-hidden
-        className="pointer-events-none absolute -right-4 bottom-0 w-[269px] max-w-none opacity-5 blur-[2px] select-none"
+        className="pointer-events-none absolute -bottom-6 left-1 w-[260px] max-w-none opacity-[0.08] select-none"
       />
 
       <div className="relative flex items-center px-5 py-6">
-        <img src={logoHorizontal} alt="Konodal" className="h-[30px] w-auto" />
+        <img src={logoHorizontal} alt="Konodal" className="h-[25.5px] w-auto" />
         <EnvBadge />
       </div>
 
-      <nav className="mt-[50px] flex flex-1 flex-col gap-0 py-1 pr-[52px]">
+      <nav className="relative mt-[50px] flex flex-1 flex-col gap-0.5 px-3 py-1">
         {allNavItems.map((item) => {
           if (item.children) {
             const isParentActive = location.pathname.startsWith(item.to)
@@ -172,21 +183,12 @@ export function Sidebar() {
               <div key={item.to} className="flex flex-col">
                 <div
                   className={cn(
-                    "group relative flex items-center gap-3 rounded-tl-none rounded-bl-[23px] rounded-r-2xl py-[14.5px] pl-6 pr-3 text-sm font-medium",
+                    "group flex items-center gap-3 rounded-xl py-[11px] pr-3 pl-3.5 text-sm font-semibold",
                     isParentActive
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      ? "bg-white/14 text-white"
+                      : "text-white/80 hover:bg-white/8 hover:text-white"
                   )}
                 >
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "pointer-events-none absolute bottom-full left-0 size-[20px]",
-                      isParentActive
-                        ? "opacity-100 bg-[radial-gradient(circle_at_top_right,transparent_70%,var(--sidebar-primary)_72%)]"
-                        : "bg-[radial-gradient(circle_at_top_right,transparent_70%,var(--sidebar-accent)_72%)] opacity-0 group-hover:opacity-100"
-                    )}
-                  />
                   <NavLink to={item.to} className="flex flex-1 items-center gap-3">
                     <item.icon className="size-4.5" />
                     {item.label}
@@ -201,7 +203,7 @@ export function Sidebar() {
                   </button>
                 </div>
                 {isOpen && (
-                  <div className="flex flex-col gap-1 py-2 pl-[7px]">
+                  <div className="flex flex-col gap-1 py-2 pl-8">
                     {item.children.map((child) => (
                       <NavLink
                         key={child.to}
@@ -244,42 +246,27 @@ export function Sidebar() {
               end={end}
               className={({ isActive }) =>
                 cn(
-                  "group relative flex items-center gap-3 rounded-tl-none rounded-bl-[23px] rounded-r-2xl py-[14.5px] pl-6 pr-3 text-sm font-medium",
-                  isActive
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  "flex items-center gap-3 rounded-xl py-[11px] pr-3 pl-3.5 text-sm font-semibold",
+                  isActive ? "bg-white/14 text-white" : "text-white/80 hover:bg-white/8 hover:text-white"
                 )
               }
             >
-              {({ isActive }) => (
-                <>
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "pointer-events-none absolute bottom-full left-0 size-[20px]",
-                      isActive
-                        ? "opacity-100 bg-[radial-gradient(circle_at_top_right,transparent_70%,var(--sidebar-primary)_72%)]"
-                        : "bg-[radial-gradient(circle_at_top_right,transparent_70%,var(--sidebar-accent)_72%)] opacity-0 group-hover:opacity-100"
-                    )}
-                  />
-                  <Icon className="size-4.5" />
-                  {label}
-                </>
-              )}
+              <Icon className="size-4.5" />
+              {label}
             </NavLink>
           )
         })}
       </nav>
 
-      <div className="border-t border-sidebar-border px-3 py-3">
+      <div className="relative m-3.5 rounded-[14px] bg-white/8">
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-sidebar-accent/50",
-              "outline-none focus-visible:bg-sidebar-accent/50"
+              "flex w-full items-center gap-2.5 rounded-[14px] px-2.5 py-2.5 text-left text-sm transition-colors hover:bg-white/6",
+              "outline-none focus-visible:bg-white/6"
             )}
           >
-            <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-foreground/15 text-xs font-semibold">
+            <div className="flex size-[34px] shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-[oklch(90%_0.03_145)] text-xs font-extrabold text-[oklch(35%_0.07_155)]">
               {profilePic ? (
                 <img src={profilePic} alt="" className="size-full object-cover" />
               ) : (
@@ -287,36 +274,61 @@ export function Sidebar() {
               )}
             </div>
             <div className="flex min-w-0 flex-1 flex-col leading-tight">
-              <span className="truncate font-medium">
+              <span className="truncate font-semibold text-white">
                 {user?.displayName || user?.email || "Compte"}
               </span>
               {user?.displayName && (
-                <span className="truncate text-xs text-sidebar-foreground/60">{user.email}</span>
+                <span className="truncate text-xs text-white/70">{user.email}</span>
               )}
             </div>
-            <ChevronsUpDown className="size-4 shrink-0 text-sidebar-foreground/50" />
+            <ChevronsUpDown className="size-3.5 shrink-0 text-white/60" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-56">
-            <DropdownMenuItem render={<Link to="/profil" />}>
-              <UserCircle />
-              Profil
-            </DropdownMenuItem>
-            {/* Facturation propre à l'agence de ce compte (abonnement Stripe
-                par siège) - réservée à l'agence elle-même, jamais à un
-                simple Agent (action sensible : paiement, moyen de paiement,
-                résiliation - même logique que les autres actions réservées
-                à l'agence dans ce BO) ni à Super Admin (pas de gérance
-                propre). */}
-            {isAgence && (
-              <DropdownMenuItem render={<Link to="/facturation" />}>
-                <CreditCard />
-                Facturation
+          <DropdownMenuContent
+            side="top"
+            align="start"
+            sideOffset={8}
+            className="rounded-2xl border border-[oklch(94%_0.005_100)] p-0 shadow-[0_20px_44px_-12px_oklch(20%_0.02_150/0.35)]"
+          >
+            <div className="border-b border-[oklch(95%_0.003_100)] px-3.5 py-2.5">
+              <div className="truncate text-[12.5px] font-bold text-[oklch(24%_0.01_150)]">
+                {user?.displayName || user?.email || "Compte"}
+              </div>
+              {user?.displayName && (
+                <div className="truncate text-[11px] text-[oklch(55%_0.01_150)]">{user.email}</div>
+              )}
+            </div>
+            <div className="flex flex-col gap-0.5 p-1.5">
+              <DropdownMenuItem
+                render={<Link to="/profil" />}
+                className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13px] font-semibold"
+              >
+                <UserCircle />
+                Profil
               </DropdownMenuItem>
-            )}
-            <DropdownMenuItem variant="destructive" onClick={() => logout()}>
-              <LogOut />
-              Déconnexion
-            </DropdownMenuItem>
+              {/* Facturation propre à l'agence de ce compte (abonnement Stripe
+                  par siège) - réservée à l'agence elle-même, jamais à un
+                  simple Agent (action sensible : paiement, moyen de paiement,
+                  résiliation - même logique que les autres actions réservées
+                  à l'agence dans ce BO) ni à Super Admin (pas de gérance
+                  propre). */}
+              {isAgence && (
+                <DropdownMenuItem
+                  render={<Link to="/facturation" />}
+                  className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13px] font-semibold"
+                >
+                  <CreditCard />
+                  Facturation
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => logout()}
+                className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13px] font-semibold"
+              >
+                <LogOut />
+                Déconnexion
+              </DropdownMenuItem>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

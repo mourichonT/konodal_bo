@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { DateInput } from "@/components/DateInput"
 import { DescriptionTextarea } from "@/components/DescriptionTextarea"
 import { KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 
 const GET_SHARED_INTERVENTION_URL =
   "https://us-central1-konodal-dev.cloudfunctions.net/get_shared_intervention"
@@ -203,7 +204,7 @@ export default function SharedInterventionPage() {
 
       {data && (
         <>
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">{data.intervention.title || "Sans titre"}</CardTitle>
               <p className="text-sm text-muted-foreground">
@@ -232,7 +233,7 @@ export default function SharedInterventionPage() {
           </Card>
 
           {data.sinistre && (
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">Ticket lié</CardTitle>
               </CardHeader>
@@ -314,14 +315,14 @@ export default function SharedInterventionPage() {
           )}
 
           {rapportSubmitted ? (
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <Card>
               <CardContent className="pt-6 text-sm text-muted-foreground">
                 Compte-rendu transmis, merci.
               </CardContent>
             </Card>
           ) : (
             <>
-              <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+              <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Suite de l'intervention</CardTitle>
                 </CardHeader>
@@ -374,7 +375,11 @@ export default function SharedInterventionPage() {
                             className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                           />
                         </div>
-                        <Button type="submit" disabled={rescheduleSubmitting || !rescheduleDate}>
+                        <Button
+                          type="submit"
+                          disabled={rescheduleSubmitting || !rescheduleDate}
+                          className={PRIMARY_CTA_CLASS}
+                        >
                           Confirmer
                         </Button>
                         {rescheduleError && (
@@ -386,7 +391,7 @@ export default function SharedInterventionPage() {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+              <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Ajouter un compte-rendu</CardTitle>
                 </CardHeader>
@@ -423,7 +428,7 @@ export default function SharedInterventionPage() {
                       />
                     </div>
                     {rapportError && <p className="text-sm text-destructive">{rapportError}</p>}
-                    <Button type="submit" disabled={rapportSubmitting} className="w-fit">
+                    <Button type="submit" disabled={rapportSubmitting} className={`w-fit ${PRIMARY_CTA_CLASS}`}>
                       <FileText />
                       Envoyer
                     </Button>

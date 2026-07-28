@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { cn } from "@/lib/utils"
+import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 import type { SinistresOutletContext } from "@/pages/SinistresPage"
 import type { SinistreWithResidence } from "@/hooks/useAllSinistres"
 
@@ -205,7 +205,7 @@ export default function SinistresKanbanPage() {
             <Button variant="outline" onClick={() => setPendingDrop(null)}>
               Annuler
             </Button>
-            <Button onClick={handleConfirmPendingDrop}>Confirmer</Button>
+            <Button onClick={handleConfirmPendingDrop} className={PRIMARY_CTA_CLASS}>Confirmer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -230,7 +230,7 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col gap-3 rounded-2xl border-t-4 bg-white p-3 shadow-[0_8px_30px_rgb(0,0,0,0.06)]",
+        "flex flex-col gap-3 rounded-[24px] border border-[oklch(93%_0.005_100)] border-t-4 bg-white p-3 shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]",
         columnAccent[statut],
         isOver && "ring-2 ring-primary"
       )}
@@ -314,7 +314,7 @@ function KanbanCardContent({
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 rounded-lg border bg-white p-[20px] text-sm shadow-[0_8px_30px_rgb(0,0,0,0.06)]",
+        "flex flex-col gap-2 rounded-xl border border-[oklch(93%_0.005_100)] bg-white p-[20px] text-sm shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]",
         dragging ? "shadow-lg" : "hover:bg-muted/50"
       )}
     >

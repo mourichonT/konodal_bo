@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import type { AdCampaignConfig } from "@/types/adCampaign"
 
 export function AdCampaignConfigDialog({
@@ -41,28 +42,34 @@ export function AdCampaignConfigDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <DialogHeader className="pb-4">
+        <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
+          <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+            <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Publicité</span>
             <DialogTitle>Réglage global des campagnes</DialogTitle>
           </DialogHeader>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ad-config-frequency">Fréquence d'affichage (tous les N posts)</Label>
-            <Input
-              id="ad-config-frequency"
-              type="number"
-              min={1}
-              required
-              value={displayFrequency}
-              onChange={(e) => setDisplayFrequency(Number(e.target.value))}
-            />
-            <p className="text-xs text-muted-foreground">
-              Valeur commune à toutes les campagnes actives, appliquée dans le fil de l'app.
-            </p>
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ad-config-frequency">Fréquence d'affichage (tous les N posts)</Label>
+              <Input
+                id="ad-config-frequency"
+                type="number"
+                min={1}
+                required
+                value={displayFrequency}
+                onChange={(e) => setDisplayFrequency(Number(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Valeur commune à toutes les campagnes actives, appliquée dans le fil de l'app.
+              </p>
+            </div>
           </div>
 
           <DialogFooter>
-            <Button type="submit" disabled={submitting}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" disabled={submitting} className={PRIMARY_CTA_CLASS}>
               <Save />
               Enregistrer
             </Button>

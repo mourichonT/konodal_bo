@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { Eye, MousePointerClick, Plus, Settings, Trash2 } from "lucide-react"
+import { Eye, Megaphone, MousePointerClick, Plus, Settings, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -25,6 +25,7 @@ import {
   subscribeToAdCampaigns,
 } from "@/lib/adCampaigns"
 import { subscribeToAdCampaignConfig, updateAdCampaignConfig } from "@/lib/adCampaignConfig"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import type { AdCampaign, AdCampaignConfig, AdCampaignInput } from "@/types/adCampaign"
 import type { Residence } from "@/types/residence"
 
@@ -62,6 +63,15 @@ export default function PublicitesPage() {
   }, [])
 
   const today = new Date().toISOString().slice(0, 10)
+
+  // "Impressions"/"Clics" : cumul depuis toujours (impressionCount/clickCount
+  // sur AdCampaign n'est pas horodaté jour par jour) - pas de fenêtre "30j"
+  // affichable honnêtement avec les données actuelles, contrairement à la
+  // maquette qui suppose un historique par jour.
+  const activeCampaignsCount = campaigns.filter((c) => campaignStatus(c, today) === "Active").length
+  const totalImpressions = campaigns.reduce((sum, c) => sum + c.impressionCount, 0)
+  const totalClicks = campaigns.reduce((sum, c) => sum + c.clickCount, 0)
+  const ctr = totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100).toFixed(1) + " %" : "—"
 
   const residenceById = new Map(residences.map((r) => [r.id, r]))
 
@@ -106,28 +116,67 @@ export default function PublicitesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Publicités</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2.5">
           <Button variant="outline" onClick={() => setConfiguring(true)}>
             <Settings />
             Réglage global
           </Button>
-          <Button onClick={() => setCreating(true)}>
+          <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
             <Plus />
             Ajouter une campagne
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg">Campagnes publicitaires</h2>
-        <p className="text-sm text-muted-foreground">
-          Cartes pub insérées dans le fil de l'app, ciblées par résidence.
-        </p>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="rounded-[18px] border border-[oklch(93%_0.005_100)] bg-white p-[18px_20px]">
+          <div className="mb-1.5 text-xs font-semibold text-muted-foreground">Campagnes actives</div>
+          <div className="text-[23px] font-extrabold text-[oklch(22%_0.01_150)]">{activeCampaignsCount}</div>
+        </div>
+        <div className="rounded-[18px] border border-[oklch(93%_0.005_100)] bg-white p-[18px_20px]">
+          <div className="mb-1.5 text-xs font-semibold text-muted-foreground">Impressions</div>
+          <div className="text-[23px] font-extrabold text-[oklch(22%_0.01_150)]">{totalImpressions}</div>
+        </div>
+        <div className="rounded-[18px] border border-[oklch(93%_0.005_100)] bg-white p-[18px_20px]">
+          <div className="mb-1.5 text-xs font-semibold text-muted-foreground">Clics</div>
+          <div className="text-[23px] font-extrabold text-[oklch(22%_0.01_150)]">{totalClicks}</div>
+        </div>
+        <div className="rounded-[18px] border border-[oklch(93%_0.005_100)] bg-white p-[18px_20px]">
+          <div className="mb-1.5 text-xs font-semibold text-muted-foreground">CTR moyen</div>
+          <div className="text-[23px] font-extrabold text-[oklch(22%_0.01_150)]">{ctr}</div>
+        </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+      <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
+        <div className="px-7 pt-[26px] pb-5">
+          <h2 className="mb-1 text-[17px] font-bold text-[oklch(22%_0.01_150)]">Campagnes publicitaires</h2>
+          <p className="text-[13.5px] text-muted-foreground">
+            Cartes pub insérées dans le fil de l'app, ciblées par résidence.
+          </p>
+        </div>
+
+        {!loading && campaigns.length === 0 ? (
+          <div className="flex flex-col items-center gap-4 border-t border-[oklch(95%_0.003_100)] px-10 py-16">
+            <div className="flex size-16 items-center justify-center rounded-[18px] bg-[oklch(93%_0.05_150)]">
+              <Megaphone className="size-7 text-[oklch(38%_0.09_155)]" />
+            </div>
+            <div className="text-center">
+              <div className="mb-1.5 text-base font-bold text-[oklch(24%_0.01_150)]">
+                Aucune campagne pour l'instant
+              </div>
+              <p className="max-w-[380px] text-[13.5px] leading-relaxed text-muted-foreground">
+                Créez une carte pub pour la mettre en avant dans le fil de l'app, ciblée sur une ou plusieurs
+                résidences.
+              </p>
+            </div>
+            <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
+              <Plus />
+              Créer votre première campagne
+            </Button>
+          </div>
+        ) : (
         <Table>
           <TableHeader className="bg-muted/40">
             <TableRow>
@@ -192,15 +241,9 @@ export default function PublicitesPage() {
                 </TableCell>
               </TableRow>
             ))}
-            {!loading && campaigns.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
-                  Aucune campagne pour l'instant.
-                </TableCell>
-              </TableRow>
-            )}
           </TableBody>
         </Table>
+        )}
       </div>
 
       <AdCampaignConfigDialog

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -106,13 +107,14 @@ export function LotDocumentFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
-          <DialogHeader className="pb-4">
+          <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+            <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Document</span>
             <DialogTitle>Ajouter un document de lot {lot ? `— ${lot.refLot || lot.lot}` : ""}</DialogTitle>
           </DialogHeader>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
+          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
             {noRecipientsAtAll ? (
-              <p className="rounded-lg border border-dashed border-input p-4 text-sm text-muted-foreground">
+              <p className="rounded-[18px] border border-dashed border-input p-4 text-sm text-muted-foreground">
                 Aucun propriétaire ni locataire rattaché à ce lot pour l'instant. Attribuez d'abord un
                 propriétaire ou un locataire à ce lot avant d'y ajouter un document.
               </p>
@@ -153,10 +155,14 @@ export function LotDocumentFormDialog({
                     <Label htmlFor="lot-doc-file">Fichier (PDF, JPG ou PNG)</Label>
                     <label
                       htmlFor="lot-doc-file"
-                      className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-input p-4 text-sm text-muted-foreground hover:bg-muted/50"
+                      className="flex cursor-pointer flex-col items-center gap-4 rounded-[14px] border-[1.5px] border-dashed border-input p-7 text-center text-muted-foreground hover:border-primary/50 hover:bg-[oklch(98%_0.003_100)]"
                     >
-                      <FileUp className="size-6" />
-                      {file?.name ?? "Choisir un fichier"}
+                      <div className="flex size-[52px] shrink-0 items-center justify-center rounded-[12px] bg-[oklch(93%_0.05_150)]">
+                        <FileUp className="size-5 text-[oklch(38%_0.09_155)]" />
+                      </div>
+                      <span className="text-[12.5px] font-semibold">
+                        {file?.name ?? "Choisir un fichier"}
+                      </span>
                     </label>
                     <input
                       id="lot-doc-file"
@@ -167,8 +173,8 @@ export function LotDocumentFormDialog({
                     />
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <Label>Destinataires</Label>
+                  <div className="flex flex-col gap-3 rounded-[18px] border border-[oklch(93%_0.005_100)] p-[16px_18px]">
+                    <Label className="font-bold">Destinataires</Label>
                     {owners.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <span className="text-xs text-muted-foreground">Propriétaire(s)</span>
@@ -182,7 +188,7 @@ export function LotDocumentFormDialog({
                                   e.target.checked ? [...prev, r.uid] : prev.filter((uid) => uid !== r.uid)
                                 )
                               }
-                              className="size-4 rounded border-input accent-primary"
+                              className="size-[17px] rounded border-input accent-primary"
                             />
                             {r.label}
                           </label>
@@ -202,7 +208,7 @@ export function LotDocumentFormDialog({
                                   e.target.checked ? [...prev, r.uid] : prev.filter((uid) => uid !== r.uid)
                                 )
                               }
-                              className="size-4 rounded border-input accent-primary"
+                              className="size-[17px] rounded border-input accent-primary"
                             />
                             {r.label}
                           </label>
@@ -216,7 +222,14 @@ export function LotDocumentFormDialog({
           </div>
 
           <DialogFooter>
-            <Button type="submit" disabled={submitting || noRecipientsAtAll || loadingRecipients}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annuler
+            </Button>
+            <Button
+              type="submit"
+              disabled={submitting || noRecipientsAtAll || loadingRecipients}
+              className={PRIMARY_CTA_CLASS}
+            >
               <Save />
               Enregistrer
             </Button>

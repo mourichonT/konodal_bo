@@ -38,6 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import {
   createGerance,
   inviteAgencyAccount,
@@ -194,26 +195,28 @@ export default function AgencesPage() {
             <p className="text-sm text-muted-foreground">Rechercher, filtrer et gérer toutes les agences.</p>
           </div>
 
-          <div className="flex items-center justify-between gap-4">
-            <div className="relative max-w-sm flex-1">
-              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher une agence…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            {isSuperAdmin && (
-              <Button className="rounded-full" onClick={() => setCreating(true)}>
-                <Plus />
-                Ajouter une agence
-              </Button>
-            )}
-          </div>
+          <Card>
+            <CardContent className="flex flex-wrap items-center gap-3">
+              <div className="relative max-w-sm flex-1">
+                <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher une agence…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              {isSuperAdmin && (
+                <Button className={`ml-auto ${PRIMARY_CTA_CLASS}`} onClick={() => setCreating(true)}>
+                  <Plus />
+                  Ajouter une agence
+                </Button>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="flex flex-col">
-            <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+            <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
               <Table>
                 <TableHeader className="bg-muted/40">
                   <TableRow>
@@ -308,6 +311,56 @@ export default function AgencesPage() {
           setEditingId(null)
         }}
       />
+    </div>
+  )
+}
+
+// Résumé licences visible par le Superadmin dans la modale d'édition -
+// jusqu'ici seule AgencyBillingCard (page dédiée de l'agence elle-même,
+// /facturation) montrait le nombre de sièges, aucune visibilité admin sur ce
+// que l'agence a réellement acheté vs. combien de comptes elle a déjà
+// distribués. `assignedCount` réplique la déduplication serveur
+// (_deduped_seat_uids, functions_python/main.py) : un même uid peut figurer
+// dans les deux tableaux de service, compté une seule fois.
+function BillingSummary({ gerance }: { gerance: Gerance }) {
+  const [billing, setBilling] = useState<GeranceBilling>({ status: "none", seatCount: 0, currentPeriodEnd: null })
+
+  useEffect(() => {
+    return subscribeToGeranceBilling(gerance.id, setBilling, () => {})
+  }, [gerance.id])
+
+  const assignedCount = useMemo(
+    () =>
+      new Set([...(gerance.serviceSyndicAgentUids ?? []), ...(gerance.geranceLocativeAgentUids ?? [])]).size,
+    [gerance]
+  )
+  const available = billing.seatCount - assignedCount
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-[oklch(97%_0.006_155)] p-[14px_18px] text-[12.5px]">
+      <Badge
+        variant="outline"
+        className={`gap-1.5 rounded-full font-bold ${billingStatusBadgeClass[billing.status]}`}
+      >
+        <span className="size-[6px] rounded-full bg-current" />
+        {billingStatusLabels[billing.status]}
+      </Badge>
+      {billing.status === "none" ? (
+        <span className="text-muted-foreground">Aucune licence achetée pour l'instant</span>
+      ) : (
+        <>
+          <div aria-hidden className="h-4 w-px bg-[oklch(88%_0.01_150)]" />
+          <span className="font-semibold text-muted-foreground">
+            Licences achetées <strong className="font-bold text-foreground">{billing.seatCount}</strong>
+          </span>
+          <span className="font-semibold text-muted-foreground">
+            Attribuées <strong className="font-bold text-foreground">{assignedCount}</strong>
+          </span>
+          <span className="font-semibold text-muted-foreground">
+            Disponibles <strong className="font-bold text-foreground">{Math.max(available, 0)}</strong>
+          </span>
+        </>
+      )}
     </div>
   )
 }
@@ -429,14 +482,20 @@ function GeranceFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
-          <DialogHeader className="pb-4">
+          <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+            <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Agence</span>
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
 
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
-            <div className="mb-1 flex flex-col gap-2 rounded-lg border border-dashed bg-muted/40 p-3 shadow-[0_4px_12px_rgb(0,0,0,0.2)]">
-              <Label htmlFor="ger-company-search">Rechercher l'entreprise (SIREN, SIRET ou nom)</Label>
-              <div className="flex flex-wrap gap-2">
+            {gerance && <BillingSummary gerance={gerance} />}
+
+            <div className="flex flex-col gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-[oklch(78%_0.07_155)] bg-[oklch(98%_0.008_155)] p-[18px_20px]">
+              <Label htmlFor="ger-company-search" className="font-bold">
+                Rechercher l'entreprise{" "}
+                <span className="font-medium text-muted-foreground">(SIREN, SIRET ou nom)</span>
+              </Label>
+              <div className="flex flex-wrap gap-2.5">
                 <Input
                   id="ger-company-search"
                   placeholder="Rechercher (nom, SIRET, SIREN)…"
@@ -445,7 +504,13 @@ function GeranceFormDialog({
                   onChange={(e) => setCompanyQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSearchCompany())}
                 />
-                <Button type="button" variant="outline" size="sm" onClick={handleSearchCompany} disabled={searching}>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleSearchCompany}
+                  disabled={searching}
+                  className="border-0 bg-[oklch(24%_0.03_155)] text-white hover:bg-[oklch(30%_0.04_155)]"
+                >
                   <Search />
                   Rechercher
                 </Button>
@@ -474,7 +539,7 @@ function GeranceFormDialog({
                   ))}
                 </div>
               )}
-              <p className="text-xs text-muted-foreground">
+              <p className="m-0 text-xs leading-relaxed text-[oklch(48%_0.06_155)]">
                 Préremplit le nom, l'adresse, le SIRET et le responsable légal ci-dessous - à vérifier avant
                 d'enregistrer, ou à saisir/corriger manuellement sans passer par la recherche.
               </p>
@@ -549,7 +614,10 @@ function GeranceFormDialog({
           </div>
 
           <DialogFooter>
-            <Button type="submit" disabled={submitting}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" disabled={submitting} className={PRIMARY_CTA_CLASS}>
               <Save />
               Enregistrer
             </Button>
@@ -583,9 +651,9 @@ function ServiceSection({
   const deptHasActiveAccount = (gerance?.[uidField]?.length ?? 0) > 0
 
   return (
-    <div className="rounded-lg border p-3">
+    <div className="rounded-[18px] border border-[oklch(93%_0.005_100)] p-[18px_20px]">
       <label
-        className="flex items-center gap-2 text-sm font-medium"
+        className="flex items-center gap-2.5 text-[13.5px] font-bold text-[oklch(24%_0.01_150)]"
         title={
           enabled && deptHasActiveAccount
             ? "Révoquez l'accès de tous les comptes de ce service avant de le désactiver"
@@ -594,7 +662,7 @@ function ServiceSection({
       >
         <input
           type="checkbox"
-          className="size-4 rounded border-input"
+          className="size-[17px] rounded border-input accent-primary"
           checked={enabled}
           disabled={enabled && deptHasActiveAccount}
           onChange={(e) => onToggle(e.target.checked)}
@@ -603,7 +671,7 @@ function ServiceSection({
       </label>
 
       {dept && (
-        <div className="mt-3 flex flex-col gap-3">
+        <div className="mt-4 flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${type}-mail`}>Email du service</Label>
@@ -711,9 +779,16 @@ function AccountControl({
   async function handleInvite() {
     setSubmitting(true)
     try {
-      const { uid } = await inviteAgencyAccount(gerance.id, serviceType, mail, role)
-      await onLinkUid(uid)
-      toast.success(`Invitation envoyée à ${mail}`)
+      const result = await inviteAgencyAccount(gerance.id, serviceType, mail, role)
+      if (result.pending) {
+        // Rien à lier : aucun compte n'a été créé (pas d'abonnement actif),
+        // seul un email commercial est parti - lier un uid inexistant
+        // afficherait à tort "Compte actif" avant tout paiement.
+        toast.success(`Email envoyé à ${mail} — l'accès sera activé après paiement des licences`)
+      } else {
+        await onLinkUid(result.uid)
+        toast.success(`Invitation envoyée à ${mail}`)
+      }
     } catch (err) {
       toast.error("Échec de l'invitation : " + (err as Error).message)
     } finally {
@@ -816,10 +891,14 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
     if (!email) return
     setInviting(true)
     try {
-      await inviteAgencyAccount(gerance.id, type, email, "agent")
+      const result = await inviteAgencyAccount(gerance.id, type, email, "agent")
       setNewAgentEmail("")
       setConfirmOpen(false)
-      toast.success(`Invitation envoyée à ${email}`)
+      toast.success(
+        result.pending
+          ? `Email envoyé à ${email} — l'accès sera activé après paiement des licences`
+          : `Invitation envoyée à ${email}`
+      )
     } catch (err) {
       toast.error("Échec de l'invitation : " + (err as Error).message)
     } finally {
@@ -837,19 +916,23 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <Label>Agents</Label>
+    <div className="flex flex-col gap-2.5">
+      <Label className="font-bold">Agents</Label>
       {loadingProfiles ? (
-        <p className="text-sm text-muted-foreground">Chargement…</p>
+        <p className="rounded-xl bg-[oklch(97%_0.005_100)] p-3 text-[12.5px] font-semibold text-muted-foreground">
+          Chargement…
+        </p>
       ) : profiles.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Aucun agent pour ce service.</p>
+        <p className="rounded-xl bg-[oklch(97%_0.005_100)] p-3 text-[12.5px] font-semibold text-muted-foreground">
+          Aucun agent pour ce service.
+        </p>
       ) : (
         profiles.map((profile) => {
           const isSelf = profile.uid === user?.uid
           return (
             <div
               key={profile.uid}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 p-2"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 p-2.5"
             >
               <div className="text-sm">
                 <span className="font-medium">
@@ -874,7 +957,7 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
         })
       )}
       {canEdit && (
-        <div className="flex gap-2">
+        <div className="flex gap-2.5">
           <Input
             placeholder="Email de l'agent à inviter"
             type="email"
@@ -883,6 +966,7 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
           />
           <Button
             type="button"
+            variant="outline"
             size="sm"
             onClick={() => setConfirmOpen(true)}
             disabled={inviting || !newAgentEmail.trim()}
@@ -910,7 +994,7 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
             <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)} disabled={inviting}>
               Annuler
             </Button>
-            <Button type="button" onClick={handleInvite} disabled={inviting}>
+            <Button type="button" onClick={handleInvite} disabled={inviting} className={PRIMARY_CTA_CLASS}>
               <Mail />
               Confirmer l'invitation
             </Button>
@@ -940,10 +1024,15 @@ function OwnAgencyPage({
   canEdit: boolean
 }) {
   return (
-    <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-semibold">
-        {gerance ? gerance.name : loading ? "…" : "Agence introuvable"}
-      </h1>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center gap-3.5">
+        <div className="flex size-[46px] shrink-0 items-center justify-center rounded-[13px] bg-[oklch(93%_0.05_150)]">
+          <Home className="size-[21px] text-[oklch(38%_0.09_155)]" />
+        </div>
+        <h1 className="text-[24px] font-extrabold tracking-[-0.01em] text-[oklch(22%_0.01_150)]">
+          {gerance ? gerance.name : loading ? "…" : "Agence introuvable"}
+        </h1>
+      </div>
 
       {!loading && !gerance && (
         <p className="text-muted-foreground">
@@ -1000,7 +1089,7 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
   }
 
   return (
-    <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+    <Card className="mb-5">
       <CardHeader>
         <CardTitle className="text-base">Informations</CardTitle>
       </CardHeader>
@@ -1050,10 +1139,12 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
                 <Input id="agency-city" value={city} onChange={(e) => setCity(e.target.value)} />
               </div>
             </div>
-            <Button className="w-fit" size="sm" onClick={handleSave} disabled={saving || !name.trim()}>
-              <Save />
-              Enregistrer
-            </Button>
+            <div className="flex justify-end">
+              <Button className={`w-fit ${PRIMARY_CTA_CLASS}`} size="sm" onClick={handleSave} disabled={saving || !name.trim()}>
+                <Save />
+                Enregistrer
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-1 text-sm">
@@ -1090,7 +1181,7 @@ function AgencyBillingCard({ gerance, canEdit }: { gerance: Gerance; canEdit: bo
   }, [gerance.id])
 
   return (
-    <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+    <Card>
       <CardHeader>
         <CardTitle className="text-base">Abonnement</CardTitle>
       </CardHeader>
@@ -1154,7 +1245,7 @@ function AgencyServiceCard({
   }
 
   return (
-    <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+    <Card>
       <CardHeader>
         <CardTitle className="text-base">{serviceTypeLabels[type]}</CardTitle>
       </CardHeader>
@@ -1176,7 +1267,7 @@ function AgencyServiceCard({
                 <Input id={`${type}-svc-phone`} value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
             </div>
-            <Button size="sm" onClick={handleSaveContact} disabled={savingContact}>
+            <Button size="sm" onClick={handleSaveContact} disabled={savingContact} className={PRIMARY_CTA_CLASS}>
               <Save />
               Enregistrer
             </Button>

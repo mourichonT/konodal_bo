@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Table,
@@ -115,14 +116,14 @@ export default function ContactsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Contacts</h1>
-        <Button onClick={() => setCreating(true)}>
+        <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
           <Plus />
           Ajouter un contact
         </Button>
       </div>
 
       {duplicatePairs.length > 0 && (
-        <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">Doublons potentiels ({duplicatePairs.length})</CardTitle>
           </CardHeader>
@@ -189,18 +190,22 @@ export default function ContactsPage() {
         />
       </div>
 
-      <div className="relative max-w-sm flex-1">
-        <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher un contact…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-8"
-        />
-      </div>
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher un contact…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex flex-col">
-        <div className="overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-foreground/10">
+        <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
@@ -324,7 +329,7 @@ export default function ContactsPage() {
             <Button variant="outline" onClick={() => setMerging(null)}>
               Annuler
             </Button>
-            <Button onClick={handleMerge}>Confirmer la fusion</Button>
+            <Button onClick={handleMerge} className={PRIMARY_CTA_CLASS}>Confirmer la fusion</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

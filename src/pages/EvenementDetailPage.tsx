@@ -293,7 +293,7 @@ export default function EvenementDetailPage() {
       {event && (
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="flex flex-col gap-6">
-            <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">Intervention</CardTitle>
               </CardHeader>
@@ -340,7 +340,7 @@ export default function EvenementDetailPage() {
             </Card>
 
             {rapports.length > 0 && (
-              <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+              <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Comptes-rendus prestataire</CardTitle>
                 </CardHeader>

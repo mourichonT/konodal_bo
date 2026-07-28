@@ -5,6 +5,7 @@ import { CreditCard, ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import {
   Table,
   TableBody,
@@ -171,7 +172,7 @@ export default function BillingPage() {
         {gerance && <p className="text-sm text-muted-foreground">{gerance.name}</p>}
       </div>
 
-      <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+      <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center gap-3">
             <CardTitle className="text-base">Abonnement</CardTitle>
@@ -187,7 +188,7 @@ export default function BillingPage() {
                   Gérer l'abonnement
                 </Button>
               ) : (
-                <Button type="button" size="sm" disabled={redirecting} onClick={handleSubscribe}>
+                <Button type="button" size="sm" disabled={redirecting} onClick={handleSubscribe} className={PRIMARY_CTA_CLASS}>
                   <CreditCard />
                   S'abonner
                 </Button>
@@ -253,7 +254,7 @@ export default function BillingPage() {
 
       {hasSubscription && (
         <>
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Paiement</CardTitle>
             </CardHeader>
@@ -282,7 +283,7 @@ export default function BillingPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Factures</CardTitle>
             </CardHeader>

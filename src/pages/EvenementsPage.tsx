@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { ChevronDown, Plus, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Card, CardContent } from "@/components/ui/card"
 import { DateInput } from "@/components/DateInput"
 import {
   DropdownMenu,
@@ -18,7 +19,7 @@ import { useAuth } from "@/lib/auth-context"
 import { createEvent } from "@/lib/events"
 import { useAllEvents, type EventWithResidence } from "@/hooks/useAllEvents"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
-import { cn } from "@/lib/utils"
+import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 
 export type EvenementsFilters = {
   search: string
@@ -86,54 +87,56 @@ export default function EvenementsPage() {
               </NavLink>
             ))}
           </div>
-          <Button onClick={() => setCreating(true)}>
+          <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
             <Plus />
             Ajouter une intervention
           </Button>
         </div>
       </div>
 
-      <div className="mb-[30px] flex items-center gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher une intervention par mot-clé..."
-            className="pl-8"
-          />
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
-            Résidence :{" "}
-            {residenceFilter === "all"
-              ? "Toutes"
-              : (residenceOptions.find(([id]) => id === residenceFilter)?.[1] ?? "Toutes")}
-            <ChevronDown className="size-4 text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuRadioGroup value={residenceFilter} onValueChange={setResidenceFilter}>
-              <DropdownMenuLabel>Résidence</DropdownMenuLabel>
-              <DropdownMenuRadioItem value="all">Toutes les résidences</DropdownMenuRadioItem>
-              {residenceOptions.map(([id, name]) => (
-                <DropdownMenuRadioItem key={id} value={id}>
-                  {name}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <span>Du</span>
-          <DateInput value={dateFrom} onChange={setDateFrom} />
-          <span>au</span>
-          <DateInput value={dateTo} onChange={setDateTo} />
-        </div>
-        <Button variant="outline" size="sm" onClick={handleClearFilters}>
-          <X />
-          Effacer les filtres
-        </Button>
-      </div>
+      <Card className="mb-[30px]">
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher une intervention par mot-clé..."
+              className="pl-8"
+            />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+              Résidence :{" "}
+              {residenceFilter === "all"
+                ? "Toutes"
+                : (residenceOptions.find(([id]) => id === residenceFilter)?.[1] ?? "Toutes")}
+              <ChevronDown className="size-4 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuRadioGroup value={residenceFilter} onValueChange={setResidenceFilter}>
+                <DropdownMenuLabel>Résidence</DropdownMenuLabel>
+                <DropdownMenuRadioItem value="all">Toutes les résidences</DropdownMenuRadioItem>
+                {residenceOptions.map(([id, name]) => (
+                  <DropdownMenuRadioItem key={id} value={id}>
+                    {name}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <span>Du</span>
+            <DateInput value={dateFrom} onChange={setDateFrom} />
+            <span>au</span>
+            <DateInput value={dateTo} onChange={setDateTo} />
+          </div>
+          <Button variant="outline" size="sm" onClick={handleClearFilters}>
+            <X />
+            Effacer les filtres
+          </Button>
+        </CardContent>
+      </Card>
 
       <Outlet context={{ events, loading, filters } satisfies EvenementsOutletContext} />
 

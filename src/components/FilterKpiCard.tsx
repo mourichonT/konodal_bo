@@ -23,8 +23,8 @@ export function FilterKpiCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-6 rounded-2xl bg-white p-4 text-left shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-shadow",
-        active ? "ring-2 ring-primary" : "hover:shadow-[0_8px_30px_rgb(0,0,0,0.1)]"
+        "flex items-center gap-6 rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-4 text-left shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)] transition-shadow",
+        active ? "ring-2 ring-primary" : "hover:shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_16px_38px_-20px_oklch(20%_0_0/0.18)]"
       )}
     >
       <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-full", colorClass)}>

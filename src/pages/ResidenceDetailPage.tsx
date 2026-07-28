@@ -72,7 +72,7 @@ import { defaultIsLinkableForType, typeLotOptions } from "@/types/lot"
 import { AGENT_UID_FIELD, serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
 import type { KonodalUser } from "@/types/user"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
-import { cn } from "@/lib/utils"
+import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 
 export default function ResidenceDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -321,7 +321,7 @@ function InfoSection({ residence }: { residence: Residence }) {
           </div>
         )}
 
-        <Button className="w-fit" onClick={handleSave} disabled={saving}>
+        <Button className={`w-fit ${PRIMARY_CTA_CLASS}`} onClick={handleSave} disabled={saving}>
           Enregistrer
         </Button>
       </CardContent>
@@ -646,7 +646,7 @@ function StructureCard({
               <Trash2 />
               Supprimer
             </Button>
-            <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
+            <Button type="button" size="sm" onClick={handleSave} disabled={saving} className={PRIMARY_CTA_CLASS}>
               Enregistrer
             </Button>
           </div>

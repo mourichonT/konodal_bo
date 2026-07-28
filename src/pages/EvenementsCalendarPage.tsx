@@ -128,8 +128,8 @@ export default function EvenementsCalendarPage() {
             type="button"
             onClick={() => setViewMode((prev) => (prev === "today" ? "month" : "today"))}
             className={cn(
-              "flex items-center gap-4 rounded-2xl bg-white p-4 text-left shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-shadow",
-              viewMode === "today" ? "ring-2 ring-primary" : "hover:shadow-[0_8px_30px_rgb(0,0,0,0.1)]"
+              "flex items-center gap-4 rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-4 text-left shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)] transition-shadow",
+              viewMode === "today" ? "ring-2 ring-primary" : "hover:shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_16px_38px_-20px_oklch(20%_0_0/0.18)]"
             )}
           >
             <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
@@ -144,8 +144,8 @@ export default function EvenementsCalendarPage() {
             type="button"
             onClick={() => setViewMode((prev) => (prev === "scheduled" ? "month" : "scheduled"))}
             className={cn(
-              "flex items-center gap-4 rounded-2xl bg-white p-4 text-left shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-shadow",
-              viewMode === "scheduled" ? "ring-2 ring-primary" : "hover:shadow-[0_8px_30px_rgb(0,0,0,0.1)]"
+              "flex items-center gap-4 rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-4 text-left shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)] transition-shadow",
+              viewMode === "scheduled" ? "ring-2 ring-primary" : "hover:shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_16px_38px_-20px_oklch(20%_0_0/0.18)]"
             )}
           >
             <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
@@ -165,8 +165,8 @@ export default function EvenementsCalendarPage() {
             type="button"
             onClick={() => setViewMode((prev) => (prev === "reprogrammed" ? "month" : "reprogrammed"))}
             className={cn(
-              "flex items-center gap-4 rounded-2xl bg-white p-4 text-left shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-shadow",
-              viewMode === "reprogrammed" ? "ring-2 ring-primary" : "hover:shadow-[0_8px_30px_rgb(0,0,0,0.1)]"
+              "flex items-center gap-4 rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-4 text-left shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)] transition-shadow",
+              viewMode === "reprogrammed" ? "ring-2 ring-primary" : "hover:shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_16px_38px_-20px_oklch(20%_0_0/0.18)]"
             )}
           >
             <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
@@ -177,7 +177,7 @@ export default function EvenementsCalendarPage() {
               <span className="text-2xl font-semibold">{reprogrammedCount}</span>
             </div>
           </button>
-          <Card className="rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <Card>
             <CardContent className="flex items-center gap-4">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
                 <Building2 className="size-5" />
@@ -192,7 +192,7 @@ export default function EvenementsCalendarPage() {
       </div>
 
       {viewMode === "reprogrammed" ? (
-        <div className="overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+        <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
           <div className="border-b bg-muted/40 px-4 py-3">
             <h2 className="text-lg">Interventions reprogrammées</h2>
           </div>
@@ -235,7 +235,7 @@ export default function EvenementsCalendarPage() {
             </p>
           )}
           {scheduledByDay.map(({ date, events: dayEvents }) => (
-            <div key={date.toISOString()} className="overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <div key={date.toISOString()} className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
               <div className="border-b bg-muted/40 px-4 py-3">
                 <h2 className="text-lg capitalize">
                   {date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
@@ -270,7 +270,7 @@ export default function EvenementsCalendarPage() {
           ))}
         </div>
       ) : viewMode === "today" ? (
-        <div className="overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+        <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
           <div className="border-b bg-muted/40 px-4 py-3">
             <h2 className="text-lg capitalize">
               {today.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
@@ -338,7 +338,7 @@ export default function EvenementsCalendarPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+          <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
             <div className="grid grid-cols-7 border-b bg-muted/40">
               {WEEKDAYS.map((day) => (
                 <div key={day} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
