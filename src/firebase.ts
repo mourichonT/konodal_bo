@@ -42,8 +42,8 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-// Région "us-central1" : même région que le codebase "mail" (functions_python,
-// cf. firebase.json côté connectkasa) où vivent invite_agency_account /
-// revoke_agency_account - getFunctions() sans région cible "us-central1" par
-// défaut, précisé explicitement pour ne pas dépendre de ce défaut implicite.
-export const functions = getFunctions(app, "us-central1");
+// Région "europe-west9" : région globale du codebase functions_python
+// (options.set_global_options(region="europe-west9") dans konodal_app/functions_python/main.py)
+// où vivent invite_agency_account / revoke_agency_account - getFunctions() cible
+// "us-central1" par défaut, précisé explicitement pour ne pas en dépendre.
+export const functions = getFunctions(app, "europe-west9");
