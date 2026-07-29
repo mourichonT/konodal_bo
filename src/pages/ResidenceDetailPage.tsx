@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, ChevronDown, GripVertical, Plus, Trash2, Upload, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, GripVertical, Plus, ShieldOff, Trash2, Upload, UserPlus, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -40,6 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
+  setCsMember,
   subscribeToResidence,
   updateResidence,
   updateResidenceGeranceRef,
@@ -68,7 +69,7 @@ import { subscribeToGerances } from "@/lib/gerances"
 import { resolveUsersByUids } from "@/lib/users"
 import { emptyAddress, type Residence } from "@/types/residence"
 import { structureElementOptions, structureTypeOptions, type StructureResidence } from "@/types/structure"
-import { defaultIsLinkableForType, typeLotOptions } from "@/types/lot"
+import { defaultIsLinkableForType, typeLotOptions, type Lot } from "@/types/lot"
 import { AGENT_UID_FIELD, serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
 import type { KonodalUser } from "@/types/user"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
@@ -127,11 +128,152 @@ export default function ResidenceDetailPage() {
       {residence && (
         <>
           <InfoSection residence={residence} />
-          <StructuresSection residenceId={id} structures={structures} />
+          <div className="grid gap-5 lg:grid-cols-2">
+            <StructuresSection residenceId={id} structures={structures} />
+            <CsMembersSection residenceId={id} residence={residence} />
+          </div>
           <LotsSection residenceId={id} structures={structures} />
         </>
       )}
     </div>
+  )
+}
+
+// Membres du Conseil Syndical (residences/{id}.csmembers) - éligibles
+// uniquement parmi les propriétaires déjà déclarés sur un lot de CETTE
+// résidence (idProprietaire), pas les locataires (décision explicite de
+// cadrage) : un CS est élu parmi les copropriétaires du même immeuble.
+// Superadmin ET agence/agent peuvent inviter/retirer (aucun gate de rôle ici
+// - firestore.rules l'autorise déjà sans restriction de champ sur
+// residences/{id}.update, cf. lib/residences.ts:setCsMember).
+function CsMembersSection({ residenceId, residence }: { residenceId: string; residence: Residence }) {
+  const [lots, setLots] = useState<Lot[]>([])
+  const [owners, setOwners] = useState<KonodalUser[]>([])
+  const [loadingOwners, setLoadingOwners] = useState(false)
+  const [pendingUid, setPendingUid] = useState<string | null>(null)
+
+  useEffect(() => {
+    return subscribeToLots(
+      residenceId,
+      setLots,
+      (error) => toast.error("Impossible de charger les lots : " + error.message)
+    )
+  }, [residenceId])
+
+  const ownerUids = useMemo(() => {
+    const ids = new Set<string>()
+    for (const lot of lots) for (const uid of lot.idProprietaire) ids.add(uid)
+    return [...ids]
+  }, [lots])
+
+  useEffect(() => {
+    if (ownerUids.length === 0) {
+      setOwners([])
+      return
+    }
+    let cancelled = false
+    setLoadingOwners(true)
+    resolveUsersByUids(ownerUids)
+      .then((users) => {
+        if (!cancelled) setOwners(users)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingOwners(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerUids.join(",")])
+
+  async function handleToggle(uid: string, member: boolean) {
+    setPendingUid(uid)
+    try {
+      await setCsMember(residenceId, uid, member)
+      toast.success(member ? "Invité au Conseil Syndical" : "Retiré du Conseil Syndical")
+    } catch (err) {
+      toast.error("Échec de la mise à jour : " + (err as Error).message)
+    } finally {
+      setPendingUid(null)
+    }
+  }
+
+  const csMemberUids = residence.csmembers ?? []
+  const members = owners.filter((u) => csMemberUids.includes(u.uid))
+  const eligible = owners.filter((u) => !csMemberUids.includes(u.uid))
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Conseil Syndical</CardTitle>
+        <CardDescription>
+          Propriétaires d'un lot de cette résidence invités à devenir membre du CS.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <Label className="font-bold">Membres actuels</Label>
+          {members.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucun membre pour l'instant.</p>
+          ) : (
+            members.map((u) => (
+              <div
+                key={u.uid}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 p-2.5"
+              >
+                <div className="text-sm">
+                  <span className="font-medium">{`${u.name} ${u.surname}`.trim() || u.email}</span>
+                  <span className="text-muted-foreground"> — {u.email}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pendingUid === u.uid}
+                  onClick={() => handleToggle(u.uid, false)}
+                >
+                  <ShieldOff />
+                  Retirer
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {eligible.length > 0 && (
+          <div className="flex flex-col gap-2 border-t pt-4">
+            <Label className="font-bold">Propriétaires éligibles</Label>
+            {eligible.map((u) => (
+              <div
+                key={u.uid}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 p-2.5"
+              >
+                <div className="text-sm">
+                  <span className="font-medium">{`${u.name} ${u.surname}`.trim() || u.email}</span>
+                  <span className="text-muted-foreground"> — {u.email}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pendingUid === u.uid}
+                  onClick={() => handleToggle(u.uid, true)}
+                >
+                  <UserPlus />
+                  Inviter au CS
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!loadingOwners && owners.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            Aucun propriétaire déclaré sur un lot de cette résidence pour l'instant.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

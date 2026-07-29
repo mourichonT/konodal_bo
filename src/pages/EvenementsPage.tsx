@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { NavLink, Outlet } from "react-router-dom"
 import { toast } from "sonner"
-import { ChevronDown, Plus, Search, X } from "lucide-react"
+import { Calendar, ChevronDown, List, Plus, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -35,8 +35,8 @@ export type EvenementsOutletContext = {
 }
 
 const tabs = [
-  { to: "liste", label: "Liste" },
-  { to: "calendrier", label: "Calendrier" },
+  { to: "liste", label: "Liste", icon: List },
+  { to: "calendrier", label: "Calendrier", icon: Calendar },
 ]
 
 export default function EvenementsPage() {
@@ -69,20 +69,21 @@ export default function EvenementsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Interventions</h1>
         <div className="flex items-center gap-2">
-          <div className="flex gap-2">
+          <div className="flex items-center gap-[5px] rounded-2xl bg-[oklch(93%_0.005_100)] p-1.5">
             {tabs.map((tab) => (
               <NavLink
                 key={tab.to}
                 to={tab.to}
                 className={({ isActive }) =>
                   cn(
-                    "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                    "flex items-center gap-2 rounded-xl px-[22px] py-[11px] text-[14.5px] font-semibold transition-colors",
                     isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      ? "bg-[oklch(45%_0.1_155)] font-bold text-white shadow-[0_6px_16px_-6px_oklch(38%_0.08_155/0.5)]"
+                      : "text-[oklch(45%_0.01_150)] hover:bg-[oklch(98%_0.003_100)]"
                   )
                 }
               >
+                <tab.icon className="size-4" />
                 {tab.label}
               </NavLink>
             ))}

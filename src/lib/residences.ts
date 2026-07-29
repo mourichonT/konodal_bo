@@ -1,5 +1,7 @@
 import {
   addDoc,
+  arrayRemove,
+  arrayUnion,
   collection,
   deleteField,
   doc,
@@ -108,5 +110,20 @@ export async function updateResidenceGeo(id: string, lat: number, lng: number) {
 export async function updateResidenceGeranceRef(id: string, geranceRef: GeranceRef | null) {
   await updateDoc(doc(db, "residences", id), {
     geranceRef: geranceRef ?? deleteField(),
+  })
+}
+
+// Invite/retire un membre du Conseil Syndical (residences/{id}.csmembers,
+// tableau d'uid) - synchronisé automatiquement vers
+// users/{uid}.csMemberResidencesIds par sync_cs_member_residences
+// (functions_python/main.py, déjà déployée), rien d'autre à écrire ici.
+// Choix explicite : uniquement parmi les propriétaires déjà déclarés sur un
+// lot de CETTE résidence (idProprietaire), pas les locataires - cf. décision
+// de cadrage. firestore.rules (residences/{id}.update) autorise déjà
+// isCsMember/isSuperAdmin/isProfessionnelResidence sans restriction de champ,
+// donc superAdmin ET agence/agent peuvent tous les trois inviter.
+export async function setCsMember(residenceId: string, uid: string, member: boolean) {
+  await updateDoc(doc(db, "residences", residenceId), {
+    csmembers: member ? arrayUnion(uid) : arrayRemove(uid),
   })
 }

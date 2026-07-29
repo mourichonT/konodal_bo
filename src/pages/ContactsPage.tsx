@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { CheckCircle2, Clock3, Merge, Pencil, Plus, Search, Trash2, Users, X } from "lucide-react"
+import { CheckCircle2, Clock3, Merge, Pencil, Phone, Plus, Search, Trash2, Users, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -17,8 +17,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ContactFormDialog } from "@/components/ContactFormDialog"
+import { EmergencyContactFormDialog } from "@/components/EmergencyContactFormDialog"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { useAllContacts } from "@/hooks/useAllContacts"
+import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import {
   createContact,
@@ -29,6 +31,13 @@ import {
   updateContactApproval,
   type ContactInput,
 } from "@/lib/contacts"
+import {
+  createEmergencyContact,
+  deleteEmergencyContact,
+  subscribeToEmergencyContacts,
+  updateEmergencyContact,
+  type EmergencyContact,
+} from "@/lib/emergencyContacts"
 import type { Contact } from "@/types/contact"
 
 type ApprovalFilter = "pending" | "approved" | null
@@ -41,11 +50,24 @@ function matchesSearch(contact: Contact, search: string): boolean {
 export default function ContactsPage() {
   const { scopedResidenceIds } = useScopedResidenceIds()
   const { contacts, residences, loading } = useAllContacts((message) => toast.error(message), scopedResidenceIds)
+  const { isSuperAdmin } = useIsSuperAdmin()
   const [search, setSearch] = useState("")
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>(null)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<Contact | null>(null)
   const [merging, setMerging] = useState<{ keep: Contact; other: Contact } | null>(null)
+
+  const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([])
+  const [editingEmergency, setEditingEmergency] = useState<EmergencyContact | null>(null)
+  const [creatingEmergency, setCreatingEmergency] = useState(false)
+  const [deletingEmergency, setDeletingEmergency] = useState<EmergencyContact | null>(null)
+
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    return subscribeToEmergencyContacts(setEmergencyContacts, (error) =>
+      toast.error("Impossible de charger les numéros d'urgence : " + error.message)
+    )
+  }, [isSuperAdmin])
 
   const residenceNameById = useMemo(
     () => new Map(residences.map((r) => [r.id, r.name])),
@@ -109,6 +131,17 @@ export default function ContactsPage() {
       setMerging(null)
     } catch (err) {
       toast.error("Échec de la fusion : " + (err as Error).message)
+    }
+  }
+
+  async function handleDeleteEmergency() {
+    if (!deletingEmergency) return
+    try {
+      await deleteEmergencyContact(deletingEmergency.id)
+      toast.success("Numéro supprimé")
+      setDeletingEmergency(null)
+    } catch (err) {
+      toast.error("Échec de la suppression : " + (err as Error).message)
     }
   }
 
@@ -285,6 +318,47 @@ export default function ContactsPage() {
         </div>
       </div>
 
+      {isSuperAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Numéros d'urgence (national)</CardTitle>
+            <CardAction>
+              <Button variant="outline" size="sm" onClick={() => setCreatingEmergency(true)}>
+                <Plus />
+                Ajouter un numéro
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {emergencyContacts.length === 0 && (
+              <p className="text-sm text-muted-foreground">Aucun numéro configuré.</p>
+            )}
+            {emergencyContacts.map((ec) => (
+              <div
+                key={ec.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 p-2.5"
+              >
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone className="size-3.5 text-muted-foreground" />
+                  <span className="font-medium">{ec.name}</span>
+                  <span className="text-muted-foreground">
+                    {[ec.service, ec.phone].filter(Boolean).join(" · ") || "—"}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingEmergency(ec)}>
+                    <Pencil />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setDeletingEmergency(ec)}>
+                    <Trash2 />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <ContactFormDialog
         open={creating}
         onOpenChange={setCreating}
@@ -311,6 +385,50 @@ export default function ContactsPage() {
               Annuler
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
+              Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <EmergencyContactFormDialog
+        open={creatingEmergency}
+        onOpenChange={setCreatingEmergency}
+        title="Ajouter un numéro d'urgence"
+        onSubmit={async (input) => {
+          await createEmergencyContact(input)
+          toast.success("Numéro créé")
+          setCreatingEmergency(false)
+        }}
+      />
+
+      <EmergencyContactFormDialog
+        open={!!editingEmergency}
+        onOpenChange={(open) => !open && setEditingEmergency(null)}
+        title="Modifier le numéro d'urgence"
+        contact={editingEmergency}
+        onSubmit={async (input) => {
+          if (!editingEmergency) return
+          await updateEmergencyContact(editingEmergency.id, input)
+          toast.success("Numéro mis à jour")
+          setEditingEmergency(null)
+        }}
+      />
+
+      <Dialog open={!!deletingEmergency} onOpenChange={(open) => !open && setDeletingEmergency(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="pb-4">
+            <DialogTitle>Supprimer ce numéro ?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            "{deletingEmergency?.name}" sera définitivement supprimé de la liste des numéros d'urgence,
+            visible par tous les résidents.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingEmergency(null)}>
+              Annuler
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteEmergency}>
               Supprimer
             </Button>
           </DialogFooter>
