@@ -612,6 +612,9 @@ function LotRow({
   const [groupedChildren, setGroupedChildren] = useState<
     { id: string; refLot: string; batiment: string; lot: string }[]
   >([])
+  const [pendingChildrenInfo, setPendingChildrenInfo] = useState<
+    { id: string; refLot: string; batiment: string; lot: string }[]
+  >([])
   const [approving, setApproving] = useState(false)
   const [documents, setDocuments] = useState<UserDocument[]>([])
 
@@ -646,6 +649,32 @@ function LotRow({
       )
     })
   }, [lot.residenceId, lot.id])
+
+  useEffect(() => {
+    // Info seule, jamais un lien réel (pas encore de parentLotId/
+    // groupedWithParent tant que ce lot principal n'est pas approuvé) :
+    // sans ça, le CS member approuve l'identité/le lot principal sans savoir
+    // qu'un second lot a été demandé en même temps à l'inscription (cf.
+    // sync_lot_approval/_process_pending_child_lots, functions_python/main.py).
+    if (!lot.residenceId || lot.pendingChildLotIds.length === 0) {
+      setPendingChildrenInfo([])
+      return
+    }
+    Promise.all(
+      lot.pendingChildLotIds.map((childId) =>
+        getDoc(doc(db, "residences", lot.residenceId, "lots", childId)).then((snap) =>
+          snap.exists()
+            ? {
+                id: childId,
+                refLot: (snap.data().refLot as string) ?? "",
+                batiment: (snap.data().batiment as string) ?? "",
+                lot: (snap.data().lot as string) ?? "",
+              }
+            : null
+        )
+      )
+    ).then((results) => setPendingChildrenInfo(results.filter((r) => r !== null)))
+  }, [lot.residenceId, lot.pendingChildLotIds])
 
   useEffect(() => {
     if (!lot.residenceId) return
@@ -756,6 +785,21 @@ function LotRow({
         <div className="flex flex-col gap-1 border-b border-[oklch(95%_0.003_100)] p-[14px_18px] text-sm">
           <span className="font-medium text-muted-foreground">Lots groupés avec celui-ci</span>
           {groupedChildren.map((child) => (
+            <span key={child.id} className="pl-3 text-muted-foreground">
+              {child.batiment || child.id}
+              {child.lot ? ` — ${child.lot}` : ""}
+              {child.refLot ? ` · Réf. ${child.refLot}` : ""}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {pendingChildrenInfo.length > 0 && (
+        <div className="flex flex-col gap-1 border-b border-[oklch(95%_0.003_100)] p-[14px_18px] text-sm">
+          <span className="font-medium text-muted-foreground">
+            Lot(s) supplémentaire(s) demandé(s) à l'inscription (rattaché(s) automatiquement à l'approbation de ce lot)
+          </span>
+          {pendingChildrenInfo.map((child) => (
             <span key={child.id} className="pl-3 text-muted-foreground">
               {child.batiment || child.id}
               {child.lot ? ` — ${child.lot}` : ""}

@@ -248,6 +248,12 @@ export type UserLot = {
   nameLot: string
   statutResident: string
   isApprovedLot: boolean
+  // Lots enfants (parking/cave...) choisis en même temps que ce lot à
+  // l'inscription, pas encore rattachés (traité côté serveur - sync_lot_approval
+  // - une fois ce lot approuvé) : simple info pour le CS member, qui sinon
+  // n'a aucune visibilité sur ce second lot réclamé avant d'approuver à
+  // l'aveugle. Jamais modifié depuis le BO.
+  pendingChildLotIds: string[]
 }
 
 // users/{uid}/lots : jamais créé depuis le backoffice (toujours en
@@ -297,6 +303,7 @@ export function subscribeToUserLots(
             nameLot: (data.nameLot as string) ?? "",
             statutResident: (data.statutResident as string) ?? "",
             isApprovedLot: (data.isApprovedLot as boolean) ?? false,
+            pendingChildLotIds: (data.pendingChildLotIds as string[] | undefined) ?? [],
           }
         })
       )
