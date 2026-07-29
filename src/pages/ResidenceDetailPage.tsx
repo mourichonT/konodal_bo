@@ -117,7 +117,7 @@ export default function ResidenceDetailPage() {
           <ArrowLeft className="size-4" />
           Résidences
         </Link>
-        <h1 className="text-2xl font-semibold">{residence?.name || (loading ? "…" : "Résidence introuvable")}</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">{residence?.name || (loading ? "…" : "Résidence introuvable")}</h1>
       </div>
 
       {!loading && !residence && (

@@ -161,7 +161,7 @@ export default function AgencesPage() {
         <OwnAgencyPage gerance={ownGerance} loading={loading} canEdit={isAgence} />
       ) : (
         <>
-          <h1 className="text-2xl font-semibold">Agences</h1>
+          <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Agences</h1>
 
           <div className="grid grid-cols-3 gap-4">
             <FilterKpiCard
@@ -1029,7 +1029,7 @@ function OwnAgencyPage({
         <div className="flex size-[46px] shrink-0 items-center justify-center rounded-[13px] bg-[oklch(93%_0.05_150)]">
           <Home className="size-[21px] text-[oklch(38%_0.09_155)]" />
         </div>
-        <h1 className="text-[24px] font-extrabold tracking-[-0.01em] text-[oklch(22%_0.01_150)]">
+        <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
           {gerance ? gerance.name : loading ? "…" : "Agence introuvable"}
         </h1>
       </div>

@@ -93,7 +93,7 @@ export default function SinistresPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Sinistres</h1>
+        <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Sinistres</h1>
         <div className="flex gap-2">
           {tabs.map((tab) => (
             <NavLink

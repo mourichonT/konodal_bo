@@ -40,6 +40,10 @@ if (missingKeys.length > 0) {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+// KONODAL est un produit exclusivement francophone : sans ça, les emails
+// d'action Firebase (reset de mot de passe...) et le lang= du lien généré
+// suivent la langue du navigateur de l'utilisateur (souvent "en").
+auth.languageCode = "fr";
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 // Région "europe-west9" : région globale du codebase functions_python

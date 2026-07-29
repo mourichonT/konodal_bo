@@ -117,7 +117,7 @@ export default function PublicitesPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Publicités</h1>
+        <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Publicités</h1>
         <div className="flex gap-2.5">
           <Button variant="outline" onClick={() => setConfiguring(true)}>
             <Settings />

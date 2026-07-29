@@ -138,7 +138,7 @@ export default function ResidentDetailPage() {
           <ArrowLeft className="size-4" />
           Utilisateurs
         </Link>
-        {!user && <h1 className="text-2xl font-semibold">{loading ? "…" : "Résident introuvable"}</h1>}
+        {!user && <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">{loading ? "…" : "Résident introuvable"}</h1>}
       </div>
 
       {!loading && !user && (

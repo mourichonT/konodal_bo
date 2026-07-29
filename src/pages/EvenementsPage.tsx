@@ -67,7 +67,7 @@ export default function EvenementsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Interventions</h1>
+        <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Interventions</h1>
         <div className="flex items-center gap-2">
           <div className="flex gap-2">
             {tabs.map((tab) => (

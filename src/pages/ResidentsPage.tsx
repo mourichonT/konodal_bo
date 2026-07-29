@@ -80,7 +80,7 @@ export default function ResidentsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Utilisateurs</h1>
+      <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Utilisateurs</h1>
 
       {/* KPI réservés Superadmin - ni Agence ni Agent n'ont besoin de ces
           agrégats sur leur propre annuaire (déjà scopé à leurs résidences),

@@ -299,7 +299,7 @@ function ProfileForm({
           onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
         />
         <div>
-          <h1 className="text-[26px] font-extrabold tracking-[-0.01em] text-[oklch(22%_0.01_150)]">
+          <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
             Mon profil
           </h1>
           <p className="mt-0.5 text-[13px] text-[oklch(52%_0.01_150)]">

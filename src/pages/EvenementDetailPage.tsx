@@ -240,7 +240,7 @@ export default function EvenementDetailPage() {
         </Link>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold">
+            <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
               {event ? event.title || "Sans titre" : loading ? "…" : "Intervention introuvable"}
             </h1>
             {event?.annule ? (

@@ -269,7 +269,7 @@ export default function SinistreDetailPage() {
           </div>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold">
+          <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
             {sinistre ? sinistre.title || "Sans titre" : loading ? "…" : "Sinistre introuvable"}
           </h1>
           {sinistre && (

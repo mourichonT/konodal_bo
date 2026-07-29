@@ -64,7 +64,7 @@ export default function CommunicationDetailPage() {
           <ArrowLeft className="size-4" />
           Communication
         </Link>
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
           {communication ? communication.title || "Sans titre" : loading ? "…" : "Communication introuvable"}
         </h1>
       </div>

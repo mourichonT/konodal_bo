@@ -283,7 +283,7 @@ export default function AdCampaignDetailPage() {
           Publicités
         </Link>
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold">
+          <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
             {campaign ? campaign.name || "Sans nom" : loading ? "…" : "Campagne introuvable"}
           </h1>
           {campaign && (

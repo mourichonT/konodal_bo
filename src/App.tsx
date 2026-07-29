@@ -4,6 +4,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { RequireSuperAdmin } from "@/components/RequireSuperAdmin"
 import LoginPage from "@/pages/LoginPage"
 import RegisterPage from "@/pages/RegisterPage"
+import ResetPasswordPage from "@/pages/ResetPasswordPage"
 import DashboardPage from "@/pages/DashboardPage"
 import ResidencesPage from "@/pages/ResidencesPage"
 import ResidenceDetailPage from "@/pages/ResidenceDetailPage"
@@ -35,6 +36,7 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/partage/:token" element={<SharedInterventionPage />} />
       <Route path="/offre/:token" element={<OfferPage />} />
       <Route

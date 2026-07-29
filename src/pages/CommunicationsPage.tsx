@@ -102,7 +102,7 @@ export default function CommunicationsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Communication</h1>
+        <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Communication</h1>
         <Button onClick={() => setCommunicating(true)} className={PRIMARY_CTA_CLASS}>
           <Plus />
           Communiquer

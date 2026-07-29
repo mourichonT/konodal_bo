@@ -168,7 +168,7 @@ export default function BillingPage() {
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">Facturation</h1>
+        <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Facturation</h1>
         {gerance && <p className="text-sm text-muted-foreground">{gerance.name}</p>}
       </div>
 

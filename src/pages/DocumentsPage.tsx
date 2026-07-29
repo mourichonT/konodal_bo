@@ -37,7 +37,7 @@ function formatDate(date: Date | null): string {
 export default function DocumentsPage() {
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-semibold">Documents</h1>
+      <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Documents</h1>
       <ResidenceDocumentsSection />
       <LotDocumentsSection />
     </div>
