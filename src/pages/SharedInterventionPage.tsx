@@ -11,14 +11,17 @@ import { DescriptionTextarea } from "@/components/DescriptionTextarea"
 import { KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
 import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 
-const GET_SHARED_INTERVENTION_URL =
-  "https://us-central1-konodal-dev.cloudfunctions.net/get_shared_intervention"
-const CREATE_SHARED_RAPPORT_URL =
-  "https://us-central1-konodal-dev.cloudfunctions.net/create_shared_rapport"
-const RESCHEDULE_SHARED_INTERVENTION_URL =
-  "https://us-central1-konodal-dev.cloudfunctions.net/reschedule_shared_intervention"
-const REVOKE_SHARED_TOKEN_URL =
-  "https://us-central1-konodal-dev.cloudfunctions.net/revoke_shared_token"
+// URL de base construite dynamiquement (région + projet réels), pas codée en
+// dur sur us-central1/konodal-dev - ce précédent (encore présent dans
+// sinistres.ts pour generate_report, legacy déployée à la main sur ce seul
+// projet/région) cassait ces 4 endpoints en prod : get_shared_intervention
+// et consorts n'ont pas de region= explicite dans functions_python/main.py,
+// donc suivent la région globale (europe-west9) du projet réellement déployé.
+const FUNCTIONS_BASE = `https://europe-west9-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net`
+const GET_SHARED_INTERVENTION_URL = `${FUNCTIONS_BASE}/get_shared_intervention`
+const CREATE_SHARED_RAPPORT_URL = `${FUNCTIONS_BASE}/create_shared_rapport`
+const RESCHEDULE_SHARED_INTERVENTION_URL = `${FUNCTIONS_BASE}/reschedule_shared_intervention`
+const REVOKE_SHARED_TOKEN_URL = `${FUNCTIONS_BASE}/revoke_shared_token`
 
 type SharedIntervention = {
   title: string

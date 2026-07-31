@@ -186,11 +186,25 @@ function CsMembersSection({ residenceId, residence }: { residenceId: string; res
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerUids.join(",")])
 
-  async function handleToggle(uid: string, member: boolean) {
-    setPendingUid(uid)
+  async function handleToggle(user: KonodalUser, member: boolean) {
+    setPendingUid(user.uid)
     try {
-      await setCsMember(residenceId, uid, member)
-      toast.success(member ? "Invité au Conseil Syndical" : "Retiré du Conseil Syndical")
+      const { emailSent } = await setCsMember(
+        residenceId,
+        user.uid,
+        member,
+        user.email,
+        residence.name
+      )
+      if (member) {
+        toast.success(
+          emailSent
+            ? "Invité au Conseil Syndical, email envoyé"
+            : "Invité au Conseil Syndical, mais l'email n'a pas pu être envoyé"
+        )
+      } else {
+        toast.success("Retiré du Conseil Syndical")
+      }
     } catch (err) {
       toast.error("Échec de la mise à jour : " + (err as Error).message)
     } finally {
@@ -230,7 +244,7 @@ function CsMembersSection({ residenceId, residence }: { residenceId: string; res
                   variant="outline"
                   size="sm"
                   disabled={pendingUid === u.uid}
-                  onClick={() => handleToggle(u.uid, false)}
+                  onClick={() => handleToggle(u, false)}
                 >
                   <ShieldOff />
                   Retirer
@@ -257,7 +271,7 @@ function CsMembersSection({ residenceId, residence }: { residenceId: string; res
                   variant="outline"
                   size="sm"
                   disabled={pendingUid === u.uid}
-                  onClick={() => handleToggle(u.uid, true)}
+                  onClick={() => handleToggle(u, true)}
                 >
                   <UserPlus />
                   Inviter au CS

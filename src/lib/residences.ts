@@ -12,7 +12,8 @@ import {
   where,
   type Unsubscribe,
 } from "firebase/firestore"
-import { db } from "@/firebase"
+import { httpsCallable } from "firebase/functions"
+import { db, functions } from "@/firebase"
 import type { Address, GeranceRef, Residence } from "@/types/residence"
 
 const residencesCollection = collection(db, "residences")
@@ -113,6 +114,56 @@ export async function updateResidenceGeranceRef(id: string, geranceRef: GeranceR
   })
 }
 
+function csMemberInviteEmailHtml(residenceName: string): string {
+  return `
+    <!DOCTYPE html>
+    <html lang="fr">
+    <body style="font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4;">
+    <table align="center" width="600" style="background-color: #ffffff; border-collapse: collapse; margin-top: 20px;">
+        <tr>
+        <td style="background-color: rgba(72, 119, 91, 1); color: #ffffff; text-align: center; padding: 30px 20px">
+            <h2 style="margin: 0; font-size: 20px">KONODAL</h2>
+        </td>
+        </tr>
+        <tr>
+        <td style="padding: 30px 30px; color: #333333;">
+            <p>Bonjour,</p>
+            <p>Vous avez été ajouté(e) au <strong>Conseil Syndical</strong> de la résidence <strong>${residenceName}</strong>.</p>
+            <p>Connectez-vous à l'application KONODAL pour accéder aux fonctionnalités réservées aux membres du CS (documents de copropriété, suivi des sinistres...).</p>
+            <p style="font-size: 12px; color: #666;">En cas de question, contactez votre syndic.</p>
+        </td>
+        </tr>
+    </table>
+    </body>
+    </html>
+  `
+}
+
+// Envoie une notification à l'adresse mail déjà connue de ce compte (pas une
+// invitation à créer un compte - le propriétaire en a déjà un, cf. décision
+// de cadrage sur setCsMember) - via send_email_callable (functions_python),
+// déjà déployée, aucun nouvel endpoint nécessaire. Échec avalé (log console
+// seulement) : l'ajout à csmembers, lui, a déjà réussi et ne doit pas être
+// remis en cause par un problème d'envoi d'email.
+async function sendCsMemberInviteEmail(email: string, residenceName: string) {
+  try {
+    const call = httpsCallable<
+      { to: string; subject: string; body: string; html: string },
+      { success: boolean; error: string | null }
+    >(functions, "send_email_callable")
+    const result = await call({
+      to: email,
+      subject: `Vous êtes membre du Conseil Syndical de ${residenceName}`,
+      body: `Vous avez été ajouté(e) au Conseil Syndical de la résidence ${residenceName}. Connectez-vous à l'application KONODAL pour en savoir plus.`,
+      html: csMemberInviteEmailHtml(residenceName),
+    })
+    return result.data.success
+  } catch (err) {
+    console.error("sendCsMemberInviteEmail: échec de l'envoi", err)
+    return false
+  }
+}
+
 // Invite/retire un membre du Conseil Syndical (residences/{id}.csmembers,
 // tableau d'uid) - synchronisé automatiquement vers
 // users/{uid}.csMemberResidencesIds par sync_cs_member_residences
@@ -122,8 +173,21 @@ export async function updateResidenceGeranceRef(id: string, geranceRef: GeranceR
 // de cadrage. firestore.rules (residences/{id}.update) autorise déjà
 // isCsMember/isSuperAdmin/isProfessionnelResidence sans restriction de champ,
 // donc superAdmin ET agence/agent peuvent tous les trois inviter.
-export async function setCsMember(residenceId: string, uid: string, member: boolean) {
+// email/residenceName : uniquement fournis lors d'un ajout (member=true),
+// pour notifier le nouveau membre - jamais utilisés au retrait.
+export async function setCsMember(
+  residenceId: string,
+  uid: string,
+  member: boolean,
+  email?: string,
+  residenceName?: string
+): Promise<{ emailSent: boolean }> {
   await updateDoc(doc(db, "residences", residenceId), {
     csmembers: member ? arrayUnion(uid) : arrayRemove(uid),
   })
+  if (member && email && residenceName) {
+    const emailSent = await sendCsMemberInviteEmail(email, residenceName)
+    return { emailSent }
+  }
+  return { emailSent: false }
 }

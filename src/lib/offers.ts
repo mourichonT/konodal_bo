@@ -1,10 +1,10 @@
 // Endpoints publics (aucune authentification Firebase) consommés par
 // OfferPage.tsx - même pattern que SharedInterventionPage/sinistres.ts
 // (@https_fn.on_request, appelés en fetch brut plutôt qu'en httpsCallable),
-// mais URL de base construite dynamiquement (région + projet réels) plutôt
-// que codée en dur, contrairement au précédent existant dans sinistres.ts
-// (GET_SHARED_INTERVENTION_URL etc., figé sur us-central1/konodal-dev quel
-// que soit l'environnement de build - bug préexistant, hors périmètre ici).
+// URL de base construite dynamiquement (région + projet réels) plutôt que
+// codée en dur - seule GENERATE_REPORT_URL (sinistres.ts) reste figée sur
+// us-central1/konodal-dev, cette fonction n'existant réellement que là
+// (legacy, cf. commentaire dans functions_python/main.py).
 const FUNCTIONS_BASE = `https://europe-west9-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net`
 
 export type Offer = {
