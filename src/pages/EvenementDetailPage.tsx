@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { EventFormDialog } from "@/components/EventFormDialog"
 import { PostCommentsCard } from "@/components/PostCommentsCard"
+// ?url : cf. commentaire équivalent dans lib/events.ts (GERANCE_PLACEHOLDER_LOGO_URL).
+import logoVertical from "@/assets/logo-vertical.png?url&no-inline"
 import { db } from "@/firebase"
-import { subscribeToEvent, updateEvent, cancelEvent, KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
+import { subscribeToEvent, updateEvent, cancelEvent } from "@/lib/events"
 import { subscribeToRapportsForEvent, type Rapport } from "@/lib/rapports"
 import type { ResidenceEvent } from "@/types/event"
 import { emptyAddress, type Address, type GeranceRef } from "@/types/residence"
@@ -57,6 +59,11 @@ function buildInterventionEmailHtml({
   const dateLabel = event.eventDate
     ? `${event.eventDate.toLocaleDateString("fr-FR")} à ${event.eventDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
     : "—"
+  // URL absolue construite à partir de l'asset bundlé (pas un lien
+  // Firebase Storage codé en dur sur konodal-dev, cf. bug du lien de
+  // partage prestataire) - reste correcte quel que soit l'environnement
+  // depuis lequel ce mail est envoyé.
+  const logoUrl = new URL(logoVertical, window.location.origin).href
 
   return `
     <!DOCTYPE html>
@@ -69,7 +76,7 @@ function buildInterventionEmailHtml({
     <table align="center" width="600" style="background-color: #ffffff; border-collapse: collapse; margin-top: 20px;">
         <tr>
         <td style="background-color: rgba(72, 119, 91, 1); color: rgba(255, 255, 255, 1); text-align: center; padding: 30px 20px">
-            <img src="${KONODAL_LOGO_HORIZONTAL_URL}" alt="KONODAL-Logo" width="250" style="max-width: 25%">
+            <img src="${logoUrl}" alt="KONODAL-Logo" width="90" style="max-width: 25%">
             <h2 style="margin: 30px 0 0; font-size: 20px">Intervention programmée</h2>
         </td>
         </tr>
@@ -302,9 +309,12 @@ export default function EvenementDetailPage() {
                   <span className="text-muted-foreground">Résidence : </span>
                   {residenceName ?? "—"}
                 </div>
-                <div>
+                <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">Prestataire : </span>
                   {event.prestaName || "—"}
+                  {event.pathImage && (
+                    <img src={event.pathImage} alt="" className="size-6 shrink-0 rounded-full border object-cover" />
+                  )}
                 </div>
                 <div>
                   <span className="text-muted-foreground">Date : </span>

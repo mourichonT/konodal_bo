@@ -2,34 +2,13 @@ import { useEffect, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { CreditCard, KeyRound, Minus, Plus } from "lucide-react"
 import logoGreen from "@/assets/logo_transparent-green.png"
+import { useManropeFont } from "@/hooks/useManropeFont"
 import { createOfferCheckoutSession, getOffer, requestOfferPasswordLink, type Offer } from "@/lib/offers"
+import { CARD_SHADOW, CTA_GRADIENT, CTA_SHADOW } from "@/lib/utils"
 
 function formatAmount(cents: number, currency: string): string {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: currency.toUpperCase() }).format(cents / 100)
 }
-
-// Police dédiée à cette page publique (maquette "Refonte offres 2026") -
-// chargée à la volée plutôt qu'injectée globalement dans index.css, qui
-// garde Roboto pour le reste du BO (jamais utilisée ailleurs dans l'app).
-function useManropeFont() {
-  useEffect(() => {
-    const preconnect = document.createElement("link")
-    preconnect.rel = "preconnect"
-    preconnect.href = "https://fonts.googleapis.com"
-    const stylesheet = document.createElement("link")
-    stylesheet.rel = "stylesheet"
-    stylesheet.href = "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
-    document.head.append(preconnect, stylesheet)
-    return () => {
-      preconnect.remove()
-      stylesheet.remove()
-    }
-  }, [])
-}
-
-const CARD_SHADOW = "0 1px 2px oklch(20% 0 0 / 0.04), 0 12px 32px -18px oklch(20% 0 0 / 0.12)"
-const CTA_GRADIENT = "linear-gradient(135deg, oklch(45% 0.08 155), oklch(38% 0.075 158))"
-const CTA_SHADOW = "0 10px 26px -10px oklch(38% 0.08 155 / 0.55)"
 
 export default function OfferPage() {
   useManropeFont()

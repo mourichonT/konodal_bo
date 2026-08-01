@@ -152,8 +152,12 @@ export async function deleteSinistre(residenceId: string, postId: string) {
 // Cloud Function existante (functions_python/main.py:generate_report), déjà
 // utilisée côté app mobile (exportpdfhttp.dart:fetchPostPdf) pour le même
 // rapport - CORS ouvert en POST, aucune auth requise, réutilisée telle
-// quelle plutôt que de dupliquer la génération PDF côté BO.
-const GENERATE_REPORT_URL = "https://us-central1-konodal-dev.cloudfunctions.net/generate_report"
+// quelle plutôt que de dupliquer la génération PDF côté BO. europe-west9 (pas
+// us-central1) et projet réel (pas konodal-dev) : generate_report n'a pas de
+// region= explicite dans main.py, donc suit la région globale du fichier -
+// même bug/même correctif que GET_SHARED_INTERVENTION_URL etc.
+// (SharedInterventionPage.tsx).
+const GENERATE_REPORT_URL = `https://europe-west9-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net/generate_report`
 
 export async function fetchSinistreReportPdf(residenceId: string, postId: string): Promise<Blob> {
   const response = await fetch(GENERATE_REPORT_URL, {

@@ -1,4 +1,20 @@
 import type { Address } from "@/types/residence"
+// ?url force une vraie URL même pour les fichiers < 4 Ko (que Vite
+// inlinerait sinon en base64) - CONTACT_SERVICE_ICONS est réutilisé tel
+// quel comme pathImage d'une intervention, envoyé jusque dans l'email
+// (EvenementDetailPage), pas juste affiché dans un <img> de cette app.
+import chauffageCollectif from "@/assets/icones_presta/chauffage-collectif.png?url&no-inline"
+import electricite from "@/assets/icones_presta/electricite.png?url&no-inline"
+import entretienAscenseur from "@/assets/icones_presta/entretien-ascenseur.png?url&no-inline"
+import espacesVerts from "@/assets/icones_presta/espaces-verts.png?url&no-inline"
+import gestionAdministrative from "@/assets/icones_presta/gestion-administrative.png?url&no-inline"
+import nettoyage from "@/assets/icones_presta/nettoyage.png?url&no-inline"
+import plomberie from "@/assets/icones_presta/plomberie.png?url&no-inline"
+import portesPortails from "@/assets/icones_presta/portes-portails.png?url&no-inline"
+import securiteIncendie from "@/assets/icones_presta/securite-incendie.png?url&no-inline"
+import toitureEtancheite from "@/assets/icones_presta/toiture-etancheite.png?url&no-inline"
+import ventilationVmc from "@/assets/icones_presta/ventilation-vmc.png?url&no-inline"
+import videosurveillance from "@/assets/icones_presta/videosurveillance.png?url&no-inline"
 
 // Reflète TypeList.servicePrestaList côté app mobile
 // (konodal_app/lib/models/enum/type_list.dart) - liste fermée choisie dans
@@ -18,27 +34,30 @@ export const CONTACT_SERVICES = [
   "Toiture / étanchéité",
 ] as const
 
-// Nom de fichier dans Storage gs://konodal-dev.firebasestorage.app/
-// assets/icones_presta/ - même convention que _prestaIconFileName côté app
-// mobile (konodal_app/lib/vues/pages_vues/event_page/event_form.dart), qui
-// résout ces mêmes fichiers via getDownloadURL() pour illustrer un event
-// "Prestation externe" créé depuis l'app. EventFormDialog fait la même
-// résolution côté BO au moment de la soumission - un nom de fichier ne
-// périme jamais, contrairement à une URL de téléchargement mise en cache
-// ici.
-export const CONTACT_SERVICE_ICON_FILENAMES: Record<(typeof CONTACT_SERVICES)[number], string> = {
-  Nettoyage: "nettoyage.png",
-  "Espaces verts": "espaces-verts.png",
-  Électricité: "electricite.png",
-  "Entretiens Ascenseur": "entretien-ascenseur.png",
-  "Chauffage collectif": "chauffage-collectif.png",
-  Plomberie: "plomberie.png",
-  "Ventilation (VMC)": "ventilation-vmc.png",
-  "Portes et portails": "portes-portails.png",
-  Vidéosurveillance: "videosurveillance.png",
-  "Sécurité incendie": "securite-incendie.png",
-  "Gestion administrative": "gestion-administrative.png",
-  "Toiture / étanchéité": "toiture-etancheite.png",
+// Icône du service, utilisée comme pathImage d'une intervention quand le
+// prestataire choisi est un contact (EventFormDialog.resolvePrestaImage).
+// Assets bundlés localement (src/assets/icones_presta/) - pas résolus via
+// Firebase Storage (gs://.../assets/icones_presta/<fichier>.png) : ces
+// fichiers n'y ont jamais été effectivement uploadés, ce qui faisait
+// échouer getDownloadURL() en silence et laissait pathImage vide pour
+// toute intervention programmée depuis ce backoffice. L'app mobile
+// (konodal_app/lib/vues/pages_vues/event_page/event_form.dart) résout ces
+// mêmes noms de fichiers via Storage pour son propre flux "Prestation
+// externe" - toujours cassé côté app tant que ces fichiers n'y sont pas
+// uploadés, hors périmètre de ce correctif BO.
+export const CONTACT_SERVICE_ICONS: Record<(typeof CONTACT_SERVICES)[number], string> = {
+  Nettoyage: nettoyage,
+  "Espaces verts": espacesVerts,
+  Électricité: electricite,
+  "Entretiens Ascenseur": entretienAscenseur,
+  "Chauffage collectif": chauffageCollectif,
+  Plomberie: plomberie,
+  "Ventilation (VMC)": ventilationVmc,
+  "Portes et portails": portesPortails,
+  Vidéosurveillance: videosurveillance,
+  "Sécurité incendie": securiteIncendie,
+  "Gestion administrative": gestionAdministrative,
+  "Toiture / étanchéité": toitureEtancheite,
 }
 
 export type Contact = {

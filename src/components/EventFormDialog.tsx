@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { Ban, ChevronDown, Save } from "lucide-react"
 import { doc, getDoc } from "firebase/firestore"
-import { getDownloadURL, ref } from "firebase/storage"
 import { Button } from "@/components/ui/button"
 import { DateInput } from "@/components/DateInput"
 import { Input } from "@/components/ui/input"
@@ -17,12 +16,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
-import { db, storage } from "@/firebase"
+import { db } from "@/firebase"
 import { GERANCE_PLACEHOLDER_LOGO_URL, type EventInput } from "@/lib/events"
 import { subscribeToContacts } from "@/lib/contacts"
 import { subscribeToStructures } from "@/lib/structures"
 import { resolveUsersByUids } from "@/lib/users"
-import { CONTACT_SERVICE_ICON_FILENAMES, type Contact } from "@/types/contact"
+import { CONTACT_SERVICE_ICONS, type Contact } from "@/types/contact"
 import type { GeranceRef } from "@/types/residence"
 import type { StructureResidence } from "@/types/structure"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
@@ -50,31 +49,27 @@ function dateToLocalParts(date: Date): { dateOnly: string; time: string } {
 }
 
 // Résout la photo associée au prestataire choisi - placeholder gérance, ou
-// icône du service du contact (assets/icones_presta/ dans Storage, même
-// fichiers que _prestaIconFileName côté app mobile). Partagé entre l'aperçu
-// live (pendant la saisie) et handleSubmit (valeur réellement enregistrée),
-// pour ne jamais désynchroniser les deux. Si aucun des deux ne matche ou si
-// le fichier est introuvable, retombe sur `fallback` (photo déjà présente
+// icône du service du contact (assets bundlés, cf. CONTACT_SERVICE_ICONS).
+// URL absolue (pas un chemin relatif au bundle) : pathImage est renvoyé tel
+// quel dans l'email d'intervention (EvenementDetailPage), qui a besoin d'une
+// URL joignable depuis n'importe quelle boîte mail, pas juste depuis cette
+// page. Partagé entre l'aperçu live (pendant la saisie) et handleSubmit
+// (valeur réellement enregistrée), pour ne jamais désynchroniser les deux.
+// Si aucun des deux ne matche, retombe sur `fallback` (photo déjà présente
 // en édition, "" en création) plutôt que de l'écraser par du vide.
-async function resolvePrestaImage(
+function resolvePrestaImage(
   name: string,
   geranceAgentLabel: string | null,
   contacts: Contact[],
   fallback: string
-): Promise<string> {
+): string {
   if (geranceAgentLabel && name === geranceAgentLabel) {
     return GERANCE_PLACEHOLDER_LOGO_URL
   }
   const contact = contacts.find((c) => c.name === name)
   if (!contact) return fallback
-  const fileName =
-    CONTACT_SERVICE_ICON_FILENAMES[contact.service as keyof typeof CONTACT_SERVICE_ICON_FILENAMES]
-  if (!fileName) return fallback
-  try {
-    return await getDownloadURL(ref(storage, `assets/icones_presta/${fileName}`))
-  } catch {
-    return fallback
-  }
+  const icon = CONTACT_SERVICE_ICONS[contact.service as keyof typeof CONTACT_SERVICE_ICONS]
+  return icon ? new URL(icon, window.location.origin).href : fallback
 }
 
 // Libellé complet d'un bâtiment/structure : "type + espace + name" (ex:
@@ -161,7 +156,6 @@ function EventFormDialogContent({
     initial?.eventDate ? dateToLocalParts(initial.eventDate).time : ""
   )
   const [prestaName, setPrestaName] = useState(initial?.prestaName ?? "")
-  const [pathImage, setPathImage] = useState(initial?.pathImage ?? "")
   const [locationElement, setLocationElement] = useState(
     initial?.locationElement ?? prefillFromSinistre?.locationElement ?? ""
   )
@@ -236,24 +230,16 @@ function EventFormDialogContent({
   )
 
   // Aperçu live de la photo pendant la saisie (avant même d'enregistrer) -
-  // recalculé à chaque changement de prestataire, même résolution que
-  // handleSubmit (resolvePrestaImage) pour ne jamais diverger.
-  useEffect(() => {
-    if (!prestaName) {
-      setPathImage(initial?.pathImage ?? "")
-      return
-    }
-    let cancelled = false
-    resolvePrestaImage(prestaName, geranceAgentLabel, residenceContacts, initial?.pathImage ?? "").then(
-      (url) => {
-        if (!cancelled) setPathImage(url)
-      }
-    )
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prestaName, geranceAgentLabel, residenceContacts, initial?.pathImage])
+  // recalculé à chaque changement de prestataire, même résolution
+  // (resolvePrestaImage) que la valeur lue par handleSubmit pour ne jamais
+  // diverger.
+  const pathImage = useMemo(
+    () =>
+      prestaName
+        ? resolvePrestaImage(prestaName, geranceAgentLabel, residenceContacts, initial?.pathImage ?? "")
+        : (initial?.pathImage ?? ""),
+    [prestaName, geranceAgentLabel, residenceContacts, initial?.pathImage]
+  )
 
   const selectedStructure = structures.find((s) => structureLabel(s) === locationElement)
   const floorOptions = selectedStructure?.etage ?? []
@@ -283,8 +269,7 @@ function EventFormDialogContent({
       // L'heure est optionnelle - minuit par défaut si non renseignée,
       // plutôt que de bloquer la soumission tant qu'elle est vide.
       const eventDate = new Date(`${eventDateOnly}T${eventTime || "00:00"}`)
-      // pathImage vient de l'aperçu live (déjà résolu par le même
-      // resolvePrestaImage à chaque changement de prestaName, cf. useEffect
+      // pathImage vient de l'aperçu live (même useMemo/resolvePrestaImage
       // ci-dessus) - jamais recalculé ici, pour ne jamais diverger de ce que
       // l'utilisateur a vu à l'écran avant de valider.
       await onSubmit(residenceId, {

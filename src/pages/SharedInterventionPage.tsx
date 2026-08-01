@@ -1,22 +1,12 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { CalendarClock, FileText, Video } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
+import logoHorizontalWhite from "@/assets/logo-horizontal.png"
 import { DateInput } from "@/components/DateInput"
-import { DescriptionTextarea } from "@/components/DescriptionTextarea"
-import { KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
-import { PRIMARY_CTA_CLASS } from "@/lib/utils"
+import { DESCRIPTION_MAX_LENGTH } from "@/components/DescriptionTextarea"
+import { useManropeFont } from "@/hooks/useManropeFont"
+import { CARD_SHADOW, CTA_GRADIENT, CTA_SHADOW } from "@/lib/utils"
 
-// URL de base construite dynamiquement (région + projet réels), pas codée en
-// dur sur us-central1/konodal-dev - ce précédent (encore présent dans
-// sinistres.ts pour generate_report, legacy déployée à la main sur ce seul
-// projet/région) cassait ces 4 endpoints en prod : get_shared_intervention
-// et consorts n'ont pas de region= explicite dans functions_python/main.py,
-// donc suivent la région globale (europe-west9) du projet réellement déployé.
 const FUNCTIONS_BASE = `https://europe-west9-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net`
 const GET_SHARED_INTERVENTION_URL = `${FUNCTIONS_BASE}/get_shared_intervention`
 const CREATE_SHARED_RAPPORT_URL = `${FUNCTIONS_BASE}/create_shared_rapport`
@@ -80,7 +70,15 @@ function formatAddress(address: SharedAddress): string {
   return [line1, line2].filter(Boolean).join(" — ") || "—"
 }
 
+const EYEBROW_CLASS = "mb-3.5 text-xs font-bold tracking-wide text-[oklch(52%_0.01_150)] uppercase"
+const CARD_CLASS = "rounded-[20px] border border-[oklch(93%_0.005_100)] bg-white p-5 sm:p-6"
+const FIELD_LABEL_CLASS = "mb-1.5 block text-[12.5px] font-bold text-[oklch(38%_0.09_155)]"
+const FIELD_CLASS =
+  "w-full box-border rounded-[11px] border border-[oklch(88%_0.01_150)] px-3.5 py-2.5 text-[13.5px] text-[oklch(24%_0.01_150)] outline-none focus:border-[oklch(55%_0.1_155)] focus:ring-3 focus:ring-[oklch(55%_0.1_155/0.14)]"
+const SUB_CARD_CLASS = "rounded-2xl border border-[oklch(92%_0.005_100)] p-4"
+
 export default function SharedInterventionPage() {
+  useManropeFont()
   const { token } = useParams<{ token: string }>()
   const navigate = useNavigate()
   const [data, setData] = useState<SharedData | null>(null)
@@ -99,6 +97,7 @@ export default function SharedInterventionPage() {
   const [rapportSubmitting, setRapportSubmitting] = useState(false)
   const [rapportError, setRapportError] = useState<string | null>(null)
   const [rapportSubmitted, setRapportSubmitted] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(() => {
     if (!token) return
@@ -196,252 +195,307 @@ export default function SharedInterventionPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-svh max-w-2xl flex-col gap-6 p-4 py-10">
-      <div className="-mx-4 flex flex-col items-center gap-1 bg-sidebar px-4 py-6 sm:-mx-0 sm:rounded-2xl">
-        <img src={KONODAL_LOGO_HORIZONTAL_URL} alt="Konodal" className="h-[86px] w-auto" />
-        <h1 className="px-5 pt-5 text-[25px] text-sidebar-foreground">Intervention</h1>
-      </div>
+    <div
+      className="flex min-h-svh justify-center px-4 py-6 pb-16 sm:px-6"
+      style={{ background: "oklch(97% 0.005 100)", fontFamily: "'Manrope', system-ui, sans-serif" }}
+    >
+      <div className="flex w-full max-w-[480px] flex-col gap-4">
+        <div
+          className="relative overflow-hidden rounded-[20px] px-6 py-6 sm:px-7"
+          style={{
+            background:
+              "linear-gradient(150deg, oklch(30% 0.05 155) 0%, oklch(42% 0.075 152) 55%, oklch(48% 0.09 148) 100%)",
+            boxShadow: "0 16px 40px -16px oklch(30% 0.05 155 / 0.45)",
+          }}
+        >
+          <div
+            className="pointer-events-none absolute -top-[50px] -right-[50px] h-[180px] w-[180px] rounded-full"
+            style={{ background: "radial-gradient(circle, oklch(70% 0.1 145 / 0.18), transparent 70%)" }}
+          />
+          <div className="relative flex items-center">
+            <img src={logoHorizontalWhite} alt="Konodal" className="block h-6 w-auto" />
+          </div>
+          <h1 className="relative mt-[30px] mb-0 text-[26px] leading-none font-extrabold tracking-tight text-white">
+            Intervention
+          </h1>
+        </div>
 
-      {loading && <p className="text-muted-foreground">Chargement…</p>}
-      {error && <p className="text-destructive">{error}</p>}
+        {loading && <p className="text-center text-sm text-[oklch(55%_0.01_150)]">Chargement…</p>}
+        {error && (
+          <div className={CARD_CLASS} style={{ boxShadow: CARD_SHADOW }}>
+            <p className="m-0 text-sm text-destructive">{error}</p>
+          </div>
+        )}
 
-      {data && (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{data.intervention.title || "Sans titre"}</CardTitle>
-              <p className="text-sm text-muted-foreground">
+        {data && (
+          <>
+            <div className={CARD_CLASS} style={{ boxShadow: CARD_SHADOW }}>
+              <h2 className="mt-0 mb-3.5 text-[15.5px] font-bold text-[oklch(38%_0.09_155)]">
+                {data.intervention.title || "Sans titre"}
+              </h2>
+              <div className="mb-2.5 text-[13px] font-semibold text-[oklch(38%_0.01_150)]">
                 {data.residence.name || "—"} — {formatAddress(data.residence.address)}
-              </p>
-            </CardHeader>
-            <CardContent className="grid gap-4 text-sm sm:grid-cols-2">
-              <div>
-                <span className="text-muted-foreground">Prestataire : </span>
-                {data.intervention.prestaName || "—"}
               </div>
-              <div>
-                <span className="text-muted-foreground">Date : </span>
-                {data.intervention.previousEventDate && (
-                  <span className="mr-1 text-muted-foreground line-through">
-                    {formatEventDateTime(data.intervention.previousEventDate)}
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-semibold text-[oklch(52%_0.01_150)]">Prestataire : </span>
+                  <span className="text-[13px] font-bold text-[oklch(24%_0.01_150)]">
+                    {data.intervention.prestaName || "—"}
                   </span>
-                )}
-                {data.intervention.eventDate ? formatEventDateTime(data.intervention.eventDate) : "—"}
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-[oklch(52%_0.01_150)]">Date : </span>
+                  {data.intervention.previousEventDate && (
+                    <span className="mr-1 text-[13px] font-bold text-[oklch(60%_0.005_100)] line-through">
+                      {formatEventDateTime(data.intervention.previousEventDate)}
+                    </span>
+                  )}
+                  <span className="text-[13px] font-bold text-[oklch(24%_0.01_150)]">
+                    {data.intervention.eventDate ? formatEventDateTime(data.intervention.eventDate) : "—"}
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col sm:col-span-2">
-                <span className="text-muted-foreground">Description :</span>
-                <span className="mt-[10px]">{data.intervention.description || "Aucune description."}</span>
+              <div className="mb-1 text-xs font-semibold text-[oklch(52%_0.01_150)]">Description :</div>
+              <div className="text-[13px] text-[oklch(65%_0.005_100)] italic">
+                {data.intervention.description || "Aucune description."}
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          {data.sinistre && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Ticket lié</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4 text-sm">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <span className="text-muted-foreground">Titre : </span>
-                    {data.sinistre.title || "Sans titre"}
+            {data.sinistre && (
+              <div className={CARD_CLASS} style={{ boxShadow: CARD_SHADOW }}>
+                <div className={EYEBROW_CLASS}>Ticket lié</div>
+                <div className="mb-3.5 text-[15px] font-bold text-[oklch(22%_0.01_150)]">
+                  {data.sinistre.title || "Sans titre"}
+                </div>
+
+                <div className="mb-4 flex flex-wrap items-center gap-6">
+                  <div>
+                    <div className="mb-1 text-[11.5px] font-semibold text-[oklch(52%_0.01_150)]">Statut</div>
+                    <span className="rounded-full bg-[oklch(93%_0.06_235)] px-2.5 py-1 text-xs font-bold text-[oklch(38%_0.13_235)]">
+                      {data.sinistre.statut || "—"}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Statut : </span>
-                    <Badge variant="outline">{data.sinistre.statut || "—"}</Badge>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Localisation : </span>
-                    {[data.sinistre.locationElement, data.sinistre.locationFloor]
-                      .filter(Boolean)
-                      .join(" — ") || "—"}
-                  </div>
-                  <div className="flex flex-col sm:col-span-2">
-                    <span className="text-muted-foreground">Description :</span>
-                    <span className="mt-[10px]">{data.sinistre.description || "Aucune description."}</span>
+                    <div className="mb-1 text-[11.5px] font-semibold text-[oklch(52%_0.01_150)]">Localisation</div>
+                    <div className="text-[13px] font-bold text-[oklch(24%_0.01_150)]">
+                      {[data.sinistre.locationElement, data.sinistre.locationFloor].filter(Boolean).join(" — ") ||
+                        "—"}
+                    </div>
                   </div>
                 </div>
 
-                {(data.sinistre.pathImage || data.sinistre.creationDate) && (
-                  <div className="rounded-lg border border-border p-3">
-                    <span className="text-xs text-muted-foreground">Déclaration principale</span>
+                {(data.sinistre.pathImage || data.sinistre.creationDate || data.sinistre.description) && (
+                  <div className={`${SUB_CARD_CLASS} mb-4`}>
+                    <div className="mb-2 text-sm font-bold text-[oklch(22%_0.01_150)]">Déclaration principale</div>
+                    {data.sinistre.description && (
+                      <p className="m-0 mb-3 text-[13px] leading-relaxed text-[oklch(48%_0.01_150)]">
+                        {data.sinistre.description}
+                      </p>
+                    )}
                     {data.sinistre.pathImage &&
                       (data.sinistre.isVideo ? (
-                        <video src={data.sinistre.pathImage} controls className="mt-2 max-h-64 rounded-lg" />
+                        <video src={data.sinistre.pathImage} controls className="block w-full rounded-[10px]" />
                       ) : (
                         <img
                           src={data.sinistre.pathImage}
                           alt={data.sinistre.title}
-                          className="mt-2 max-h-64 rounded-lg object-cover"
+                          className="block w-full rounded-[10px] object-cover"
                         />
                       ))}
                     {data.sinistre.creationDate && (
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <div className="mt-2 text-[11.5px] font-semibold text-[oklch(60%_0.005_100)]">
                         {new Date(data.sinistre.creationDate).toLocaleDateString("fr-FR")}
-                      </p>
+                      </div>
                     )}
                   </div>
                 )}
 
                 {data.sinistre.signalements.map((s, i) => (
-                  <div key={i} className="rounded-lg border border-border p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">{s.title || "Sans titre"}</span>
+                  <div key={i} className={`${SUB_CARD_CLASS} mb-4`}>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-[oklch(22%_0.01_150)]">{s.title || "Sans titre"}</span>
                       {s.isVideo && (
-                        <Badge variant="outline">
-                          <Video />
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[oklch(93%_0.06_235)] px-2.5 py-0.5 text-xs font-bold text-[oklch(38%_0.13_235)]">
+                          <Video className="h-3 w-3" />
                           Vidéo
-                        </Badge>
+                        </span>
                       )}
                     </div>
-                    {s.description && <p className="mt-1 text-muted-foreground">{s.description}</p>}
+                    {s.description && (
+                      <p className="m-0 mb-3 text-[13px] leading-relaxed text-[oklch(48%_0.01_150)]">
+                        {s.description}
+                      </p>
+                    )}
                     {s.pathImage &&
                       (s.isVideo ? (
-                        <video src={s.pathImage} controls className="mt-2 max-h-64 rounded-lg" />
+                        <video src={s.pathImage} controls className="block w-full rounded-[10px]" />
                       ) : (
-                        <img src={s.pathImage} alt={s.title} className="mt-2 max-h-64 rounded-lg object-cover" />
+                        <img
+                          src={s.pathImage}
+                          alt={s.title}
+                          className="block w-full rounded-[10px] object-cover"
+                        />
                       ))}
                     {s.creationDate && (
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <div className="mt-2 text-[11.5px] font-semibold text-[oklch(60%_0.005_100)]">
                         {new Date(s.creationDate).toLocaleDateString("fr-FR")}
-                      </p>
+                      </div>
                     )}
                   </div>
                 ))}
 
-                <p className="text-xs text-muted-foreground">
-                  La déclaration et la clôture de ce ticket se font désormais via le compte-rendu
-                  ci-dessous.
+                <p className="m-0 text-xs leading-relaxed text-[oklch(55%_0.01_150)]">
+                  La déclaration et la clôture de ce ticket se font désormais via le compte-rendu ci-dessous.
                 </p>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            )}
 
-          {rapportSubmitted ? (
-            <Card>
-              <CardContent className="pt-6 text-sm text-muted-foreground">
-                Compte-rendu transmis, merci.
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Suite de l'intervention</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4 text-sm">
+            {rapportSubmitted ? (
+              <div className={CARD_CLASS} style={{ boxShadow: CARD_SHADOW }}>
+                <p className="m-0 text-sm text-[oklch(52%_0.01_150)]">Compte-rendu transmis, merci.</p>
+              </div>
+            ) : (
+              <>
+                <div className={CARD_CLASS} style={{ boxShadow: CARD_SHADOW }}>
+                  <div className={EYEBROW_CLASS}>Suite de l'intervention</div>
+
                   {data.intervention.previousEventDate && (
-                    <div className="rounded-lg border border-border bg-muted/40 p-3">
-                      <p>
-                        <span className="mr-1 text-muted-foreground line-through">
+                    <div className={`${SUB_CARD_CLASS} mb-4 bg-[oklch(97.5%_0.005_100)]`}>
+                      <p className="m-0 text-[13px]">
+                        <span className="mr-1 text-[oklch(60%_0.005_100)] line-through">
                           {formatEventDateTime(data.intervention.previousEventDate)}
                         </span>
                         {data.intervention.eventDate && (
-                          <span className="font-medium">{formatEventDateTime(data.intervention.eventDate)}</span>
+                          <span className="font-bold text-[oklch(24%_0.01_150)]">
+                            {formatEventDateTime(data.intervention.eventDate)}
+                          </span>
                         )}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Ce lien correspond à cette nouvelle date : conservez-le, c'est celui à
-                        utiliser pour la suite (compte-rendu, nouvelle reprogrammation).
+                      <p className="mt-1 mb-0 text-xs text-[oklch(55%_0.01_150)]">
+                        Ce lien correspond à cette nouvelle date : conservez-le, c'est celui à utiliser pour la suite
+                        (compte-rendu, nouvelle reprogrammation).
                       </p>
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={rescheduleSubmitting}
-                      onClick={() => setRescheduling((v) => !v)}
-                      className="w-fit"
-                    >
-                      <CalendarClock />
-                      {data.intervention.previousEventDate ? "Modifier le nouvel horaire" : "Reprogrammer un passage"}
-                    </Button>
+                  <button
+                    type="button"
+                    disabled={rescheduleSubmitting}
+                    onClick={() => setRescheduling((v) => !v)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-[oklch(88%_0.01_150)] bg-white px-4 py-3 text-[13.5px] font-bold text-[oklch(35%_0.01_150)] disabled:opacity-60"
+                  >
+                    <CalendarClock className="h-[15px] w-[15px]" />
+                    {data.intervention.previousEventDate ? "Modifier le nouvel horaire" : "Reprogrammer un passage"}
+                  </button>
 
-                    {rescheduling && (
-                      <form
-                        onSubmit={handleReschedule}
-                        className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3"
+                  {rescheduling && (
+                    <form onSubmit={handleReschedule} className="mt-3 flex flex-wrap items-end gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <label className={FIELD_LABEL_CLASS}>Nouvelle date</label>
+                        <DateInput value={rescheduleDate} onChange={setRescheduleDate} className={FIELD_CLASS} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label htmlFor="reschedule-time" className={FIELD_LABEL_CLASS}>
+                          Heure (optionnel)
+                        </label>
+                        <input
+                          id="reschedule-time"
+                          type="time"
+                          value={rescheduleTime}
+                          onChange={(e) => setRescheduleTime(e.target.value)}
+                          className={FIELD_CLASS}
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={rescheduleSubmitting || !rescheduleDate}
+                        className="rounded-xl px-5 py-2.5 text-[13.5px] font-bold text-white disabled:opacity-60"
+                        style={{ background: CTA_GRADIENT, boxShadow: CTA_SHADOW }}
                       >
-                        <div className="flex flex-col gap-1.5">
-                          <Label>Nouvelle date</Label>
-                          <DateInput value={rescheduleDate} onChange={setRescheduleDate} />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                          <Label htmlFor="reschedule-time">Heure (optionnel)</Label>
-                          <input
-                            id="reschedule-time"
-                            type="time"
-                            value={rescheduleTime}
-                            onChange={(e) => setRescheduleTime(e.target.value)}
-                            className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                          />
-                        </div>
-                        <Button
-                          type="submit"
-                          disabled={rescheduleSubmitting || !rescheduleDate}
-                          className={PRIMARY_CTA_CLASS}
-                        >
-                          Confirmer
-                        </Button>
-                        {rescheduleError && (
-                          <p className="w-full text-sm text-destructive">{rescheduleError}</p>
-                        )}
-                      </form>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                        Confirmer
+                      </button>
+                      {rescheduleError && <p className="m-0 w-full text-sm text-destructive">{rescheduleError}</p>}
+                    </form>
+                  )}
+                </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Ajouter un compte-rendu</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSubmitRapport} className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="rapport-title">Titre</Label>
-                      <Input
+                <div className={CARD_CLASS} style={{ boxShadow: CARD_SHADOW }}>
+                  <div className={EYEBROW_CLASS}>Ajouter un compte-rendu</div>
+
+                  <form onSubmit={handleSubmitRapport} className="flex flex-col gap-4">
+                    <div>
+                      <label htmlFor="rapport-title" className={FIELD_LABEL_CLASS}>
+                        Titre
+                      </label>
+                      <input
                         id="rapport-title"
                         required
                         value={rapportTitle}
                         onChange={(e) => setRapportTitle(e.target.value)}
+                        className={FIELD_CLASS}
                       />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="rapport-desc">Description</Label>
-                      <DescriptionTextarea
+
+                    <div>
+                      <label htmlFor="rapport-desc" className={FIELD_LABEL_CLASS}>
+                        Description
+                      </label>
+                      <textarea
                         id="rapport-desc"
-                        rows={3}
+                        rows={4}
+                        maxLength={DESCRIPTION_MAX_LENGTH}
                         value={rapportDescription}
-                        onChange={setRapportDescription}
+                        onChange={(e) => setRapportDescription(e.target.value)}
+                        className={`${FIELD_CLASS} resize-y font-[inherit]`}
                       />
+                      <div className="mt-1 text-right text-[11px] font-semibold text-[oklch(65%_0.005_100)]">
+                        {rapportDescription.length}/{DESCRIPTION_MAX_LENGTH}
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="rapport-file">Photo</Label>
-                      <input
-                        id="rapport-file"
-                        type="file"
-                        required
-                        accept="image/*"
-                        capture="environment"
-                        onChange={(e) => setRapportFile(e.target.files?.[0] ?? null)}
-                        className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
-                      />
+
+                    <div>
+                      <label className={FIELD_LABEL_CLASS}>Photo</label>
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="rounded-[10px] border border-[oklch(88%_0.01_150)] bg-[oklch(98%_0.003_100)] px-4 py-2 text-[12.5px] font-bold whitespace-nowrap text-[oklch(35%_0.01_150)]"
+                        >
+                          Parcourir…
+                        </button>
+                        <span className="text-[12.5px] font-semibold text-[oklch(60%_0.005_100)]">
+                          {rapportFile ? rapportFile.name : "Aucun fichier sélectionné"}
+                        </span>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          required
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => setRapportFile(e.target.files?.[0] ?? null)}
+                          className="hidden"
+                        />
+                      </div>
                     </div>
-                    {rapportError && <p className="text-sm text-destructive">{rapportError}</p>}
-                    <Button type="submit" disabled={rapportSubmitting} className={`w-fit ${PRIMARY_CTA_CLASS}`}>
-                      <FileText />
+
+                    {rapportError && <p className="m-0 text-sm text-destructive">{rapportError}</p>}
+
+                    <button
+                      type="submit"
+                      disabled={rapportSubmitting}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-bold text-white disabled:opacity-60"
+                      style={{ background: CTA_GRADIENT, boxShadow: CTA_SHADOW }}
+                    >
+                      <FileText className="h-[15px] w-[15px]" />
                       Envoyer
-                    </Button>
+                    </button>
                   </form>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </>
-      )}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

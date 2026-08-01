@@ -16,6 +16,11 @@ import {
 } from "firebase/firestore"
 import { db } from "@/firebase"
 import { EVENT_TYPE_INTERVENTION, type ResidenceEvent } from "@/types/event"
+// ?url force une vraie URL même si Vite déciderait d'inliner ce fichier en
+// base64 (assets < 4 Ko) - cette URL doit rester joignable en dehors du
+// bundle (email d'intervention), pas juste utilisable dans un <img> de la
+// page.
+import logoVertical from "@/assets/logo-vertical.png?url&no-inline"
 
 function toDateOrNull(value: unknown): Date | null {
   return value && typeof (value as { toDate?: unknown }).toDate === "function"
@@ -117,9 +122,11 @@ export async function findInterventionEventId(
 
 // Placeholder en attendant une vraie photo de profil par gérance (à
 // implémenter plus tard) - utilisé comme pathImage quand le prestataire
-// choisi est la gérance plutôt qu'un contact de la résidence.
-export const GERANCE_PLACEHOLDER_LOGO_URL =
-  "https://firebasestorage.googleapis.com/v0/b/konodal-dev.firebasestorage.app/o/assets%2Flogo%2Flogo-blanc_vertical.png?alt=media&token=91bc28f2-cca4-49f3-90bf-5e859d8d270c"
+// choisi est la gérance plutôt qu'un contact de la résidence. URL absolue
+// construite depuis l'asset bundlé (pas un lien Firebase Storage codé en
+// dur sur konodal-dev, cf. bug du logo email d'intervention) - reste
+// correcte quel que soit l'environnement de déploiement.
+export const GERANCE_PLACEHOLDER_LOGO_URL = new URL(logoVertical, window.location.origin).href
 
 // Logo blanc horizontal - utilisé dans les en-têtes (email d'intervention,
 // page de partage prestataire) sur fond de couleur (vert marque), jamais
@@ -133,9 +140,9 @@ export type EventInput = {
   eventDate: Date
   prestaName: string
   // Résolu par EventFormDialog selon le prestataire choisi (gérance ->
-  // GERANCE_PLACEHOLDER_LOGO_URL, contact -> CONTACT_SERVICE_ICON_FILENAMES
-  // via Storage) - vide tant qu'aucune icône n'est résolue, l'app affiche
-  // alors son placeholder générique (imageAnnounced()), comme avant ce lot.
+  // GERANCE_PLACEHOLDER_LOGO_URL, contact -> CONTACT_SERVICE_ICONS) - vide
+  // tant qu'aucune icône n'est résolue, l'app affiche alors son placeholder
+  // générique (imageAnnounced()), comme avant ce lot.
   pathImage: string
   // Champ backoffice uniquement - renseigné seulement quand l'intervention
   // est créée depuis la fiche d'un sinistre ("Programmer une intervention"),
