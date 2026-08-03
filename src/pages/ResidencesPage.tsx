@@ -135,8 +135,8 @@ export default function ResidencesPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Résidences</h1>
 
-      <div className="flex gap-4">
-        <div className="flex w-72 shrink-0 flex-col gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row">
+        <div className="flex w-full flex-col gap-4 lg:w-72 lg:shrink-0">
           <Card>
             <CardContent className="flex flex-col gap-1">
               <span className="text-sm text-muted-foreground">Total résidences</span>
