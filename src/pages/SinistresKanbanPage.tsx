@@ -26,6 +26,7 @@ import { SinistreThumbnail } from "@/components/SinistreThumbnail"
 import { SinistrePriorityIcon } from "@/components/SinistrePriorityIcon"
 import { useCommentStats } from "@/hooks/useCommentCount"
 import { useSignalementCount } from "@/hooks/useSignalementCount"
+import { useIsMobile } from "@/hooks/useIsMobile"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,7 +73,14 @@ export default function SinistresKanbanPage() {
     statut: SinistreStatus
   } | null>(null)
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  // Drag-and-drop désactivé sur mobile (aucun sensor actif) : le
+  // PointerSensor intercepterait le moindre geste de scroll vertical dès 4px
+  // de mouvement, empêchant de faire défiler la page - les colonnes
+  // s'affichent alors empilées (cf. plus bas), ouvrir un ticket (tap) reste
+  // le seul moyen d'en changer le statut.
+  const isMobile = useIsMobile()
+  const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  const sensors = useSensors(...(isMobile ? [] : [pointerSensor]))
 
   useEffect(() => {
     setStatusOverrides((prev) => {
@@ -148,15 +156,23 @@ export default function SinistresKanbanPage() {
   return (
     <div className="flex flex-col gap-4">
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* minmax(260px, 1fr) plutôt que grid-cols-N brut (minmax(0, 1fr)) :
-            au-dessus de 260px/colonne, comportement identique (colonnes
-            réparties à l'identique) - en dessous, les colonnes ne se
+        {/* Sur mobile (drag désactivé, cf. sensors ci-dessus) : une seule
+            colonne empilée, plus naturelle à consulter/scroller qu'un
+            board qui défile horizontalement sans pouvoir y glisser une
+            carte. Desktop inchangé : minmax(260px, 1fr) plutôt que
+            grid-cols-N brut (minmax(0, 1fr)) - au-dessus de 260px/colonne,
+            comportement identique : en dessous, les colonnes ne se
             compriment plus, le conteneur défile horizontalement à la
             place. */}
         <div
           className={cn(
-            "grid gap-4 overflow-x-auto",
-            showNonDeclares ? "grid-cols-[repeat(4,minmax(260px,1fr))]" : "grid-cols-[repeat(3,minmax(260px,1fr))]"
+            "grid gap-4",
+            isMobile
+              ? "grid-cols-1"
+              : cn(
+                  "overflow-x-auto",
+                  showNonDeclares ? "grid-cols-[repeat(4,minmax(260px,1fr))]" : "grid-cols-[repeat(3,minmax(260px,1fr))]"
+                )
           )}
         >
           {SINISTRE_STATUSES.filter((statut) => showNonDeclares || statut !== "Non envoyé").map((statut) => {
@@ -268,6 +284,7 @@ function KanbanCard({
   sinistre: SinistreWithResidence
   onOpen: () => void
 }) {
+  const isMobile = useIsMobile()
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: cardKey(sinistre),
   })
@@ -275,15 +292,15 @@ function KanbanCard({
   return (
     <div
       ref={setNodeRef}
-      {...listeners}
-      {...attributes}
+      {...(isMobile ? {} : listeners)}
+      {...(isMobile ? {} : attributes)}
       onClick={onOpen}
       style={
         transform
           ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
           : undefined
       }
-      className={cn("cursor-grab active:cursor-grabbing", isDragging && "opacity-0")}
+      className={cn(!isMobile && "cursor-grab active:cursor-grabbing", isDragging && "opacity-0")}
     >
       <KanbanCardContent sinistre={sinistre} />
     </div>
