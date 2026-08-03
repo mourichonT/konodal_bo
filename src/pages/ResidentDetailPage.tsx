@@ -104,6 +104,13 @@ export default function ResidentDetailPage() {
 
   if (!uid) return null
 
+  // Un compte refusé est gelé : plus aucune modification (identité,
+  // téléphone, statut) tant qu'une nouvelle soumission n'est pas faite
+  // depuis l'application (qui remet isApproved/rejectionReason à zéro, cf.
+  // submit_user.dart) - évite qu'une correction silencieuse côté BO
+  // maquille un refus sans repasser par une vraie resoumission.
+  const isRejected = !!user && !user.isApproved && !!user.rejectionReason
+
   async function handleToggleApproved() {
     if (!user) return
     setSavingApproval(true)
@@ -216,8 +223,10 @@ export default function ResidentDetailPage() {
                   {/* Validation d'identité (isApproved) réservée Superadmin -
                       ni Agence ni Agent, cf. matrice de droits BO : c'est une
                       vérification de pièce d'identité, pas une correction de
-                      fiche courante. */}
-                  {isSuperAdmin && (
+                      fiche courante. Masqués une fois refusé (isRejected) :
+                      plus aucune action possible tant qu'une nouvelle
+                      soumission n'arrive pas de l'application. */}
+                  {isSuperAdmin && !isRejected && (
                     <Button
                       variant={user.isApproved ? "outline" : "default"}
                       size="sm"
@@ -229,7 +238,7 @@ export default function ResidentDetailPage() {
                       {user.isApproved ? "Révoquer l'identité" : "Approuver l'identité"}
                     </Button>
                   )}
-                  {isSuperAdmin && !user.isApproved && (
+                  {isSuperAdmin && !user.isApproved && !isRejected && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -243,18 +252,24 @@ export default function ResidentDetailPage() {
                 </CardAction>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
-                {user.rejectionReason && !user.isApproved && (
+                {isRejected && (
                   <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
                     <span className="font-medium">Motif du refus : </span>
                     {user.rejectionReason}
+                    <p className="mt-1.5 text-xs text-destructive/80">
+                      Fiche gelée : plus aucune modification possible tant que ce compte n'a pas resoumis son
+                      inscription depuis l'application.
+                    </p>
                   </div>
                 )}
                 {/* Identité (nom/prénom/date de naissance/pièce...) réservée
                     superAdmin - une Agence reste en lecture seule ici, même
                     traitement qu'un Agent (correction d'une identité mal
                     reconnue = action superAdmin, distincte de la gestion de
-                    ses propres lots/agents). */}
-                <IdentityFields user={user} canEdit={isSuperAdmin} />
+                    ses propres lots/agents). locked (isRejected) prime sur
+                    canEdit : gèle aussi le téléphone, éditable par
+                    Agence/Agent en temps normal. */}
+                <IdentityFields user={user} canEdit={isSuperAdmin} locked={isRejected} />
               </CardContent>
             </Card>
 
@@ -396,7 +411,15 @@ function toDateInputValue(date: Date | null): string {
 // l'inscription) - tout sauf l'email, identifiant du compte Firebase Auth.
 // canEdit=false (Agent) : consultation seule, cf. matrice de droits BO -
 // une Agence garde le droit de correction, pas un simple Agent.
-function IdentityFields({ user, canEdit }: { user: KonodalUser; canEdit: boolean }) {
+function IdentityFields({
+  user,
+  canEdit,
+  locked,
+}: {
+  user: KonodalUser
+  canEdit: boolean
+  locked?: boolean
+}) {
   const [name, setName] = useState(user.name)
   const [surname, setSurname] = useState(user.surname)
   const [phone, setPhone] = useState(user.phone)
@@ -454,7 +477,9 @@ function IdentityFields({ user, canEdit }: { user: KonodalUser; canEdit: boolean
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid gap-3 text-sm sm:grid-cols-2">
+      <div
+        className={cn("grid gap-3 text-sm sm:grid-cols-2", locked && "pointer-events-none opacity-50")}
+      >
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="identity-email">Email</Label>
           <Input id="identity-email" value={user.email} disabled />
@@ -467,8 +492,9 @@ function IdentityFields({ user, canEdit }: { user: KonodalUser; canEdit: boolean
 
       {/* Le reste de l'identité (nom/prénom/date de naissance/pièce...)
           reste réservé superAdmin - seul le téléphone ci-dessus est
-          modifiable par Agence/Agent. */}
-      <div className={cn("grid gap-3 text-sm sm:grid-cols-2", !canEdit && "pointer-events-none opacity-50")}>
+          modifiable par Agence/Agent. locked (compte refusé) prime sur
+          canEdit : gèle tout le monde, superAdmin compris. */}
+      <div className={cn("grid gap-3 text-sm sm:grid-cols-2", (!canEdit || locked) && "pointer-events-none opacity-50")}>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="identity-name">Prénom</Label>
           <Input id="identity-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -513,12 +539,14 @@ function IdentityFields({ user, canEdit }: { user: KonodalUser; canEdit: boolean
         {user.isInfoCorrect ? "Oui" : "Non"}
       </p>
 
-      <div className="mb-[20px] flex justify-end">
-        <Button size="sm" disabled={saving} onClick={canEdit ? handleSave : handleSavePhone} className={PRIMARY_CTA_CLASS}>
-          <Save />
-          {canEdit ? "Enregistrer les modifications" : "Enregistrer le téléphone"}
-        </Button>
-      </div>
+      {!locked && (
+        <div className="mb-[20px] flex justify-end">
+          <Button size="sm" disabled={saving} onClick={canEdit ? handleSave : handleSavePhone} className={PRIMARY_CTA_CLASS}>
+            <Save />
+            {canEdit ? "Enregistrer les modifications" : "Enregistrer le téléphone"}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
