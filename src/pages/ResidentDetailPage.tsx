@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Ban, Check, Eye, FileText, ImageOff, Play, RefreshCw, Save, X } from "lucide-react"
+import { ArrowLeft, Ban, Check, Eye, FileText, ImageOff, Play, RefreshCw, Save, Trash2, X } from "lucide-react"
 import { getDownloadURL, ref } from "firebase/storage"
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,7 @@ import { useSinistreMedia } from "@/hooks/useSinistreMedia"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 import {
   approveUserLot,
+  deleteUserAccount,
   rejectUser,
   setUserApproved,
   subscribeToUser,
@@ -44,6 +45,7 @@ function initialsFor(nameOrEmail: string): string {
 
 export default function ResidentDetailPage() {
   const { uid } = useParams<{ uid: string }>()
+  const navigate = useNavigate()
   const { isSuperAdmin, isAgence } = useAccountRole()
   const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   const [user, setUser] = useState<KonodalUser | null>(null)
@@ -54,6 +56,8 @@ export default function ResidentDetailPage() {
   const [rejecting, setRejecting] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const [savingRejection, setSavingRejection] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   useEffect(() => {
     if (!uid) return
@@ -128,6 +132,19 @@ export default function ResidentDetailPage() {
     }
   }
 
+  async function handleDeleteAccount() {
+    if (!user) return
+    setDeleting(true)
+    try {
+      await deleteUserAccount(user.uid)
+      toast.success("Compte supprimé")
+      navigate("/residents")
+    } catch (err) {
+      toast.error("Échec de la suppression : " + (err as Error).message)
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="-mt-[20px] flex flex-col gap-8">
       <div className="flex flex-col gap-3">
@@ -170,6 +187,21 @@ export default function ResidentDetailPage() {
                 <span className="size-[6px] rounded-full bg-current" />
                 En attente d'approbation
               </Badge>
+            )}
+            {/* Suppression de compte réservée superAdmin (comme côté serveur,
+                cf. requireSuperAdmin dans adminDeleteUser) - action
+                irréversible (Auth + toutes les données via cleanupUserData),
+                séparée visuellement des actions de validation d'identité. */}
+            {isSuperAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto border-red-200 text-red-700 hover:bg-red-50"
+                onClick={() => setDeletingAccount(true)}
+              >
+                <Trash2 />
+                Supprimer le compte
+              </Button>
             )}
           </div>
 
@@ -318,6 +350,34 @@ export default function ResidentDetailPage() {
               </Button>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deletingAccount} onOpenChange={setDeletingAccount}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <span className="text-[11.5px] font-bold tracking-wide text-destructive uppercase">Compte</span>
+            <DialogTitle>Supprimer ce compte ?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Cette action est irréversible : le compte{" "}
+            <strong>{`${user?.name ?? ""} ${user?.surname ?? ""}`.trim() || user?.email}</strong> et toutes ses
+            données (identité, documents, lots, annonces, commentaires…) seront définitivement supprimés.
+          </p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeletingAccount(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={handleDeleteAccount}
+            >
+              <Trash2 />
+              Supprimer définitivement
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

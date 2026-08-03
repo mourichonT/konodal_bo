@@ -16,7 +16,8 @@ import {
 } from "firebase/firestore"
 import type { User as FirebaseUser } from "firebase/auth"
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage"
-import { db, storage } from "@/firebase"
+import { httpsCallable } from "firebase/functions"
+import { db, storage, functions } from "@/firebase"
 import type { KonodalUser } from "@/types/user"
 
 const usersCollection = collection(db, "users")
@@ -112,6 +113,19 @@ export async function setUserApproved(uid: string, isApproved: boolean) {
 // NoApprovalPage) - distinct d'une simple révocation sans explication.
 export async function rejectUser(uid: string, reason: string) {
   await updateDoc(doc(usersCollection, uid), { isApproved: false, rejectionReason: reason })
+}
+
+// Supprime le compte Auth (Admin SDK, functions/index.js:adminDeleteUser,
+// réservé superAdmin côté serveur aussi - même garde-fou que côté BO) -
+// déclenche automatiquement cleanupUserData (onDelete), qui purge
+// Firestore/Storage/annonces/likes/commentaires. Pas de suppression
+// Firestore directe possible depuis le client : firestore.rules interdit
+// delete sur users/{uid} (jamais eu besoin jusqu'ici), et une suppression
+// partielle laisserait des données orphelines (cf. l'incident du compte
+// "fantôme" ressuscité par sync_lot_tenants plus tôt).
+export async function deleteUserAccount(uid: string) {
+  const call = httpsCallable<{ uid: string }, { success: boolean }>(functions, "adminDeleteUser")
+  await call({ uid })
 }
 
 export type UserIdentityInput = {
