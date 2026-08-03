@@ -148,10 +148,15 @@ export default function SinistresKanbanPage() {
   return (
     <div className="flex flex-col gap-4">
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        {/* minmax(260px, 1fr) plutôt que grid-cols-N brut (minmax(0, 1fr)) :
+            au-dessus de 260px/colonne, comportement identique (colonnes
+            réparties à l'identique) - en dessous, les colonnes ne se
+            compriment plus, le conteneur défile horizontalement à la
+            place. */}
         <div
           className={cn(
-            "grid gap-4",
-            showNonDeclares ? "grid-cols-4" : "grid-cols-3"
+            "grid gap-4 overflow-x-auto",
+            showNonDeclares ? "grid-cols-[repeat(4,minmax(260px,1fr))]" : "grid-cols-[repeat(3,minmax(260px,1fr))]"
           )}
         >
           {SINISTRE_STATUSES.filter((statut) => showNonDeclares || statut !== "Non envoyé").map((statut) => {

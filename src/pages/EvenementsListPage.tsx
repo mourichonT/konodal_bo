@@ -45,7 +45,7 @@ export default function EvenementsListPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="mb-[25px] grid grid-cols-3 gap-4">
+      <div className="mb-[25px] grid grid-cols-1 gap-4 sm:grid-cols-3">
         <FilterKpiCard
           label="Total interventions"
           value={events.length}

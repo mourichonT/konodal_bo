@@ -123,7 +123,7 @@ export default function EvenementsCalendarPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-[30px]">
-        <div className="grid flex-1 grid-cols-2 gap-4">
+        <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
           <button
             type="button"
             onClick={() => setViewMode((prev) => (prev === "today" ? "month" : "today"))}
@@ -160,7 +160,7 @@ export default function EvenementsCalendarPage() {
 
         <div aria-hidden className="hidden w-px shrink-0 self-stretch bg-border lg:block" />
 
-        <div className="grid flex-1 grid-cols-2 gap-4">
+        <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
           <button
             type="button"
             onClick={() => setViewMode((prev) => (prev === "reprogrammed" ? "month" : "reprogrammed"))}
@@ -339,15 +339,21 @@ export default function EvenementsCalendarPage() {
           </div>
 
           <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
-            <div className="grid grid-cols-7 border-b bg-muted/40">
-              {WEEKDAYS.map((day) => (
-                <div key={day} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-                  {day}
+            {/* overflow-x-auto + min-width partagé : les 7 colonnes défilent
+                ensemble (en-tête + jours synchronisés) plutôt que de se
+                comprimer sur un écran étroit - aucun effet tant que le
+                conteneur dépasse déjà cette largeur (desktop). */}
+            <div className="overflow-x-auto">
+              <div className="min-w-[640px]">
+                <div className="grid grid-cols-7 border-b bg-muted/40">
+                  {WEEKDAYS.map((day) => (
+                    <div key={day} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                      {day}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7">
-              {grid.map((date) => {
+                <div className="grid grid-cols-7">
+                  {grid.map((date) => {
                 const inMonth = date.getMonth() === monthStart.getMonth()
                 const isToday = dayKey(date) === dayKey(today)
                 const dayEvents = eventsByDay.get(dayKey(date)) ?? []
@@ -405,6 +411,8 @@ export default function EvenementsCalendarPage() {
                   </div>
                 )
               })}
+                </div>
+              </div>
             </div>
           </div>
         </>

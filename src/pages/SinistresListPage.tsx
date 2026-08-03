@@ -67,7 +67,7 @@ export default function SinistresListPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="mb-[25px] grid grid-cols-4 gap-4">
+      <div className="mb-[25px] grid grid-cols-2 gap-4 sm:grid-cols-4">
         <FilterKpiCard
           label="Total tickets"
           value={sinistres.length}

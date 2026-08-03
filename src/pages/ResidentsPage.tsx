@@ -86,7 +86,7 @@ export default function ResidentsPage() {
           agrégats sur leur propre annuaire (déjà scopé à leurs résidences),
           cf. demande explicite de simplification de la vue Agence. */}
       {isSuperAdmin && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <FilterKpiCard
             label="Total utilisateurs"
             value={residents.length}

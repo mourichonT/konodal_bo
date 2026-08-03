@@ -477,7 +477,7 @@ export default function AdCampaignDetailPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="flex items-center gap-3 rounded-xl bg-muted/40 p-4">
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
                     <Eye className="size-5" />

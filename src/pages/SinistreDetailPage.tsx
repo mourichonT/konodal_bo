@@ -315,7 +315,7 @@ export default function SinistreDetailPage() {
                 <CardHeader>
                   <CardTitle className="text-base">Ticket</CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                <CardContent className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                   <div className="flex flex-col gap-3">
                     <div>
                       <span className="text-muted-foreground">N° ticket : </span>
@@ -528,7 +528,7 @@ export default function SinistreDetailPage() {
               <CardHeader>
                 <CardTitle className="text-base">Ticket</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-3 text-sm">
+              <CardContent className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                 <div className="flex flex-col gap-3">
                   <div>
                     <span className="text-muted-foreground">N° ticket : </span>

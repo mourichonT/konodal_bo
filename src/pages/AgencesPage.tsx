@@ -163,7 +163,7 @@ export default function AgencesPage() {
         <>
           <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Agences</h1>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <FilterKpiCard
               label="Total des professionnels de l'immo"
               value={gerances.length}
@@ -563,7 +563,7 @@ function GeranceFormDialog({
                 }}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ger-zip">Code postal</Label>
                 <ZipCodeCityInput
@@ -579,7 +579,7 @@ function GeranceFormDialog({
                 <Input id="ger-city" required value={city} onChange={(e) => setCity(e.target.value)} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ger-siret">SIRET / SIREN</Label>
                 <Input
@@ -672,7 +672,7 @@ function ServiceSection({
 
       {dept && (
         <div className="mt-4 flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${type}-mail`}>Email du service</Label>
               <Input
