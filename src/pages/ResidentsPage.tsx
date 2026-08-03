@@ -65,17 +65,23 @@ export default function ResidentsPage() {
     return allResidents.filter((u) => allowedUids.has(u.uid))
   }, [allResidents, scopedResidenceIds, scopedLots])
 
+  // Un compte refusé garde isApproved: false (cf. rejectUser dans lib/users.ts)
+  // - seul rejectionReason le distingue d'un compte réellement en attente. Sans
+  // cette distinction, "En attente" (compteur, filtre, badge) incluait aussi
+  // les comptes déjà refusés.
+  const isPending = (user: KonodalUser) => !user.isApproved && !user.rejectionReason
+
   const filteredResidents = useMemo(
     () =>
       residents.filter((user) => {
-        if (approvalFilter === "pending" && user.isApproved) return false
+        if (approvalFilter === "pending" && !isPending(user)) return false
         if (approvalFilter === "approved" && !user.isApproved) return false
         return matchesSearch(user, search)
       }),
     [residents, search, approvalFilter]
   )
 
-  const pendingCount = residents.filter((u) => !u.isApproved).length
+  const pendingCount = residents.filter(isPending).length
   const approvedCount = residents.filter((u) => u.isApproved).length
 
   return (
@@ -168,9 +174,15 @@ export default function ResidentsPage() {
                   <TableCell>
                     <Badge
                       variant={user.isApproved ? "default" : "outline"}
-                      className={!user.isApproved ? "border-transparent bg-amber-100 text-amber-800" : undefined}
+                      className={
+                        user.isApproved
+                          ? undefined
+                          : user.rejectionReason
+                            ? "border-transparent bg-red-100 text-red-800"
+                            : "border-transparent bg-amber-100 text-amber-800"
+                      }
                     >
-                      {user.isApproved ? "Approuvé" : "En attente"}
+                      {user.isApproved ? "Approuvé" : user.rejectionReason ? "Refusée" : "En attente"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">

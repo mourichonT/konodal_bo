@@ -30,8 +30,12 @@ export function usePendingUsersCount(): number {
 
   return useMemo(() => {
     const residents = users.filter((u) => (u.accountType || "utilisateur") === "utilisateur")
-    if (!scopedResidenceIds) return residents.filter((u) => !u.isApproved).length
+    // Un compte refusé garde isApproved: false (cf. rejectUser dans
+    // lib/users.ts) - !rejectionReason exclut ces comptes déjà traités, sans
+    // quoi la pastille ne disparaissait jamais après un refus.
+    const isPending = (u: KonodalUser) => !u.isApproved && !u.rejectionReason
+    if (!scopedResidenceIds) return residents.filter(isPending).length
     const allowedUids = new Set(scopedLots.flatMap((l) => [...l.idProprietaire, ...l.idLocataire]))
-    return residents.filter((u) => !u.isApproved && allowedUids.has(u.uid)).length
+    return residents.filter((u) => isPending(u) && allowedUids.has(u.uid)).length
   }, [users, scopedResidenceIds, scopedLots])
 }

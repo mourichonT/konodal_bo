@@ -257,7 +257,10 @@ export default function DashboardPage() {
     const relevantIds = new Set([...ownerIds, ...tenantIds])
     return residents.filter((u) => relevantIds.has(u.uid))
   }, [residents, residenceFilter, ownerIds, tenantIds])
-  const filteredUsersPending = filteredResidents.filter((u) => !u.isApproved).length
+  // Un compte refusé garde isApproved: false (cf. rejectUser dans
+  // lib/users.ts) - !rejectionReason exclut ces comptes déjà traités du
+  // compteur "en attente" (même correctif que ResidentsPage/usePendingUsersCount).
+  const filteredUsersPending = filteredResidents.filter((u) => !u.isApproved && !u.rejectionReason).length
 
   const filteredContactsForResidence = useMemo(() => {
     if (residenceFilter === "all") return contacts
