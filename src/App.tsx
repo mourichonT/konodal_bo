@@ -8,6 +8,7 @@ import ResetPasswordPage from "@/pages/ResetPasswordPage"
 import DashboardPage from "@/pages/DashboardPage"
 import ResidencesPage from "@/pages/ResidencesPage"
 import ResidenceDetailPage from "@/pages/ResidenceDetailPage"
+import LotDetailPage from "@/pages/LotDetailPage"
 import ResidentsPage from "@/pages/ResidentsPage"
 import ResidentDetailPage from "@/pages/ResidentDetailPage"
 import SinistresPage from "@/pages/SinistresPage"
@@ -63,6 +64,7 @@ function App() {
         <Route path="communications/:residenceId/:postId" element={<CommunicationDetailPage />} />
         <Route path="residences" element={<ResidencesPage />} />
         <Route path="residences/:id" element={<ResidenceDetailPage />} />
+        <Route path="residences/:id/lots/:lotId" element={<LotDetailPage />} />
         <Route path="residents" element={<ResidentsPage />} />
         <Route path="residents/:uid" element={<ResidentDetailPage />} />
         <Route path="agences" element={<AgencesPage />} />

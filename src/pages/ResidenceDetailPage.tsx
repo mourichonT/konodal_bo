@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, ChevronDown, GripVertical, Plus, ShieldOff, Trash2, Upload, UserPlus, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Eye, GripVertical, Plus, Search, ShieldOff, Trash2, Upload, UserPlus, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -827,6 +827,13 @@ type LotRow = {
   parentLotId: string | null
 }
 
+function matchesLotSearch(row: LotRow, search: string): boolean {
+  const trimmed = search.trim().toLowerCase()
+  if (!trimmed) return true
+  const haystack = [row.batiment, row.lot, row.refLot, row.typeLot].join(" ").toLowerCase()
+  return haystack.includes(trimmed)
+}
+
 function LotsSection({
   residenceId,
   structures,
@@ -837,6 +844,7 @@ function LotsSection({
   const [rows, setRows] = useState<LotRow[]>([])
   const [loading, setLoading] = useState(true)
   const [importing, setImporting] = useState(false)
+  const [search, setSearch] = useState("")
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   // Miroir synchrone de `rows`, lu depuis les callbacks différés
   // (setTimeout de schedulePersist) ou depuis handleDragEnd juste après un
@@ -905,6 +913,7 @@ function LotsSection({
   }, [residenceId])
 
   const buildingOptions = structures.map((s) => `${s.type} ${s.name}`.trim())
+  const filteredRows = useMemo(() => rows.filter((row) => matchesLotSearch(row, search)), [rows, search])
 
   // Un lot qui reprendrait la référence ou le bâtiment+numéro d'un autre lot
   // déjà affiché n'est jamais persisté - revérifié à chaque tentative
@@ -1065,6 +1074,15 @@ function LotsSection({
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher un lot…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
         <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
           <Table>
             <TableHeader>
@@ -1081,10 +1099,11 @@ function LotsSection({
             </TableHeader>
             <TableBody>
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={rows.map((r) => r.key)} strategy={verticalListSortingStrategy}>
-                  {rows.map((row) => (
+                <SortableContext items={filteredRows.map((r) => r.key)} strategy={verticalListSortingStrategy}>
+                  {filteredRows.map((row) => (
                     <SortableLotRow
                       key={row.key}
+                      residenceId={residenceId}
                       row={row}
                       allRows={rows}
                       buildingOptions={buildingOptions}
@@ -1099,6 +1118,13 @@ function LotsSection({
                 <TableRow>
                   <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                     Aucun lot pour l'instant.
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading && rows.length > 0 && filteredRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                    Aucun lot ne correspond à la recherche.
                   </TableCell>
                 </TableRow>
               )}
@@ -1127,6 +1153,7 @@ function LotsSection({
 }
 
 function SortableLotRow({
+  residenceId,
   row,
   allRows,
   buildingOptions,
@@ -1134,6 +1161,7 @@ function SortableLotRow({
   removeRow,
   onLink,
 }: {
+  residenceId: string
   row: LotRow
   allRows: LotRow[]
   buildingOptions: string[]
@@ -1230,16 +1258,28 @@ function SortableLotRow({
         )}
       </TableCell>
       <TableCell className="text-right">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          disabled={row.idProprietaire.length > 0}
-          title={row.idProprietaire.length > 0 ? "Lot déjà rattaché à un propriétaire" : undefined}
-          onClick={() => removeRow(row)}
-        >
-          <Trash2 />
-        </Button>
+        <div className="flex justify-end gap-2">
+          {row.id && (
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link to={`/residences/${residenceId}/lots/${row.id}`} />}
+            >
+              <Eye />
+              Voir
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            disabled={row.idProprietaire.length > 0}
+            title={row.idProprietaire.length > 0 ? "Lot déjà rattaché à un propriétaire" : undefined}
+            onClick={() => removeRow(row)}
+          >
+            <Trash2 />
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   )

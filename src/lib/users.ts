@@ -326,6 +326,33 @@ export function subscribeToUserLots(
   )
 }
 
+export type UserLotAttribution = {
+  // "Résidence Principale ou secondaire"/"Investissement Locatif" côté
+  // propriétaire, "Bail unique (personne seule)"/"Bail co-titulaire (en
+  // concubinage)"/"Bail en colocation" côté locataire (type de bail) - même
+  // champ Firestore, sémantique différente selon statutResident (cf.
+  // step2.dart côté app mobile).
+  intendedFor: string
+  statutResident: string
+}
+
+// Détail de l'attribution d'UN utilisateur sur un lot précis (LotDetailPage,
+// cartes Propriétaire/Locataire) - contrairement à subscribeToUserLots
+// (tous les lots d'UN utilisateur), ici on part du lot pour retrouver
+// l'attribution d'un des uids listés dans idProprietaire/idLocataire.
+export async function getUserLotAttribution(
+  uid: string,
+  lotId: string
+): Promise<UserLotAttribution | null> {
+  const snapshot = await getDoc(doc(db, "users", uid, "lots", lotId))
+  if (!snapshot.exists()) return null
+  const data = snapshot.data()
+  return {
+    intendedFor: (data.intendedFor as string) ?? "",
+    statutResident: (data.statutResident as string) ?? "",
+  }
+}
+
 // Résout uid -> "Prénom Nom" (ou email/uid à défaut) pour l'affichage - ex:
 // destinataires d'un document de lot (DocumentsPage). uids dédupliqués
 // avant lecture (un même destinataire peut apparaître comme propriétaire

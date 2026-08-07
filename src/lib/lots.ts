@@ -58,6 +58,37 @@ export function subscribeToLots(
   )
 }
 
+// Lot unique (LotDetailPage) - même précaution `id` posé après le spread
+// que subscribeToLots ci-dessus.
+export function subscribeToLot(
+  residenceId: string,
+  lotId: string,
+  onData: (lot: Lot | null) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, "residences", residenceId, "lots", lotId),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        onData(null)
+        return
+      }
+      onData({
+        refLot: "",
+        batiment: "",
+        lot: "",
+        typeLot: "",
+        isLinkable: false,
+        idProprietaire: [],
+        idLocataire: [],
+        ...(snapshot.data() as Partial<Omit<Lot, "id">>),
+        id: snapshot.id,
+      })
+    },
+    onError
+  )
+}
+
 export type LotInput = {
   refLot: string
   batiment: string
