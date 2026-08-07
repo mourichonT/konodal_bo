@@ -33,6 +33,7 @@ function toContact(d: DocumentSnapshot<DocumentData>): Contact {
     mail: (data.mail as string) ?? "",
     address,
     web: (data.web as string) ?? "",
+    siret: (data.siret as string) ?? "",
     likelyDuplicateIds: (data.likelyDuplicateIds as string[]) ?? [],
     isApproved: (data.isApproved as boolean) ?? false,
   }
@@ -84,6 +85,7 @@ export type ContactProfileInput = {
   mail: string
   address: Address
   web: string
+  siret: string
 }
 
 export type ContactInput = ContactProfileInput & {

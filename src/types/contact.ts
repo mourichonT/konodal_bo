@@ -68,6 +68,11 @@ export type Contact = {
   mail: string
   address: Address
   web: string
+  // Obligatoire à la création/édition depuis ce backoffice (superAdmin,
+  // agence, agent) - cf. ContactFormDialog/ContactDetailPage. Absent sur les
+  // contacts créés avant l'ajout de ce champ, d'où le typage non-optionnel
+  // mais une valeur par défaut vide côté toContact.
+  siret: string
   // Doublons probables détectés par nom normalisé entre résidences
   // différentes (migrate_contacts_to_root.py) - jamais fusionnés
   // automatiquement, à traiter manuellement ici.

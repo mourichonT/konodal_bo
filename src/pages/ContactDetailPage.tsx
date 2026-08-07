@@ -36,6 +36,7 @@ export default function ContactDetailPage() {
 
   const [name, setName] = useState("")
   const [service, setService] = useState<string>(CONTACT_SERVICES[0])
+  const [siret, setSiret] = useState("")
   const [phone, setPhone] = useState("")
   const [mail, setMail] = useState("")
   const [street, setStreet] = useState(emptyAddress.street)
@@ -74,6 +75,7 @@ export default function ContactDetailPage() {
     if (contact && !initialized) {
       setName(contact.name)
       setService(contact.service || CONTACT_SERVICES[0])
+      setSiret(contact.siret)
       setPhone(contact.phone)
       setMail(contact.mail)
       setStreet(contact.address.street || emptyAddress.street)
@@ -92,6 +94,7 @@ export default function ContactDetailPage() {
       await updateContact(id, {
         name,
         service,
+        siret,
         phone,
         mail,
         address: { ...emptyAddress, street, zipCode, city },
@@ -202,6 +205,16 @@ export default function ContactDetailPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="contact-siret">SIRET / SIREN</Label>
+                  <Input
+                    id="contact-siret"
+                    required
+                    placeholder="123 456 789 00012"
+                    value={siret}
+                    onChange={(e) => setSiret(e.target.value)}
+                  />
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="flex flex-col gap-1.5">

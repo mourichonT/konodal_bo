@@ -29,6 +29,7 @@ export function ContactFormDialog({
 }) {
   const [name, setName] = useState("")
   const [service, setService] = useState<string>(CONTACT_SERVICES[0])
+  const [siret, setSiret] = useState("")
   const [phone, setPhone] = useState("")
   const [mail, setMail] = useState("")
   const [street, setStreet] = useState(emptyAddress.street)
@@ -44,6 +45,7 @@ export function ContactFormDialog({
     if (open) {
       setName("")
       setService(CONTACT_SERVICES[0])
+      setSiret("")
       setPhone("")
       setMail("")
       setStreet(emptyAddress.street)
@@ -65,6 +67,7 @@ export function ContactFormDialog({
       await onSubmit({
         name,
         service,
+        siret,
         phone,
         mail,
         address: { ...emptyAddress, street, zipCode, city },
@@ -106,6 +109,16 @@ export function ContactFormDialog({
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="contact-siret">SIRET / SIREN</Label>
+              <Input
+                id="contact-siret"
+                required
+                placeholder="123 456 789 00012"
+                value={siret}
+                onChange={(e) => setSiret(e.target.value)}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
