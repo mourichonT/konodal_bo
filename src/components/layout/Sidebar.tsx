@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth-context"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { usePendingUsersCount } from "@/hooks/usePendingUsersCount"
+import { usePendingContactsCount } from "@/hooks/usePendingContactsCount"
 import { subscribeToUser } from "@/lib/users"
 import { cn } from "@/lib/utils"
 import { EnvBadge } from "./EnvBadge"
@@ -133,6 +134,7 @@ export function Sidebar() {
   const { isSuperAdmin } = useIsSuperAdmin()
   const { isAgence, isAgent } = useAccountRole()
   const pendingUsersCount = usePendingUsersCount()
+  const pendingContactsCount = usePendingContactsCount()
   const location = useLocation()
   // profil.profilPic n'est pas porté par Firebase Auth (displayName/photoURL
   // ne sont jamais renseignés côté résident) - souscription dédiée à sa
@@ -267,6 +269,7 @@ export function Sidebar() {
               <Icon className="size-4.5" />
               {label}
               {to === "/residents" && pendingUsersCount > 0 && <NavBadge count={pendingUsersCount} />}
+              {to === "/contacts" && pendingContactsCount > 0 && <NavBadge count={pendingContactsCount} />}
             </NavLink>
           )
         })}
