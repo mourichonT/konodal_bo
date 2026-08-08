@@ -1,9 +1,8 @@
 import { useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { sendPasswordResetEmail } from "firebase/auth"
 import { toast } from "sonner"
-import { auth } from "@/firebase"
 import { useAuth } from "@/lib/auth-context"
+import { sendPasswordResetEmail } from "@/lib/passwordReset"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,6 +16,22 @@ import {
 import logoVertical from "@/assets/logo_vertical-transparent_green.png"
 import googleLogo from "@/assets/google-logo.png"
 import { PRIMARY_CTA_CLASS } from "@/lib/utils"
+
+// Messages alignés sur ceux d'auth_controller.dart (app mobile) pour ce même
+// flux - contrairement aux erreurs de connexion ci-dessous, ce produit révèle
+// volontairement l'absence de compte plutôt que de la masquer (décision déjà
+// actée côté Cloud Function/app mobile, cf. lib/passwordReset.ts).
+function passwordResetErrorMessage(error: unknown): string {
+  const code = error instanceof Error ? error.message : "unknown"
+  switch (code) {
+    case "user-not-found":
+      return "Aucun utilisateur trouvé avec cet e-mail."
+    case "invalid-email":
+      return "L'adresse e-mail est invalide."
+    default:
+      return "Une erreur est survenue, réessaie."
+  }
+}
 
 function firebaseAuthErrorMessage(error: unknown): string {
   const code = (error as { code?: string })?.code
@@ -75,13 +90,10 @@ export default function LoginPage() {
     }
     setSendingReset(true)
     try {
-      await sendPasswordResetEmail(auth, email.trim())
-      toast.success("Email de réinitialisation envoyé")
-    } catch {
-      // Même message quel que soit le code d'erreur (y compris
-      // auth/user-not-found) : ne pas confirmer/infirmer l'existence d'un
-      // compte à cette adresse à quelqu'un qui n'est pas encore authentifié.
-      toast.success("Si un compte existe pour cet email, un lien de réinitialisation a été envoyé")
+      await sendPasswordResetEmail(email.trim())
+      toast.success(`Un email de réinitialisation a été envoyé à ${email.trim()}.`)
+    } catch (err) {
+      toast.error(passwordResetErrorMessage(err))
     } finally {
       setSendingReset(false)
     }
