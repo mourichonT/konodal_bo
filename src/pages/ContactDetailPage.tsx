@@ -235,7 +235,66 @@ export default function ContactDetailPage() {
       )}
 
       {contact && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <>
+          <Card className="rounded-[18px] border-[1.5px] border-dashed border-[oklch(78%_0.07_155)] bg-[oklch(98%_0.008_155)]">
+            <CardContent className="flex flex-col gap-2.5">
+              <Label htmlFor="contact-company-search" className="font-bold">
+                Rechercher l'entreprise{" "}
+                <span className="font-medium text-muted-foreground">(SIREN, SIRET ou nom)</span>
+              </Label>
+              <div className="flex flex-wrap gap-2.5">
+                <Input
+                  id="contact-company-search"
+                  placeholder="Rechercher (nom, SIRET, SIREN)…"
+                  className="max-w-xs"
+                  value={companyQuery}
+                  onChange={(e) => setCompanyQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSearchCompany())}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleSearchCompany}
+                  disabled={searching}
+                  className="border-0 bg-[oklch(24%_0.03_155)] text-white hover:bg-[oklch(30%_0.04_155)]"
+                >
+                  <Search />
+                  Rechercher
+                </Button>
+              </div>
+              {companyResults.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {companyResults.map((result) => (
+                    <div
+                      key={result.siret || result.siren}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 p-2 text-sm"
+                    >
+                      <div>
+                        <span className="font-medium">{result.name}</span>{" "}
+                        <span className="text-muted-foreground">
+                          {[result.siret, result.address.city].filter(Boolean).join(" · ")}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleApplyCompanyResult(result)}
+                      >
+                        Utiliser
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="m-0 text-xs leading-relaxed text-[oklch(48%_0.06_155)]">
+                Préremplit le nom, l'adresse et le SIRET de la fiche ci-dessous - à vérifier avant
+                d'enregistrer, ou à saisir/corriger manuellement sans passer par la recherche.
+              </p>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Fiche contact</CardTitle>
@@ -260,61 +319,6 @@ export default function ContactDetailPage() {
                       </option>
                     ))}
                   </select>
-                </div>
-                <div className="flex flex-col gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-[oklch(78%_0.07_155)] bg-[oklch(98%_0.008_155)] p-[18px_20px]">
-                  <Label htmlFor="contact-company-search" className="font-bold">
-                    Rechercher l'entreprise{" "}
-                    <span className="font-medium text-muted-foreground">(SIREN, SIRET ou nom)</span>
-                  </Label>
-                  <div className="flex flex-wrap gap-2.5">
-                    <Input
-                      id="contact-company-search"
-                      placeholder="Rechercher (nom, SIRET, SIREN)…"
-                      className="max-w-xs"
-                      value={companyQuery}
-                      onChange={(e) => setCompanyQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSearchCompany())}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleSearchCompany}
-                      disabled={searching}
-                      className="border-0 bg-[oklch(24%_0.03_155)] text-white hover:bg-[oklch(30%_0.04_155)]"
-                    >
-                      <Search />
-                      Rechercher
-                    </Button>
-                  </div>
-                  {companyResults.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                      {companyResults.map((result) => (
-                        <div
-                          key={result.siret || result.siren}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 p-2 text-sm"
-                        >
-                          <div>
-                            <span className="font-medium">{result.name}</span>{" "}
-                            <span className="text-muted-foreground">
-                              {[result.siret, result.address.city].filter(Boolean).join(" · ")}
-                            </span>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleApplyCompanyResult(result)}
-                          >
-                            Utiliser
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <p className="m-0 text-xs leading-relaxed text-[oklch(48%_0.06_155)]">
-                    Préremplit le nom, l'adresse et le SIRET ci-dessous - à vérifier avant d'enregistrer, ou à
-                    saisir/corriger manuellement sans passer par la recherche.
-                  </p>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="contact-siret">SIRET / SIREN</Label>
@@ -500,7 +504,8 @@ export default function ContactDetailPage() {
               </Card>
             )}
           </div>
-        </div>
+          </div>
+        </>
       )}
 
       <Dialog open={deleting} onOpenChange={setDeleting}>

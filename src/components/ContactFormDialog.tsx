@@ -148,25 +148,6 @@ export function ContactFormDialog({
           </DialogHeader>
 
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="contact-name">Nom</Label>
-              <Input id="contact-name" required value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="contact-service">Service</Label>
-              <select
-                id="contact-service"
-                value={service}
-                onChange={(e) => setService(e.target.value)}
-                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                {CONTACT_SERVICES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div className="flex flex-col gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-[oklch(78%_0.07_155)] bg-[oklch(98%_0.008_155)] p-[18px_20px]">
               <Label htmlFor="contact-company-search" className="font-bold">
                 Rechercher l'entreprise{" "}
@@ -221,6 +202,25 @@ export function ContactFormDialog({
                 Préremplit le nom, l'adresse et le SIRET ci-dessous - à vérifier avant d'enregistrer, ou à
                 saisir/corriger manuellement sans passer par la recherche.
               </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="contact-service">Service</Label>
+              <select
+                id="contact-service"
+                value={service}
+                onChange={(e) => setService(e.target.value)}
+                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {CONTACT_SERVICES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="contact-name">Nom</Label>
+              <Input id="contact-name" required value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="contact-siret">SIRET / SIREN</Label>
