@@ -18,9 +18,11 @@ import {
 import { db } from "@/firebase"
 import { emptyAddress, type Address, type Residence } from "@/types/residence"
 import type { Contact } from "@/types/contact"
+import type { Gerance } from "@/types/gerance"
 
 const contactsCollection = collection(db, "contacts")
 const residencesCollection = collection(db, "residences")
+const gerancesCollection = collection(db, "gerances")
 
 function toContact(d: DocumentSnapshot<DocumentData>): Contact {
   const data = d.data() ?? {}
@@ -47,6 +49,14 @@ function toContact(d: DocumentSnapshot<DocumentData>): Contact {
 // résidences déjà chargées, sans requête supplémentaire.
 export function residenceIdsForContact(residences: Residence[], contactId: string): string[] {
   return residences.filter((r) => r.contactRefs?.[contactId]).map((r) => r.id)
+}
+
+// Même pattern que residenceIdsForContact ci-dessus, pour le rattachement
+// gérance entière (annuaire Superadmin, cf. Gerance.contactRefs) - une
+// agence/agent ne voit/gère jamais ce rattachement, seulement celui par
+// résidence.
+export function geranceIdsForContact(gerances: Gerance[], contactId: string): string[] {
+  return gerances.filter((g) => g.contactRefs?.[contactId]).map((g) => g.id)
 }
 
 // Collection racine "contacts" (pas residences/{id}/contacts, déprécié côté
@@ -90,26 +100,34 @@ export type ContactProfileInput = {
 
 export type ContactInput = ContactProfileInput & {
   residencesIds: string[]
+  // Toujours présent mais rempli uniquement depuis l'annuaire Superadmin
+  // (cf. ContactFormDialog) - vide pour une création par agence/agent, qui
+  // ne voit pas cette sélection.
+  geranceIds: string[]
 }
 
 // Créé depuis le BO (superAdmin ou agence/agent) = déjà validé, pas de
 // file d'attente - contrairement à une création côté app résident, cf.
 // firestore.rules (contacts/{id}.create autorise isApproved: true pour
 // isSuperAdmin() ET isAgenceOrAgentAccount()). Le contact lui-même ne
-// stocke plus residencesIds : chaque résidence sélectionnée reçoit son
-// propre contactRefs.{id} = true.
+// stocke plus residencesIds : chaque résidence (et, pour un rattachement
+// gérance entière, chaque gérance) sélectionnée reçoit son propre
+// contactRefs.{id} = true.
 export async function createContact(input: ContactInput) {
-  const { residencesIds, ...profile } = input
+  const { residencesIds, geranceIds, ...profile } = input
   const docRef = await addDoc(contactsCollection, {
     ...profile,
     nameNormalized: profile.name.trim().toLowerCase(),
     likelyDuplicateIds: [],
     isApproved: true,
   })
-  if (residencesIds.length > 0) {
+  if (residencesIds.length > 0 || geranceIds.length > 0) {
     const batch = writeBatch(db)
     for (const residenceId of residencesIds) {
       batch.update(doc(residencesCollection, residenceId), { [`contactRefs.${docRef.id}`]: true })
+    }
+    for (const geranceId of geranceIds) {
+      batch.update(doc(gerancesCollection, geranceId), { [`contactRefs.${docRef.id}`]: true })
     }
     await batch.commit()
   }
@@ -141,15 +159,20 @@ export async function updateContactApproval(id: string, isApproved: boolean) {
   await updateDoc(doc(contactsCollection, id), { isApproved })
 }
 
-// Nettoie aussi les contactRefs des résidences qui référencent encore ce
-// contact - sinon elles pointeraient vers un document supprimé.
+// Nettoie aussi les contactRefs des résidences ET des gérances qui
+// référencent encore ce contact - sinon elles pointeraient vers un document
+// supprimé.
 export async function deleteContact(id: string) {
-  const referencing = await getDocs(
-    query(residencesCollection, where(`contactRefs.${id}`, "==", true))
-  )
+  const [referencingResidences, referencingGerances] = await Promise.all([
+    getDocs(query(residencesCollection, where(`contactRefs.${id}`, "==", true))),
+    getDocs(query(gerancesCollection, where(`contactRefs.${id}`, "==", true))),
+  ])
   const batch = writeBatch(db)
-  for (const residenceDoc of referencing.docs) {
+  for (const residenceDoc of referencingResidences.docs) {
     batch.update(residenceDoc.ref, { [`contactRefs.${id}`]: deleteField() })
+  }
+  for (const geranceDoc of referencingGerances.docs) {
+    batch.update(geranceDoc.ref, { [`contactRefs.${id}`]: deleteField() })
   }
   batch.delete(doc(contactsCollection, id))
   await batch.commit()
@@ -169,16 +192,24 @@ export async function dismissDuplicate(contactId: string, otherId: string) {
 // (remplacée par keepId) - action explicite et ponctuelle depuis l'UI, pas
 // un script en masse, donc pas besoin d'une vraie transaction Firestore.
 export async function mergeContacts(keepId: string, mergeId: string) {
-  const [keepSnap, residencesReferencingMerge, contactsReferencingMerge] = await Promise.all([
-    getDoc(doc(contactsCollection, keepId)),
-    getDocs(query(residencesCollection, where(`contactRefs.${mergeId}`, "==", true))),
-    getDocs(query(contactsCollection, where("likelyDuplicateIds", "array-contains", mergeId))),
-  ])
+  const [keepSnap, residencesReferencingMerge, gerancesReferencingMerge, contactsReferencingMerge] =
+    await Promise.all([
+      getDoc(doc(contactsCollection, keepId)),
+      getDocs(query(residencesCollection, where(`contactRefs.${mergeId}`, "==", true))),
+      getDocs(query(gerancesCollection, where(`contactRefs.${mergeId}`, "==", true))),
+      getDocs(query(contactsCollection, where("likelyDuplicateIds", "array-contains", mergeId))),
+    ])
   const keep = toContact(keepSnap)
 
   const batch = writeBatch(db)
   for (const residenceDoc of residencesReferencingMerge.docs) {
     batch.update(residenceDoc.ref, {
+      [`contactRefs.${keepId}`]: true,
+      [`contactRefs.${mergeId}`]: deleteField(),
+    })
+  }
+  for (const geranceDoc of gerancesReferencingMerge.docs) {
+    batch.update(geranceDoc.ref, {
       [`contactRefs.${keepId}`]: true,
       [`contactRefs.${mergeId}`]: deleteField(),
     })

@@ -42,6 +42,12 @@ export type Gerance = {
   // rempli à la main ou via recherche-entreprises.api.gouv.fr (SIRET/SIREN).
   siret?: string
   responsableLegal?: string
+  // Contacts (prestataires) rattachés à la gérance elle-même plutôt qu'à une
+  // résidence précise - même pattern que Residence.contactRefs (cf.
+  // lib/contacts.ts:geranceIdsForContact/setContactGeranceLink). Réservé à
+  // l'annuaire Superadmin : une agence/agent ne doit voir/gérer que le
+  // rattachement par résidence, jamais par gérance entière.
+  contactRefs?: Record<string, boolean>
 }
 
 export const emptyAgencyDept: AgencyDept = {

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, CheckCircle2, Save, Trash2, XCircle } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Save, Search, Trash2, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
 import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import { subscribeToResidences } from "@/lib/residences"
+import { subscribeToGerances, setContactGeranceLink } from "@/lib/gerances"
+import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import {
   deleteContact,
   setContactResidenceLink,
@@ -21,8 +23,10 @@ import {
 } from "@/lib/contacts"
 import { CONTACT_SERVICES } from "@/types/contact"
 import { emptyAddress } from "@/types/residence"
+import { searchCompanies, type CompanySearchResult } from "@/lib/companySearch"
 import type { Contact } from "@/types/contact"
 import type { Residence } from "@/types/residence"
+import type { Gerance } from "@/types/gerance"
 
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -30,6 +34,8 @@ export default function ContactDetailPage() {
   const [contact, setContact] = useState<Contact | null>(null)
   const [loading, setLoading] = useState(true)
   const [residences, setResidences] = useState<Residence[]>([])
+  const [gerances, setGerances] = useState<Gerance[]>([])
+  const { isSuperAdmin } = useIsSuperAdmin()
   const [initialized, setInitialized] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -43,6 +49,37 @@ export default function ContactDetailPage() {
   const [zipCode, setZipCode] = useState(emptyAddress.zipCode)
   const [city, setCity] = useState(emptyAddress.city)
   const [web, setWeb] = useState("")
+
+  // Recherche recherche-entreprises.api.gouv.fr (cf. companySearch.ts),
+  // même usage que ContactFormDialog/GeranceFormDialog.
+  const [companyQuery, setCompanyQuery] = useState("")
+  const [companyResults, setCompanyResults] = useState<CompanySearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+
+  async function handleSearchCompany() {
+    if (!companyQuery.trim()) return
+    setSearching(true)
+    try {
+      const results = await searchCompanies(companyQuery)
+      setCompanyResults(results)
+      if (results.length === 0) toast.error("Aucun résultat pour cette recherche")
+    } catch (err) {
+      toast.error("Recherche impossible : " + (err as Error).message)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  function handleApplyCompanyResult(result: CompanySearchResult) {
+    setName(result.name)
+    setStreet(result.address.street)
+    setZipCode(result.address.zipCode)
+    setCity(result.address.city)
+    setSiret(result.siret)
+    setCompanyResults([])
+    setCompanyQuery("")
+    toast.success("Informations reprises depuis la recherche - vérifiez avant d'enregistrer")
+  }
 
   useEffect(() => {
     if (!id) return
@@ -66,6 +103,15 @@ export default function ContactDetailPage() {
       (error) => toast.error("Impossible de charger les résidences : " + error.message)
     )
   }, [])
+
+  // Rattachement gérance entière (annuaire Superadmin uniquement, cf.
+  // Gerance.contactRefs) - une agence/agent ne voit que la carte Résidences.
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    return subscribeToGerances(setGerances, (error) =>
+      toast.error("Impossible de charger les agences : " + error.message)
+    )
+  }, [isSuperAdmin])
 
   // Ne préremplit le formulaire qu'une fois, au premier chargement - les
   // mises à jour temps réel suivantes de `contact` (ex: après un toggle de
@@ -122,6 +168,15 @@ export default function ContactDetailPage() {
     if (!id) return
     try {
       await setContactResidenceLink(residenceId, id, checked)
+    } catch (err) {
+      toast.error("Échec de la mise à jour : " + (err as Error).message)
+    }
+  }
+
+  async function handleToggleGerance(geranceId: string, checked: boolean) {
+    if (!id) return
+    try {
+      await setContactGeranceLink(geranceId, id, checked)
     } catch (err) {
       toast.error("Échec de la mise à jour : " + (err as Error).message)
     }
@@ -206,6 +261,61 @@ export default function ContactDetailPage() {
                     ))}
                   </select>
                 </div>
+                <div className="flex flex-col gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-[oklch(78%_0.07_155)] bg-[oklch(98%_0.008_155)] p-[18px_20px]">
+                  <Label htmlFor="contact-company-search" className="font-bold">
+                    Rechercher l'entreprise{" "}
+                    <span className="font-medium text-muted-foreground">(SIREN, SIRET ou nom)</span>
+                  </Label>
+                  <div className="flex flex-wrap gap-2.5">
+                    <Input
+                      id="contact-company-search"
+                      placeholder="Rechercher (nom, SIRET, SIREN)…"
+                      className="max-w-xs"
+                      value={companyQuery}
+                      onChange={(e) => setCompanyQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSearchCompany())}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSearchCompany}
+                      disabled={searching}
+                      className="border-0 bg-[oklch(24%_0.03_155)] text-white hover:bg-[oklch(30%_0.04_155)]"
+                    >
+                      <Search />
+                      Rechercher
+                    </Button>
+                  </div>
+                  {companyResults.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      {companyResults.map((result) => (
+                        <div
+                          key={result.siret || result.siren}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 p-2 text-sm"
+                        >
+                          <div>
+                            <span className="font-medium">{result.name}</span>{" "}
+                            <span className="text-muted-foreground">
+                              {[result.siret, result.address.city].filter(Boolean).join(" · ")}
+                            </span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleApplyCompanyResult(result)}
+                          >
+                            Utiliser
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="m-0 text-xs leading-relaxed text-[oklch(48%_0.06_155)]">
+                    Préremplit le nom, l'adresse et le SIRET ci-dessous - à vérifier avant d'enregistrer, ou à
+                    saisir/corriger manuellement sans passer par la recherche.
+                  </p>
+                </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="contact-siret">SIRET / SIREN</Label>
                   <Input
@@ -278,32 +388,63 @@ export default function ContactDetailPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Résidences</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-1">
-                {residences.length === 0 && (
-                  <p className="px-1 py-1 text-sm text-muted-foreground">Aucune résidence.</p>
-                )}
-                {residences.map((residence) => (
-                  <label
-                    key={residence.id}
-                    className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted/50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!!residence.contactRefs?.[contact.id]}
-                      onChange={(e) => handleToggleResidence(residence.id, e.target.checked)}
-                      className="size-4 rounded border-input accent-primary"
-                    />
-                    {residence.name}
-                  </label>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex flex-col gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Résidences</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col gap-1">
+                  {residences.length === 0 && (
+                    <p className="px-1 py-1 text-sm text-muted-foreground">Aucune résidence.</p>
+                  )}
+                  {residences.map((residence) => (
+                    <label
+                      key={residence.id}
+                      className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted/50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!residence.contactRefs?.[contact.id]}
+                        onChange={(e) => handleToggleResidence(residence.id, e.target.checked)}
+                        className="size-4 rounded border-input accent-primary"
+                      />
+                      {residence.name}
+                    </label>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {isSuperAdmin && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Gérances</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col gap-1">
+                    {gerances.length === 0 && (
+                      <p className="px-1 py-1 text-sm text-muted-foreground">Aucune gérance.</p>
+                    )}
+                    {gerances.map((gerance) => (
+                      <label
+                        key={gerance.id}
+                        className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted/50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!gerance.contactRefs?.[contact.id]}
+                          onChange={(e) => handleToggleGerance(gerance.id, e.target.checked)}
+                          className="size-4 rounded border-input accent-primary"
+                        />
+                        {gerance.name}
+                      </label>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       )}
 

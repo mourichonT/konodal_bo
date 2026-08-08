@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteField,
   doc,
   onSnapshot,
   orderBy,
@@ -207,6 +208,15 @@ export async function setDeptAccountUid(gerance: Gerance, serviceType: ServiceTy
 
 // Édition ciblée du contact d'un service (mail/téléphone), même logique que
 // updateGeranceAddress - fiche Agence directement modifiable, sans dialog.
+// Rattachement contact <-> gérance (annuaire Superadmin uniquement, cf.
+// Gerance.contactRefs) - même pattern qu'un toggle = une écriture ciblée que
+// setContactResidenceLink (lib/contacts.ts), pas un set complet d'un tableau.
+export async function setContactGeranceLink(geranceId: string, contactId: string, linked: boolean) {
+  await updateDoc(doc(gerancesCollection, geranceId), {
+    [`contactRefs.${contactId}`]: linked ? true : deleteField(),
+  })
+}
+
 export async function updateGeranceDeptContact(
   id: string,
   serviceType: ServiceType,
