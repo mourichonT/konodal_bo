@@ -389,55 +389,110 @@ export default function ContactDetailPage() {
           </Card>
 
           <div className="flex flex-col gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Résidences</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col gap-1">
-                  {residences.length === 0 && (
-                    <p className="px-1 py-1 text-sm text-muted-foreground">Aucune résidence.</p>
-                  )}
-                  {residences.map((residence) => (
-                    <label
-                      key={residence.id}
-                      className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted/50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={!!residence.contactRefs?.[contact.id]}
-                        onChange={(e) => handleToggleResidence(residence.id, e.target.checked)}
-                        className="size-4 rounded border-input accent-primary"
-                      />
-                      {residence.name}
-                    </label>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            {isSuperAdmin ? (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Gérances</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col gap-2.5">
+                      {gerances.length === 0 && (
+                        <p className="px-1 py-1 text-sm text-muted-foreground">Aucune gérance.</p>
+                      )}
+                      {gerances.map((gerance) => {
+                        const geranceResidences = residences.filter(
+                          (r) => r.geranceRef?.geranceId === gerance.id
+                        )
+                        return (
+                          <div key={gerance.id} className="flex flex-col gap-1">
+                            <label className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm font-medium hover:bg-muted/50">
+                              <input
+                                type="checkbox"
+                                checked={!!gerance.contactRefs?.[contact.id]}
+                                onChange={(e) => handleToggleGerance(gerance.id, e.target.checked)}
+                                className="size-4 rounded border-input accent-primary"
+                              />
+                              {gerance.name}
+                            </label>
+                            {geranceResidences.length > 0 && (
+                              <div className="ml-[11px] flex flex-col gap-1 border-l border-[oklch(90%_0.005_100)] pl-3">
+                                {geranceResidences.map((residence) => (
+                                  <label
+                                    key={residence.id}
+                                    className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={!!residence.contactRefs?.[contact.id]}
+                                      onChange={(e) => handleToggleResidence(residence.id, e.target.checked)}
+                                      className="size-4 rounded border-input accent-primary"
+                                    />
+                                    {residence.name}
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
 
-            {isSuperAdmin && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Résidences sans gérance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col gap-1">
+                      {residences.filter((r) => !r.geranceRef?.geranceId).length === 0 && (
+                        <p className="px-1 py-1 text-sm text-muted-foreground">
+                          Aucune résidence sans gérance.
+                        </p>
+                      )}
+                      {residences
+                        .filter((r) => !r.geranceRef?.geranceId)
+                        .map((residence) => (
+                          <label
+                            key={residence.id}
+                            className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted/50"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!residence.contactRefs?.[contact.id]}
+                              onChange={(e) => handleToggleResidence(residence.id, e.target.checked)}
+                              className="size-4 rounded border-input accent-primary"
+                            />
+                            {residence.name}
+                          </label>
+                        ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Gérances</CardTitle>
+                  <CardTitle className="text-base">Résidences</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-col gap-1">
-                    {gerances.length === 0 && (
-                      <p className="px-1 py-1 text-sm text-muted-foreground">Aucune gérance.</p>
+                    {residences.length === 0 && (
+                      <p className="px-1 py-1 text-sm text-muted-foreground">Aucune résidence.</p>
                     )}
-                    {gerances.map((gerance) => (
+                    {residences.map((residence) => (
                       <label
-                        key={gerance.id}
+                        key={residence.id}
                         className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-muted/50"
                       >
                         <input
                           type="checkbox"
-                          checked={!!gerance.contactRefs?.[contact.id]}
-                          onChange={(e) => handleToggleGerance(gerance.id, e.target.checked)}
+                          checked={!!residence.contactRefs?.[contact.id]}
+                          onChange={(e) => handleToggleResidence(residence.id, e.target.checked)}
                           className="size-4 rounded border-input accent-primary"
                         />
-                        {gerance.name}
+                        {residence.name}
                       </label>
                     ))}
                   </div>

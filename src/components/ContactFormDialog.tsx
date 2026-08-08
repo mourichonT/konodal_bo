@@ -14,8 +14,8 @@ import { emptyAddress } from "@/types/residence"
 import { searchCompanies, type CompanySearchResult } from "@/lib/companySearch"
 import { subscribeToGerances } from "@/lib/gerances"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
-
-type ResidenceOption = { id: string; name: string }
+import type { Residence } from "@/types/residence"
+import type { Gerance } from "@/types/gerance"
 
 export function ContactFormDialog({
   open,
@@ -27,7 +27,7 @@ export function ContactFormDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   title: string
-  residences: ResidenceOption[]
+  residences: Residence[]
   onSubmit: (input: ContactInput) => Promise<void>
 }) {
   const { isSuperAdmin } = useIsSuperAdmin()
@@ -47,7 +47,7 @@ export function ContactFormDialog({
   // Rattachement gérance entière (annuaire Superadmin uniquement, cf.
   // Gerance.contactRefs) - une agence/agent ne voit que la sélection par
   // résidence ci-dessus.
-  const [gerances, setGerances] = useState<{ id: string; name: string }[]>([])
+  const [gerances, setGerances] = useState<Gerance[]>([])
   useEffect(() => {
     if (!isSuperAdmin) return
     return subscribeToGerances(setGerances, () => {
@@ -280,48 +280,97 @@ export function ContactFormDialog({
               <Input id="contact-web" type="url" value={web} onChange={(e) => setWeb(e.target.value)} />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label>Résidences</Label>
-              <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-[18px] border border-[oklch(93%_0.005_100)] p-[10px]">
-                {residences.length === 0 && (
-                  <p className="px-1 py-1 text-sm text-muted-foreground">Aucune résidence.</p>
-                )}
-                {residences.map((residence) => (
-                  <label
-                    key={residence.id}
-                    className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted/50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={residencesIds.includes(residence.id)}
-                      onChange={(e) => toggleResidence(residence.id, e.target.checked)}
-                      className="size-[17px] rounded border-input accent-primary"
-                    />
-                    {residence.name}
-                  </label>
-                ))}
-              </div>
-            </div>
+            {isSuperAdmin ? (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Gérances</Label>
+                  <div className="flex max-h-64 flex-col gap-2.5 overflow-y-auto rounded-[18px] border border-[oklch(93%_0.005_100)] p-[10px]">
+                    {gerances.length === 0 && (
+                      <p className="px-1 py-1 text-sm text-muted-foreground">Aucune gérance.</p>
+                    )}
+                    {gerances.map((gerance) => {
+                      const geranceResidences = residences.filter(
+                        (r) => r.geranceRef?.geranceId === gerance.id
+                      )
+                      return (
+                        <div key={gerance.id} className="flex flex-col gap-1">
+                          <label className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm font-medium hover:bg-muted/50">
+                            <input
+                              type="checkbox"
+                              checked={geranceIds.includes(gerance.id)}
+                              onChange={(e) => toggleGerance(gerance.id, e.target.checked)}
+                              className="size-[17px] rounded border-input accent-primary"
+                            />
+                            {gerance.name}
+                          </label>
+                          {geranceResidences.length > 0 && (
+                            <div className="ml-[13px] flex flex-col gap-1 border-l border-[oklch(90%_0.005_100)] pl-3">
+                              {geranceResidences.map((residence) => (
+                                <label
+                                  key={residence.id}
+                                  className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={residencesIds.includes(residence.id)}
+                                    onChange={(e) => toggleResidence(residence.id, e.target.checked)}
+                                    className="size-4 rounded border-input accent-primary"
+                                  />
+                                  {residence.name}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
 
-            {isSuperAdmin && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>Résidences sans gérance</Label>
+                  <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-[18px] border border-[oklch(93%_0.005_100)] p-[10px]">
+                    {residences.filter((r) => !r.geranceRef?.geranceId).length === 0 && (
+                      <p className="px-1 py-1 text-sm text-muted-foreground">Aucune résidence sans gérance.</p>
+                    )}
+                    {residences
+                      .filter((r) => !r.geranceRef?.geranceId)
+                      .map((residence) => (
+                        <label
+                          key={residence.id}
+                          className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted/50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={residencesIds.includes(residence.id)}
+                            onChange={(e) => toggleResidence(residence.id, e.target.checked)}
+                            className="size-[17px] rounded border-input accent-primary"
+                          />
+                          {residence.name}
+                        </label>
+                      ))}
+                  </div>
+                </div>
+              </>
+            ) : (
               <div className="flex flex-col gap-1.5">
-                <Label>Gérances</Label>
+                <Label>Résidences</Label>
                 <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-[18px] border border-[oklch(93%_0.005_100)] p-[10px]">
-                  {gerances.length === 0 && (
-                    <p className="px-1 py-1 text-sm text-muted-foreground">Aucune gérance.</p>
+                  {residences.length === 0 && (
+                    <p className="px-1 py-1 text-sm text-muted-foreground">Aucune résidence.</p>
                   )}
-                  {gerances.map((gerance) => (
+                  {residences.map((residence) => (
                     <label
-                      key={gerance.id}
+                      key={residence.id}
                       className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted/50"
                     >
                       <input
                         type="checkbox"
-                        checked={geranceIds.includes(gerance.id)}
-                        onChange={(e) => toggleGerance(gerance.id, e.target.checked)}
+                        checked={residencesIds.includes(residence.id)}
+                        onChange={(e) => toggleResidence(residence.id, e.target.checked)}
                         className="size-[17px] rounded border-input accent-primary"
                       />
-                      {gerance.name}
+                      {residence.name}
                     </label>
                   ))}
                 </div>
