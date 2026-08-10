@@ -1,3 +1,5 @@
+import type { LinkPreview } from "@/lib/linkPreview"
+
 export const COMMUNICATION_AUDIENCES = ["all", "proprietaires"] as const
 export type CommunicationAudience = (typeof COMMUNICATION_AUDIENCES)[number]
 
@@ -22,4 +24,8 @@ export type Communication = {
   // Retombe sur l'id du post lui-même si absent (anciennes communications,
   // ou copie isolée), pour toujours former un groupe même minimal.
   groupId: string
+  // Lien optionnel attaché à la communication (cf. Post.link côté app
+  // mobile, LinkPreviewController) - résolu une fois à la création
+  // (CommunicationFormDialog), jamais re-fetché à l'affichage.
+  link?: LinkPreview
 }

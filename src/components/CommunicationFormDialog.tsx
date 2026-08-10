@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { DescriptionTextarea } from "@/components/DescriptionTextarea"
 import type { CommunicationInput } from "@/lib/communications"
+import { fetchLinkPreview } from "@/lib/linkPreview"
 import {
   COMMUNICATION_AUDIENCES,
   communicationAudienceLabels,
@@ -57,6 +58,7 @@ function CommunicationFormDialogContent({
   const [selectedResidenceIds, setSelectedResidenceIds] = useState<Set<string>>(new Set())
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
+  const [link, setLink] = useState("")
   const [audience, setAudience] = useState<CommunicationAudience>("all")
   const [submitting, setSubmitting] = useState(false)
 
@@ -96,10 +98,20 @@ function CommunicationFormDialogContent({
     }
     setSubmitting(true)
     try {
+      // Résolu une seule fois pour toute la soumission (partagé par toutes
+      // les copies) - une URL invalide/inaccessible bloque la publication
+      // plutôt que d'enregistrer un lien resté vide (cf. fetchLinkPreview).
+      const linkPreview = link.trim() ? await fetchLinkPreview(link) : undefined
       // Un seul groupId pour toute la soumission, quel que soit le nombre de
       // résidences cochées - permet de regrouper les copies dans la liste BO
       // (cf. Communication.groupId).
-      const input: CommunicationInput = { title, description, audience, groupId: crypto.randomUUID() }
+      const input: CommunicationInput = {
+        title,
+        description,
+        audience,
+        groupId: crypto.randomUUID(),
+        link: linkPreview,
+      }
       await Promise.all([...selectedResidenceIds].map((residenceId) => onSubmit(residenceId, input)))
       toast.success("Communication publiée")
       onDone()
@@ -136,6 +148,16 @@ function CommunicationFormDialogContent({
               rows={5}
               value={description}
               onChange={setDescription}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="communication-link">Lien (optionnel)</Label>
+            <Input
+              id="communication-link"
+              type="url"
+              placeholder="https://…"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-2">

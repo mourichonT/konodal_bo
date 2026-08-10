@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { doc, getDoc } from "firebase/firestore"
 import { toast } from "sonner"
-import { ArrowLeft, Eye, MessageCircle } from "lucide-react"
+import { ArrowLeft, ExternalLink, Eye, MessageCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PostCommentsCard } from "@/components/PostCommentsCard"
 import { db } from "@/firebase"
@@ -113,6 +113,21 @@ export default function CommunicationDetailPage() {
                     {communication.description || "Aucune description."}
                   </span>
                 </div>
+                {communication.link && (
+                  <div className="flex flex-col gap-1 border-t pt-3">
+                    <span className="text-muted-foreground">Lien :</span>
+                    <a
+                      href={communication.link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 text-primary hover:underline"
+                    >
+                      <ExternalLink className="size-3.5 shrink-0" />
+                      <span className="truncate">{communication.link.title || communication.link.domain}</span>
+                    </a>
+                    <span className="text-xs text-muted-foreground">{communication.link.domain}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

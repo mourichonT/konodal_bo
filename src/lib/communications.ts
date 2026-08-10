@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore"
 import { db } from "@/firebase"
 import type { Communication, CommunicationAudience } from "@/types/communication"
+import type { LinkPreview } from "@/lib/linkPreview"
 
 function toDateOrNull(value: unknown): Date | null {
   return value && typeof (value as { toDate?: unknown }).toDate === "function"
@@ -36,6 +37,7 @@ function toCommunication(residenceId: string, d: DocumentSnapshot<DocumentData>)
     user: (data.user as string) ?? "",
     audience: data.audience === "proprietaires" ? "proprietaires" : "all",
     groupId: (data.communicationGroupId as string) || d.id,
+    link: data.link ? (data.link as LinkPreview) : undefined,
   }
 }
 
@@ -77,6 +79,9 @@ export type CommunicationInput = {
   // partagé par toutes les résidences cochées - permet de regrouper les
   // copies d'une même publication dans la liste BO (useAllCommunications).
   groupId: string
+  // Résolu une seule fois par soumission (fetchLinkPreview), partagé par
+  // toutes les copies - cf. Communication.link.
+  link?: LinkPreview
 }
 
 // Réservé isProfessionnelResidence()/isSuperAdmin() côté firestore.rules
@@ -100,6 +105,7 @@ export async function createCommunication(residenceId: string, uid: string, inpu
     dates: { creationDate: serverTimestamp() },
     communicationGroupId: input.groupId,
     ...(input.audience === "proprietaires" ? { audience: "proprietaires" } : {}),
+    ...(input.link ? { link: input.link } : {}),
   })
 }
 
