@@ -82,9 +82,9 @@ export default function ResetPasswordPage() {
         style={{ background: "radial-gradient(circle, oklch(88% 0.06 150 / 0.45), transparent 70%)" }}
       />
 
-      <Card className="relative w-full max-w-sm p-9">
+      <Card className="relative w-full max-w-[420px] rounded-[28px] border-[oklch(93%_0.005_100)] p-9 shadow-[0_1px_2px_oklch(20%_0_0/0.04),0_30px_70px_-24px_oklch(20%_0.02_150/0.22)]">
         <CardContent className="flex flex-col gap-0 p-0">
-          <img src={logoVertical} alt="Konodal" className="mx-auto mb-[30px] h-[140px] w-auto" />
+          <img src={logoVertical} alt="Konodal" className="mx-auto mb-[18px] h-[140px] w-auto" />
 
           {status === "invalid" ? (
             <>
@@ -115,7 +115,9 @@ export default function ResetPasswordPage() {
 
               <form onSubmit={handleSubmit} className="flex flex-col gap-6">
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="new-password">Nouveau mot de passe</Label>
+                  <Label htmlFor="new-password" className="text-[12.5px] font-bold text-[oklch(30%_0.01_150)]">
+                    Nouveau mot de passe
+                  </Label>
                   <div className="relative">
                     <Input
                       id="new-password"
@@ -124,14 +126,14 @@ export default function ResetPasswordPage() {
                       required
                       minLength={6}
                       disabled={status !== "valid"}
-                      className="h-11 px-3.5 pr-10"
+                      className="h-11 rounded-[12px] border-[oklch(88%_0.01_150)] px-3.5 pr-[42px] text-[13.5px] text-[oklch(24%_0.01_150)]"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
-                      className="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
+                      className="absolute top-1/2 right-1.5 flex size-[30px] -translate-y-1/2 items-center justify-center text-[oklch(55%_0.01_150)] hover:text-[oklch(35%_0.01_150)]"
                     >
                       {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
