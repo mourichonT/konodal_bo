@@ -3,6 +3,7 @@ import {
   deleteField,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -52,16 +53,44 @@ function toKonodalUser(snapshot: DocumentSnapshot<DocumentData>): KonodalUser {
   }
 }
 
+// Même algorithme que generateUniqueRefUserApp côté app mobile (Dart,
+// lib/controllers/features/generate_ref_user_app.dart) : 8 premiers
+// caractères de l'uid en minuscule, avec repli sur les 7 premiers + 1
+// caractère décalé en cas de collision (négligeable en pratique, l'uid
+// Firebase Auth étant déjà quasi-unique sur ce préfixe).
+async function generateUniqueRefUserApp(uid: string): Promise<string> {
+  let refUserApp = uid.substring(0, 8).toLowerCase()
+  let attempt = 0
+  while (true) {
+    const snapshot = await getDocs(query(usersCollection, where("refUserApp", "==", refUserApp)))
+    if (snapshot.empty) return refUserApp
+    refUserApp =
+      uid.substring(0, 7).toLowerCase() +
+      String.fromCharCode(uid.charCodeAt(7) + (attempt % 26)).toLowerCase()
+    attempt++
+  }
+}
+
 // Champs minimaux acceptés par firestore.rules à la création d'un compte
 // (users/{uid} : isApproved doit être false, accountType 'utilisateur' -
 // tout le reste est optionnel côté modèle Dart, cf. User.fromMap qui
 // tolère l'absence des groupes imbriqués "user"/"profil"). Un compte créé
 // depuis ce backoffice est ensuite promu manuellement en superAdmin via un
 // script Admin SDK, hors règles.
+//
+// refUserApp posé dès la création (pas seulement côté app mobile à la fin
+// de l'inscription, cf. FirestoreUserRepository.setUser) : c'est le
+// marqueur que exports.cleanupAbandonedSignups (functions/index.js, repo
+// konodal_app) utilise pour distinguer une inscription mobile abandonnée
+// (candidate à la suppression après 20 min) d'un compte légitime - sans
+// lui, un compte créé depuis ce backoffice se faisait supprimer par ce
+// filet de sécurité avant même d'être promu superAdmin.
 export async function ensureUserDocument(user: FirebaseUser) {
   const ref = doc(db, "users", user.uid)
   const snapshot = await getDoc(ref)
   if (snapshot.exists()) return
+
+  const refUserApp = await generateUniqueRefUserApp(user.uid)
 
   await setDoc(ref, {
     uid: user.uid,
@@ -69,6 +98,7 @@ export async function ensureUserDocument(user: FirebaseUser) {
     isApproved: false,
     accountType: "utilisateur",
     createdDate: serverTimestamp(),
+    refUserApp,
   })
 }
 
