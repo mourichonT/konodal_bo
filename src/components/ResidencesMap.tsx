@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import maplibregl from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
 import type { FeatureCollection, Point } from "geojson"
@@ -66,20 +66,38 @@ export function ResidencesMap({ residences }: { residences: Residence[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const hasFocusedRef = useRef(false)
+  // WebGL peut être indisponible sur certains postes/navigateurs (pilote
+  // GPU blocklisté par Chromium/ANGLE, accélération matérielle désactivée,
+  // session à distance sans GPU...) - `new maplibregl.Map(...)` lève alors
+  // une exception synchrone. Sans ce garde, l'erreur remontait non
+  // rattrapée depuis ce useEffect (pas d'ErrorBoundary dans ce projet),
+  // cassant toute la page Résidences au lieu de juste la carte.
+  const [webglError, setWebglError] = useState(false)
 
   useEffect(() => {
     if (!containerRef.current) return
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: STYLE,
-      center: [2.2137, 46.2276], // centre de la France
-      zoom: 4.5,
-      attributionControl: false,
-    })
+    let map: maplibregl.Map
+    try {
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        style: STYLE,
+        center: [2.2137, 46.2276], // centre de la France
+        zoom: 4.5,
+        attributionControl: false,
+      })
+    } catch (error) {
+      console.error("Échec d'initialisation de la carte (WebGL indisponible ?)", error)
+      setWebglError(true)
+      return
+    }
     mapRef.current = map
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right")
     map.addControl(new maplibregl.AttributionControl({ compact: true }))
+
+    map.on("error", (e) => {
+      console.error("Erreur MapLibre :", e.error)
+    })
 
     map.on("load", () => {
       map.addSource(SOURCE_ID, {
@@ -177,6 +195,14 @@ export function ResidencesMap({ residences }: { residences: Residence[] }) {
     if (map.isStyleLoaded()) applyData()
     else map.once("load", applyData)
   }, [residences])
+
+  if (webglError) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-center text-sm text-muted-foreground">
+        Carte indisponible : WebGL n'a pas pu être initialisé sur ce navigateur/poste.
+      </div>
+    )
+  }
 
   return <div ref={containerRef} className="h-full w-full" />
 }

@@ -62,10 +62,10 @@ export function useAllCommunications(
 
   // Un résident peut aussi publier un post "communication" depuis l'app
   // (AskingNeighbordsForm) - cette page BO n'est destinée qu'aux annonces
-  // officielles publiées par l'agence/gérance (accountType agence/agent),
-  // pas au fil de discussion résident->résident. Rôle résolu par uid, une
-  // fois (accountType ne change pas assez souvent pour justifier un
-  // onSnapshot dédié par auteur).
+  // officielles publiées par l'agence/gérance ou un superAdmin (accountType
+  // agence/agent/superAdmin), pas au fil de discussion résident->résident.
+  // Rôle résolu par uid, une fois (accountType ne change pas assez souvent
+  // pour justifier un onSnapshot dédié par auteur).
   const [authorRoles, setAuthorRoles] = useState<Record<string, string>>({})
   useEffect(() => {
     const missing = [...new Set(rawCommunications.map((c) => c.user))].filter(
@@ -83,7 +83,7 @@ export function useAllCommunications(
 
   const communications: CommunicationWithResidence[] = useMemo(() => {
     return rawCommunications
-      .filter((c) => authorRoles[c.user] === "agence" || authorRoles[c.user] === "agent")
+      .filter((c) => ["agence", "agent", "superAdmin"].includes(authorRoles[c.user]))
       .sort((a, b) => (b.creationDate?.getTime() ?? 0) - (a.creationDate?.getTime() ?? 0))
   }, [rawCommunications, authorRoles])
 
