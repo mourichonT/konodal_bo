@@ -22,6 +22,7 @@ import { subscribeToContacts } from "@/lib/contacts"
 import { subscribeToStructures } from "@/lib/structures"
 import { resolveUsersByUids } from "@/lib/users"
 import { CONTACT_SERVICE_ICONS, type Contact } from "@/types/contact"
+import type { KonodalUser } from "@/types/user"
 import type { GeranceRef } from "@/types/residence"
 import type { StructureResidence } from "@/types/structure"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
@@ -34,6 +35,10 @@ type ResidenceOption = {
   name: string
   contactRefs?: Record<string, boolean>
   geranceRef?: GeranceRef
+  // Membres du Conseil Syndical de cette résidence (uids) - proposés comme
+  // "contact CS disponible" pour CETTE intervention (cf. contactCsMemberIds
+  // sur EventInput), résolus en identité + téléphone ci-dessous.
+  csmembers?: string[]
 }
 
 // Date et heure séparées (plutôt qu'un seul <input type="datetime-local">) :
@@ -168,6 +173,10 @@ function EventFormDialogContent({
   const [contacts, setContacts] = useState<Contact[]>([])
   const [structures, setStructures] = useState<StructureResidence[]>([])
   const [geranceAgentLabel, setGeranceAgentLabel] = useState<string | null>(null)
+  const [contactCsMemberIds, setContactCsMemberIds] = useState<string[]>(
+    initial?.contactCsMemberIds ?? []
+  )
+  const [csMembers, setCsMembers] = useState<KonodalUser[]>([])
 
   useEffect(() => {
     return subscribeToContacts(setContacts, () => {
@@ -190,6 +199,30 @@ function EventFormDialogContent({
 
   const selectedResidence = residences.find((r) => r.id === residenceId)
   const geranceRef = selectedResidence?.geranceRef
+
+  // Résout l'identité + téléphone des membres du CS de la résidence choisie,
+  // pour la case à cocher "Contact CS disponible" ci-dessous - même source
+  // (users/{uid}) que CsMembersSection côté ResidenceDetailPage.
+  const csMemberUids = useMemo(() => selectedResidence?.csmembers ?? [], [selectedResidence])
+  useEffect(() => {
+    if (csMemberUids.length === 0) {
+      setCsMembers([])
+      return
+    }
+    let cancelled = false
+    resolveUsersByUids(csMemberUids).then((users) => {
+      if (!cancelled) setCsMembers(users)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [csMemberUids])
+
+  // Une sélection faite pour une autre résidence n'a plus de sens si on
+  // change de résidence en cours de création (lockResidence=false).
+  useEffect(() => {
+    setContactCsMemberIds((prev) => prev.filter((uid) => csMemberUids.includes(uid)))
+  }, [csMemberUids])
 
   // Résout l'agent (ou à défaut l'agence) rattaché à la résidence via
   // geranceRef, pour le proposer comme prestataire au même titre que les
@@ -280,6 +313,7 @@ function EventFormDialogContent({
         pathImage,
         locationElement,
         locationFloor,
+        contactCsMemberIds,
         ...(linkedSinistreId ? { linkedSinistreId } : {}),
       })
     } catch (err) {
@@ -447,6 +481,41 @@ function EventFormDialogContent({
               </select>
             </div>
           </div>
+          {csMembers.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <Label>Contact CS disponible (optionnel)</Label>
+              <div className="flex flex-col gap-1.5">
+                {csMembers.map((u) => {
+                  const checked = contactCsMemberIds.includes(u.uid)
+                  return (
+                    <label
+                      key={u.uid}
+                      className="flex items-center gap-2 text-sm"
+                      title={
+                        !u.phone
+                          ? "Aucun téléphone renseigné - n'apparaîtrait pas au prestataire tant qu'il n'en a pas un"
+                          : undefined
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={restDisabled}
+                        className="size-4 rounded border-input"
+                        checked={checked}
+                        onChange={(e) =>
+                          setContactCsMemberIds((prev) =>
+                            e.target.checked ? [...prev, u.uid] : prev.filter((id) => id !== u.uid)
+                          )
+                        }
+                      />
+                      {`${u.name} ${u.surname}`.trim() || u.email}
+                      {checked && !u.phone && <span className="text-destructive">(sans téléphone)</span>}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <Label htmlFor="event-desc">Description</Label>
             <DescriptionTextarea

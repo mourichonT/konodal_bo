@@ -56,6 +56,7 @@ function toResidenceEvent(residenceId: string, d: DocumentSnapshot<DocumentData>
     previousEventId: (data.previousEventId as string) || undefined,
     reporte: (data.reporte as boolean) || false,
     annule: (data.annule as boolean) || false,
+    contactCsMemberIds: (data.contactCsMemberIds as string[] | undefined) || undefined,
   }
 }
 
@@ -153,6 +154,10 @@ export type EventInput = {
   // uniquement, comme linkedSinistreId.
   locationElement?: string
   locationFloor?: string
+  // Membre(s) du CS disponible(s) pour cette intervention précise (uids),
+  // choisis dans le formulaire au moment de sa planification - backoffice
+  // uniquement, comme linkedSinistreId/locationElement.
+  contactCsMemberIds?: string[]
 }
 
 // Réservé isSuperAdmin() côté firestore.rules (posts/{id}.create) - la règle
@@ -178,6 +183,7 @@ export async function createEvent(residenceId: string, uid: string, input: Event
       locationFloor: input.locationFloor ?? "",
     },
     ...(input.linkedSinistreId ? { linkedSinistreId: input.linkedSinistreId } : {}),
+    ...(input.contactCsMemberIds?.length ? { contactCsMemberIds: input.contactCsMemberIds } : {}),
   })
 }
 
@@ -190,6 +196,7 @@ export async function updateEvent(residenceId: string, postId: string, input: Ev
     "event.prestaName": input.prestaName,
     "location.locationElements": input.locationElement ?? "",
     "location.locationFloor": input.locationFloor ?? "",
+    contactCsMemberIds: input.contactCsMemberIds ?? [],
   })
 }
 

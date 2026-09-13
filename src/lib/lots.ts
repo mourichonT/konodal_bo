@@ -48,6 +48,7 @@ export function subscribeToLots(
         isLinkable: false,
         idProprietaire: [],
         idLocataire: [],
+        tantiemes: 0,
         ...(d.data() as Partial<Omit<Lot, "id">>),
         id: d.id,
       }))
@@ -81,6 +82,7 @@ export function subscribeToLot(
         isLinkable: false,
         idProprietaire: [],
         idLocataire: [],
+        tantiemes: 0,
         ...(snapshot.data() as Partial<Omit<Lot, "id">>),
         id: snapshot.id,
       })
@@ -96,13 +98,17 @@ export type LotInput = {
   typeLot: string
   isLinkable: boolean
   order: number
+  // Tantième général du lot (loi de 1965) - cf. Lot.tantiemes, types/lot.ts.
+  tantiemes: number
 }
 
 // Mêmes clés que Lot.toJsonForDb() côté app mobile (connectkasa) : on
 // n'écrit que les champs gérés depuis cet écran, jamais idLocataire,
 // syndicAgency... pour ne pas écraser des données gérées ailleurs
 // (attribution de lot). Le rattachement parent-enfant (parentLotId) a sa
-// propre fonction dédiée, linkLot, plus bas.
+// propre fonction dédiée, linkLot, plus bas. `tantiemes` toujours écrit, y
+// compris à 0 - même choix explicite que côté app mobile (toJsonForDb),
+// jamais omis silencieusement contrairement aux champs texte ci-dessus.
 function toFirestoreLotData(input: LotInput) {
   return {
     ...(input.refLot ? { refLot: input.refLot } : {}),
@@ -111,6 +117,7 @@ function toFirestoreLotData(input: LotInput) {
     ...(input.typeLot ? { typeLot: input.typeLot } : {}),
     isLinkable: input.isLinkable,
     order: input.order,
+    tantiemes: input.tantiemes,
   }
 }
 

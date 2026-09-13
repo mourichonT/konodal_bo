@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { CalendarClock, FileText, Video } from "lucide-react"
+import { CalendarClock, FileText, KeyRound, Phone, Video } from "lucide-react"
 import logoHorizontalWhite from "@/assets/logo-horizontal.png"
 import { DateInput } from "@/components/DateInput"
 import { DESCRIPTION_MAX_LENGTH } from "@/components/DescriptionTextarea"
@@ -58,10 +58,47 @@ type SharedSinistre = {
   signalements: SharedSignalement[]
 }
 
+type SharedAccessPoint = {
+  type: string
+  code?: string
+  details?: string
+}
+
+type SharedBuildingAccess = {
+  name: string
+  type: string
+  accessPoint: SharedAccessPoint
+}
+
+type SharedCsContact = {
+  name: string
+  phone: string
+}
+
+type SharedAccess = {
+  residenceAccessPoint: SharedAccessPoint | null
+  buildingAccessPoints: SharedBuildingAccess[]
+  csContacts: SharedCsContact[]
+}
+
 type SharedData = {
   intervention: SharedIntervention
   residence: SharedResidence
   sinistre: SharedSinistre | null
+  access: SharedAccess
+}
+
+const ACCESS_POINT_TYPE_LABEL: Record<string, string> = {
+  code: "Digicode",
+  badge: "Badge",
+  cle: "Clé",
+  autre: "Accès",
+}
+
+function formatAccessPoint(accessPoint: SharedAccessPoint): string {
+  const label = ACCESS_POINT_TYPE_LABEL[accessPoint.type] ?? ACCESS_POINT_TYPE_LABEL.autre
+  if (accessPoint.type === "code" && accessPoint.code) return `${label} : ${accessPoint.code}`
+  return label
 }
 
 function formatAddress(address: SharedAddress): string {
@@ -260,6 +297,58 @@ export default function SharedInterventionPage() {
                 {data.intervention.description || "Aucune description."}
               </div>
             </div>
+
+            {(data.access.residenceAccessPoint ||
+              data.access.buildingAccessPoints.length > 0 ||
+              data.access.csContacts.length > 0) && (
+              <div className={CARD_CLASS} style={{ boxShadow: CARD_SHADOW }}>
+                <div className={EYEBROW_CLASS}>Accès</div>
+                <div className="flex flex-col gap-3">
+                  {data.access.residenceAccessPoint && (
+                    <div className="flex items-start gap-2.5">
+                      <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-[oklch(52%_0.01_150)]" />
+                      <div>
+                        <div className="text-[13px] font-bold text-[oklch(24%_0.01_150)]">
+                          Résidence — {formatAccessPoint(data.access.residenceAccessPoint)}
+                        </div>
+                        {data.access.residenceAccessPoint.details && (
+                          <div className="text-[12.5px] text-[oklch(52%_0.01_150)]">
+                            {data.access.residenceAccessPoint.details}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {data.access.buildingAccessPoints.map((building, i) => (
+                    <div key={i} className="flex items-start gap-2.5">
+                      <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-[oklch(52%_0.01_150)]" />
+                      <div>
+                        <div className="text-[13px] font-bold text-[oklch(24%_0.01_150)]">
+                          {[building.type, building.name].filter(Boolean).join(" ") || "Bâtiment"} —{" "}
+                          {formatAccessPoint(building.accessPoint)}
+                        </div>
+                        {building.accessPoint.details && (
+                          <div className="text-[12.5px] text-[oklch(52%_0.01_150)]">
+                            {building.accessPoint.details}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {data.access.csContacts.map((contact, i) => (
+                    <a
+                      key={i}
+                      href={`tel:${contact.phone}`}
+                      className="flex items-center gap-2.5 text-[oklch(24%_0.01_150)]"
+                    >
+                      <Phone className="h-4 w-4 shrink-0 text-[oklch(52%_0.01_150)]" />
+                      <span className="text-[13px] font-bold">{contact.name}</span>
+                      <span className="text-[13px] text-[oklch(52%_0.01_150)]">{contact.phone}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {data.sinistre && (
               <div className={CARD_CLASS} style={{ boxShadow: CARD_SHADOW }}>

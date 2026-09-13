@@ -146,6 +146,7 @@ export default function EvenementDetailPage() {
   const [residenceAddress, setResidenceAddress] = useState<Address | undefined>(undefined)
   const [contactRefs, setContactRefs] = useState<Record<string, boolean> | undefined>(undefined)
   const [geranceRef, setGeranceRef] = useState<GeranceRef | undefined>(undefined)
+  const [csmembers, setCsmembers] = useState<string[] | undefined>(undefined)
   const [editing, setEditing] = useState(false)
   const [sending, setSending] = useState(false)
   const [rapports, setRapports] = useState<Rapport[]>([])
@@ -184,6 +185,7 @@ export default function EvenementDetailPage() {
       setResidenceAddress(snap.exists() ? (snap.data().address as Address | undefined) : undefined)
       setContactRefs(snap.exists() ? (snap.data().contactRefs as Record<string, boolean> | undefined) : undefined)
       setGeranceRef(snap.exists() ? (snap.data().geranceRef as GeranceRef | undefined) : undefined)
+      setCsmembers(snap.exists() ? (snap.data().csmembers as string[] | undefined) : undefined)
     })
   }, [residenceId])
 
@@ -388,7 +390,9 @@ export default function EvenementDetailPage() {
         open={editing}
         onOpenChange={setEditing}
         title="Modifier l'intervention"
-        residences={residenceName ? [{ id: residenceId, name: residenceName, contactRefs, geranceRef }] : []}
+        residences={
+          residenceName ? [{ id: residenceId, name: residenceName, contactRefs, geranceRef, csmembers }] : []
+        }
         initialResidenceId={residenceId}
         lockResidence
         initial={
@@ -399,6 +403,7 @@ export default function EvenementDetailPage() {
                 eventDate: event.eventDate ?? new Date(),
                 prestaName: event.prestaName,
                 pathImage: event.pathImage,
+                contactCsMemberIds: event.contactCsMemberIds,
               }
             : undefined
         }

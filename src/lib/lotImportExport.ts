@@ -256,7 +256,16 @@ export function validateLotImportRows(
     }
     seenRefs.add(row.refLot)
     seenCombos.add(combo)
-    toCreate.push({ refLot: row.refLot, batiment: row.batiment, lot: row.lot, typeLot: row.typeLot, isLinkable })
+    toCreate.push({
+      refLot: row.refLot,
+      batiment: row.batiment,
+      lot: row.lot,
+      typeLot: row.typeLot,
+      isLinkable,
+      // Pas de colonne "Tantièmes" dans le modèle d'import - toujours 0 à la
+      // création, ajustable ensuite depuis le tableau des lots.
+      tantiemes: 0,
+    })
   }
 
   return { toCreate, duplicatesExisting, duplicatesInFile, errors }

@@ -76,6 +76,7 @@ export default function SinistreDetailPage() {
   const [residenceName, setResidenceName] = useState<string | null>(null)
   const [contactRefs, setContactRefs] = useState<Record<string, boolean> | undefined>(undefined)
   const [geranceRef, setGeranceRef] = useState<GeranceRef | undefined>(undefined)
+  const [csmembers, setCsmembers] = useState<string[] | undefined>(undefined)
   const [schedulingIntervention, setSchedulingIntervention] = useState(false)
   const [interventionEventId, setInterventionEventId] = useState<string | undefined>(undefined)
   const [mediaIndex, setMediaIndex] = useState(0)
@@ -114,6 +115,7 @@ export default function SinistreDetailPage() {
       setResidenceName(snap.exists() ? ((snap.data().name as string) ?? null) : null)
       setContactRefs(snap.exists() ? (snap.data().contactRefs as Record<string, boolean> | undefined) : undefined)
       setGeranceRef(snap.exists() ? (snap.data().geranceRef as GeranceRef | undefined) : undefined)
+      setCsmembers(snap.exists() ? (snap.data().csmembers as string[] | undefined) : undefined)
     })
   }, [residenceId])
 
@@ -633,7 +635,9 @@ export default function SinistreDetailPage() {
         open={schedulingIntervention}
         onOpenChange={setSchedulingIntervention}
         title="Programmer une intervention"
-        residences={residenceName ? [{ id: residenceId, name: residenceName, contactRefs, geranceRef }] : []}
+        residences={
+          residenceName ? [{ id: residenceId, name: residenceName, contactRefs, geranceRef, csmembers }] : []
+        }
         initialResidenceId={residenceId}
         lockResidence
         linkedSinistreId={postId}

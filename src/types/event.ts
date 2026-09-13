@@ -44,4 +44,12 @@ export type ResidenceEvent = {
   // l'annulation est une décision explicite du BO, pas la conséquence d'une
   // reprogrammation côté prestataire.
   annule?: boolean
+  // Champ backoffice uniquement - membre(s) du CS disponible(s)/joignable(s)
+  // pour CETTE intervention précise, choisis au moment de sa planification
+  // (EventFormDialog) plutôt qu'un réglage permanent sur la résidence : la
+  // disponibilité d'un membre du CS varie d'une intervention à l'autre.
+  // Affiché avec son téléphone au prestataire sur la page de partage (cf.
+  // get_shared_intervention, functions_python/main.py, qui lit ce champ
+  // depuis LE POST plutôt que depuis la résidence).
+  contactCsMemberIds?: string[]
 }

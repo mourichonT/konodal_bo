@@ -32,12 +32,18 @@ export const structureElementOptions = [
   "Arbres",
 ]
 
+import type { AccessPoint } from "@/types/accessPoint"
+
 export type StructureResidence = {
   id: string
   name: string
   type: string
   etage: string[]
   hasUnderground: boolean
+  // Moyen d'accès de ce bâtiment (digicode/badge/clé), affiché au
+  // prestataire sur la page de partage d'une intervention - absent tant que
+  // personne ne l'a renseigné, cf. types/accessPoint.ts.
+  accessPoint?: AccessPoint | null
   // Éléments présents dans/autour du bâtiment (cage d'escalier, boîte aux
   // lettres...) - suggestions dans structureElementOptions, plus des
   // valeurs libres ajoutées à la main (mêmes deux sources que côté app).

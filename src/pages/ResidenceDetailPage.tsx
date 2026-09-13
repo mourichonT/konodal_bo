@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, ChevronDown, Eye, GripVertical, Plus, Search, ShieldOff, Trash2, Upload, UserPlus, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Eye, GripVertical, Home, Info, MoreVertical, Percent, Plus, Search, Settings2, ShieldOff, Trash2, Upload, UserPlus, Vote as VoteIcon, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -17,6 +17,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -64,22 +65,57 @@ import {
   updateLot,
   type LotInput,
 } from "@/lib/lots"
+import {
+  createClefCharge,
+  deleteClefCharge,
+  subscribeToClesCharge,
+  updateClefChargeNom,
+} from "@/lib/clesCharge"
 import { LotImportDialog } from "@/components/LotImportDialog"
+import { LotClefsChargeDialog } from "@/components/LotClefsChargeDialog"
+import { VoteFormDialog } from "@/components/VoteFormDialog"
+import { saveResidenceAccessPoint, setStructureAccessPoint, subscribeToResidenceAccessPoint } from "@/lib/accessPoints"
+import { AccessPointType, accessPointTypeLabels, type AccessPoint, type AccessPointTypeValue } from "@/types/accessPoint"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { subscribeToGerances } from "@/lib/gerances"
 import { resolveUsersByUids } from "@/lib/users"
+import { deleteVote, subscribeToVotes } from "@/lib/votes"
+import { useAuth } from "@/lib/auth-context"
 import { emptyAddress, type Residence } from "@/types/residence"
 import { structureElementOptions, structureTypeOptions, type StructureResidence } from "@/types/structure"
 import { defaultIsLinkableForType, typeLotOptions, type Lot } from "@/types/lot"
+import { totalTantiemes, type ClefCharge } from "@/types/clefCharge"
 import { AGENT_UID_FIELD, serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
 import type { KonodalUser } from "@/types/user"
+import { VoteType, isSessionFinished, isVoteClosed, isVoteStarted, isVotePaused, type Vote } from "@/types/vote"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
+
+// Onglets de la page résidence - regroupe les sections par usage (fiche +
+// CS d'un côté, réglages structurels de l'autre, lots et votes chacun dans
+// leur propre onglet) plutôt qu'un long scroll unique, cf. retour
+// utilisateur. Switch en state local (pas de sous-routes/Outlet comme
+// SinistresPage) : tout vit déjà dans ce même composant, pas besoin d'URLs
+// dédiées par onglet.
+const residenceTabs = [
+  { key: "information", label: "Information", icon: Info },
+  { key: "configuration", label: "Configuration", icon: Settings2 },
+  { key: "lots", label: "Configuration des lots", icon: Home },
+  { key: "votes", label: "Votes & assemblées générales", icon: VoteIcon },
+] as const
+type ResidenceTabKey = (typeof residenceTabs)[number]["key"]
 
 export default function ResidenceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [residence, setResidence] = useState<Residence | null>(null)
   const [loading, setLoading] = useState(true)
   const [structures, setStructures] = useState<StructureResidence[]>([])
+  const [activeTab, setActiveTab] = useState<ResidenceTabKey>("information")
 
   useEffect(() => {
     if (!id) return
@@ -127,12 +163,43 @@ export default function ResidenceDetailPage() {
 
       {residence && (
         <>
-          <InfoSection residence={residence} />
-          <div className="grid gap-5 lg:grid-cols-2">
-            <StructuresSection residenceId={id} structures={structures} />
-            <CsMembersSection residenceId={id} residence={residence} />
+          <div className="flex w-full items-center gap-1 rounded-2xl bg-[oklch(93%_0.005_100)] p-1.5">
+            {residenceTabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-[13.5px] font-semibold transition-colors",
+                  activeTab === tab.key
+                    ? "bg-[oklch(45%_0.1_155)] font-bold text-white shadow-[0_6px_16px_-6px_oklch(38%_0.08_155/0.5)]"
+                    : "text-[oklch(45%_0.01_150)] hover:bg-[oklch(98%_0.003_100)]"
+                )}
+              >
+                <tab.icon className="size-4" />
+                {tab.label}
+              </button>
+            ))}
           </div>
-          <LotsSection residenceId={id} structures={structures} />
+
+          {activeTab === "information" && (
+            <div className="flex flex-col gap-5">
+              <InfoSection residence={residence} />
+              <CsMembersSection residenceId={id} residence={residence} />
+            </div>
+          )}
+
+          {activeTab === "configuration" && (
+            <div className="flex flex-col gap-5">
+              <StructuresSection residenceId={id} structures={structures} />
+              <SecurityAccessSection residenceId={id} structures={structures} />
+              <ClesChargeSection residenceId={id} />
+            </div>
+          )}
+
+          {activeTab === "lots" && <LotsSection residenceId={id} structures={structures} />}
+
+          {activeTab === "votes" && <VotesSection residenceId={id} />}
         </>
       )}
     </div>
@@ -151,6 +218,10 @@ function CsMembersSection({ residenceId, residence }: { residenceId: string; res
   const [owners, setOwners] = useState<KonodalUser[]>([])
   const [loadingOwners, setLoadingOwners] = useState(false)
   const [pendingUid, setPendingUid] = useState<string | null>(null)
+  // Filtre la liste "Propriétaires éligibles" (nom ou email) - peut compter
+  // plusieurs centaines d'entrées sur une grosse résidence, cf. retour
+  // utilisateur.
+  const [eligibleSearch, setEligibleSearch] = useState("")
 
   useEffect(() => {
     return subscribeToLots(
@@ -215,6 +286,12 @@ function CsMembersSection({ residenceId, residence }: { residenceId: string; res
   const csMemberUids = residence.csmembers ?? []
   const members = owners.filter((u) => csMemberUids.includes(u.uid))
   const eligible = owners.filter((u) => !csMemberUids.includes(u.uid))
+  const normalizedEligibleSearch = eligibleSearch.trim().toLowerCase()
+  const filteredEligible = normalizedEligibleSearch
+    ? eligible.filter((u) =>
+        `${u.name} ${u.surname} ${u.email}`.toLowerCase().includes(normalizedEligibleSearch)
+      )
+    : eligible
 
   return (
     <Card>
@@ -256,28 +333,43 @@ function CsMembersSection({ residenceId, residence }: { residenceId: string; res
 
         {eligible.length > 0 && (
           <div className="flex flex-col gap-2 border-t pt-4">
-            <Label className="font-bold">Propriétaires éligibles</Label>
-            {eligible.map((u) => (
-              <div
-                key={u.uid}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 p-2.5"
-              >
-                <div className="text-sm">
-                  <span className="font-medium">{`${u.name} ${u.surname}`.trim() || u.email}</span>
-                  <span className="text-muted-foreground"> — {u.email}</span>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={pendingUid === u.uid}
-                  onClick={() => handleToggle(u, true)}
-                >
-                  <UserPlus />
-                  Inviter au CS
-                </Button>
-              </div>
-            ))}
+            <Label className="font-bold">Propriétaires éligibles ({eligible.length})</Label>
+            <div className="relative">
+              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher par nom ou email…"
+                value={eligibleSearch}
+                onChange={(e) => setEligibleSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <div className="flex max-h-72 flex-col gap-2 overflow-y-auto pr-1">
+              {filteredEligible.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aucun propriétaire ne correspond à la recherche.</p>
+              ) : (
+                filteredEligible.map((u) => (
+                  <div
+                    key={u.uid}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 p-2.5"
+                  >
+                    <div className="text-sm">
+                      <span className="font-medium">{`${u.name} ${u.surname}`.trim() || u.email}</span>
+                      <span className="text-muted-foreground"> — {u.email}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={pendingUid === u.uid}
+                      onClick={() => handleToggle(u, true)}
+                    >
+                      <UserPlus />
+                      Inviter au CS
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 
@@ -812,6 +904,324 @@ function StructureCard({
   )
 }
 
+type ClefChargeRow = {
+  key: string
+  id?: string
+  nom: string
+  // Non éditable ici : recalculé à partir de tantiemesParLot (jamais stocké
+  // tel quel, cf. types/clefCharge.ts:totalTantiemes) - affiché en lecture
+  // seule à titre de repère.
+  total: number
+  tantiemesParLot: Record<string, number>
+}
+
+type AccessRowState = {
+  key: string
+  label: string
+  type: AccessPointTypeValue
+  code: string
+  details: string
+}
+
+function toAccessRow(key: string, label: string, accessPoint?: AccessPoint | null): AccessRowState {
+  return {
+    key,
+    label,
+    type: accessPoint?.type ?? AccessPointType.code,
+    code: accessPoint?.code ?? "",
+    details: accessPoint?.details ?? "",
+  }
+}
+
+// Moyens d'accès (digicode/badge/clé) de la résidence et de chaque bâtiment -
+// une ligne "Résidence (portail)" toujours présente + une ligne par bâtiment
+// déclaré dans la section Structures ci-dessus. Affiché au prestataire sur
+// le lien de partage d'une intervention (cf. get_shared_intervention,
+// functions_python/main.py). Même patron d'édition inline auto-enregistrée
+// (debounce) que ClesChargeSection/LotsSection - la résidence est stockée à
+// part (residences/{id}/access/main, cf. lib/accessPoints.ts), chaque
+// bâtiment sur son propre document (structures/{id}.accessPoint).
+function SecurityAccessSection({
+  residenceId,
+  structures,
+}: {
+  residenceId: string
+  structures: StructureResidence[]
+}) {
+  const [residenceAccessPoint, setResidenceAccessPointState] = useState<AccessPoint | null>(null)
+  const [rows, setRows] = useState<AccessRowState[]>([])
+  const rowsRef = useRef<AccessRowState[]>([])
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+  useEffect(() => {
+    rowsRef.current = rows
+  }, [rows])
+
+  useEffect(() => {
+    const timers = saveTimers.current
+    return () => {
+      Object.values(timers).forEach(clearTimeout)
+    }
+  }, [])
+
+  useEffect(() => {
+    return subscribeToResidenceAccessPoint(
+      residenceId,
+      setResidenceAccessPointState,
+      (error) => toast.error("Impossible de charger l'accès résidence : " + error.message)
+    )
+  }, [residenceId])
+
+  useEffect(() => {
+    const next = [
+      toAccessRow("residence", "Résidence (portail)", residenceAccessPoint),
+      ...structures.map((s) => toAccessRow(s.id, `${s.type} ${s.name}`.trim(), s.accessPoint)),
+    ]
+    setRows(next)
+    rowsRef.current = next
+  }, [residenceAccessPoint, structures])
+
+  function schedulePersist(key: string) {
+    clearTimeout(saveTimers.current[key])
+    saveTimers.current[key] = setTimeout(() => void persistRow(key), 600)
+  }
+
+  async function persistRow(key: string) {
+    const row = rowsRef.current.find((r) => r.key === key)
+    if (!row) return
+    const accessPoint: AccessPoint = {
+      type: row.type,
+      ...(row.type === AccessPointType.code && row.code.trim() ? { code: row.code.trim() } : {}),
+      ...(row.details.trim() ? { details: row.details.trim() } : {}),
+    }
+    try {
+      if (row.key === "residence") {
+        await saveResidenceAccessPoint(residenceId, accessPoint)
+      } else {
+        await setStructureAccessPoint(residenceId, row.key, accessPoint)
+      }
+    } catch (err) {
+      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+    }
+  }
+
+  function updateRow(key: string, patch: Partial<AccessRowState>) {
+    setRows((prev) => {
+      const next = prev.map((r) => (r.key === key ? { ...r, ...patch } : r))
+      rowsRef.current = next
+      return next
+    })
+    schedulePersist(key)
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sécurité & accès</CardTitle>
+        <CardDescription>
+          Digicode, badge ou clé pour entrer dans la résidence et dans chaque bâtiment - affiché au
+          prestataire sur le lien d'intervention qui lui est envoyé.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {rows.map((row) => (
+          <div key={row.key} className="rounded-xl border p-3">
+            <Label className="mb-2 block text-xs font-semibold text-muted-foreground">{row.label}</Label>
+            <div className="grid gap-2 sm:grid-cols-[140px_110px_1fr]">
+              <select
+                value={row.type}
+                onChange={(e) => updateRow(row.key, { type: e.target.value as AccessPointTypeValue })}
+                className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {Object.entries(accessPointTypeLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              {row.type === AccessPointType.code ? (
+                <Input
+                  placeholder="Code"
+                  value={row.code}
+                  onChange={(e) => updateRow(row.key, { code: e.target.value })}
+                />
+              ) : (
+                <div />
+              )}
+              <Input
+                placeholder="Précisions (ex : badge à retirer à la loge)"
+                value={row.details}
+                onChange={(e) => updateRow(row.key, { details: e.target.value })}
+                className={row.type === AccessPointType.code ? undefined : "sm:col-span-2"}
+              />
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+// Gestion des clés de répartition des charges de la résidence (charges
+// générales, ascenseur, chauffage...) - même patron d'édition inline
+// auto-enregistrée que LotsSection, en plus simple (pas de drag, pas de
+// recherche). Le tantième de chaque lot pour chacune de ces clés se règle
+// depuis le tableau des lots ci-dessous (bouton "Répartition" par ligne), pas
+// ici - seul le nom de la clé s'édite dans ce tableau.
+function ClesChargeSection({ residenceId }: { residenceId: string }) {
+  const [rows, setRows] = useState<ClefChargeRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const rowsRef = useRef<ClefChargeRow[]>([])
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+  useEffect(() => {
+    rowsRef.current = rows
+  }, [rows])
+
+  useEffect(() => {
+    const timers = saveTimers.current
+    return () => {
+      Object.values(timers).forEach(clearTimeout)
+    }
+  }, [])
+
+  useEffect(() => {
+    return subscribeToClesCharge(
+      residenceId,
+      (clesCharge) => {
+        setRows(
+          clesCharge.map((c) => ({
+            key: c.id,
+            id: c.id,
+            nom: c.nom,
+            total: totalTantiemes(c),
+            tantiemesParLot: c.tantiemesParLot,
+          }))
+        )
+        setLoading(false)
+      },
+      (error) => {
+        toast.error("Impossible de charger les clés de charges : " + error.message)
+        setLoading(false)
+      }
+    )
+  }, [residenceId])
+
+  async function persistRow(key: string) {
+    const row = rowsRef.current.find((r) => r.key === key)
+    if (!row?.id) return
+    const nom = row.nom.trim()
+    // Ligne encore incomplète (saisie en cours) : on attend simplement,
+    // aucune erreur tant que l'utilisateur n'a pas donné de nom.
+    if (!nom) return
+    try {
+      await updateClefChargeNom(residenceId, row.id, nom)
+    } catch (err) {
+      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+    }
+  }
+
+  function schedulePersist(key: string) {
+    clearTimeout(saveTimers.current[key])
+    saveTimers.current[key] = setTimeout(() => {
+      void persistRow(key)
+    }, 600)
+  }
+
+  function updateRow(key: string, nom: string) {
+    setRows((prev) => {
+      const next = prev.map((row) => (row.key === key ? { ...row, nom } : row))
+      rowsRef.current = next
+      return next
+    })
+    schedulePersist(key)
+  }
+
+  async function addRow() {
+    try {
+      const id = await createClefCharge(residenceId, "")
+      setRows((prev) =>
+        prev.some((r) => r.id === id)
+          ? prev
+          : [...prev, { key: id, id, nom: "", total: 0, tantiemesParLot: {} }]
+      )
+    } catch (err) {
+      toast.error("Échec de la création : " + (err as Error).message)
+    }
+  }
+
+  async function removeRow(row: ClefChargeRow) {
+    if (!row.id) return
+    clearTimeout(saveTimers.current[row.key])
+    try {
+      await deleteClefCharge(residenceId, row.id)
+      toast.success("Clé de charges supprimée")
+    } catch (err) {
+      toast.error("Échec de la suppression : " + (err as Error).message)
+      return
+    }
+    setRows((prev) => prev.filter((r) => r.key !== row.key))
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Clés de charges</CardTitle>
+        <CardDescription>
+          Chaque clé définit une répartition des charges (charges générales, ascenseur…). Le tantième de
+          chaque lot pour cette clé se règle depuis le tableau des lots ci-dessous (bouton "Répartition").
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nom</TableHead>
+                <TableHead>Total tantièmes</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.key}>
+                  <TableCell>
+                    <Input
+                      placeholder="Ex : Charges générales"
+                      value={row.nom}
+                      onChange={(e) => updateRow(row.key, e.target.value)}
+                    />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{row.total}</TableCell>
+                  <TableCell className="text-right">
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeRow(row)}>
+                      <Trash2 />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!loading && rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
+                    Aucune clé de charges pour l'instant.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" onClick={addRow}>
+            <Plus />
+            Ajouter une clé
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 type LotRow = {
   key: string
   id?: string
@@ -825,6 +1235,10 @@ type LotRow = {
   // aucun. Sélectionnable uniquement quand isLinkable est coché (cf.
   // SortableLotRow, colonne "Rattaché à").
   parentLotId: string | null
+  // Tantième général du lot (loi de 1965) - édité inline comme les autres
+  // champs. Distinct de la répartition par clé de charge dédiée (bouton
+  // "Répartition", cf. LotClefsChargeDialog).
+  tantiemes: number
 }
 
 function matchesLotSearch(row: LotRow, search: string): boolean {
@@ -845,6 +1259,7 @@ function LotsSection({
   const [loading, setLoading] = useState(true)
   const [importing, setImporting] = useState(false)
   const [search, setSearch] = useState("")
+  const [clesCharge, setClesCharge] = useState<ClefCharge[]>([])
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   // Miroir synchrone de `rows`, lu depuis les callbacks différés
   // (setTimeout de schedulePersist) ou depuis handleDragEnd juste après un
@@ -901,6 +1316,7 @@ function LotsSection({
             isLinkable: lot.isLinkable,
             idProprietaire: lot.idProprietaire,
             parentLotId: lot.parentLotId ?? null,
+            tantiemes: lot.tantiemes,
           }))
         )
         setLoading(false)
@@ -909,6 +1325,14 @@ function LotsSection({
         toast.error("Impossible de charger les lots : " + error.message)
         setLoading(false)
       }
+    )
+  }, [residenceId])
+
+  useEffect(() => {
+    return subscribeToClesCharge(
+      residenceId,
+      setClesCharge,
+      (error) => toast.error("Impossible de charger les clés de charges : " + error.message)
     )
   }, [residenceId])
 
@@ -953,6 +1377,7 @@ function LotsSection({
       typeLot: row.typeLot,
       isLinkable: row.isLinkable,
       order: rowsRef.current.findIndex((r) => r.key === key),
+      tantiemes: row.tantiemes,
     }
     try {
       await updateLot(residenceId, row.id, input)
@@ -985,6 +1410,7 @@ function LotsSection({
         typeLot: "",
         isLinkable: false,
         order: rowsRef.current.length,
+        tantiemes: 0,
       })
       // Ajout optimiste, mais seulement si subscribeToLots n'a pas déjà
       // ramené ce même lot entre-temps (sinon deux lignes partageraient la
@@ -999,6 +1425,7 @@ function LotsSection({
         isLinkable: false,
         idProprietaire: [],
         parentLotId: null,
+        tantiemes: 0,
       }]))
     } catch (err) {
       toast.error("Échec de la création : " + (err as Error).message)
@@ -1092,6 +1519,7 @@ function LotsSection({
                 <TableHead>N°</TableHead>
                 <TableHead>Référence</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Tantièmes</TableHead>
                 <TableHead>Rattachable</TableHead>
                 <TableHead>Rattaché à</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -1107,6 +1535,7 @@ function LotsSection({
                       row={row}
                       allRows={rows}
                       buildingOptions={buildingOptions}
+                      clesCharge={clesCharge}
                       updateRow={updateRow}
                       removeRow={removeRow}
                       onLink={handleLinkLot}
@@ -1116,14 +1545,14 @@ function LotsSection({
               </DndContext>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                     Aucun lot pour l'instant.
                   </TableCell>
                 </TableRow>
               )}
               {!loading && rows.length > 0 && filteredRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                     Aucun lot ne correspond à la recherche.
                   </TableCell>
                 </TableRow>
@@ -1157,6 +1586,7 @@ function SortableLotRow({
   row,
   allRows,
   buildingOptions,
+  clesCharge,
   updateRow,
   removeRow,
   onLink,
@@ -1165,10 +1595,12 @@ function SortableLotRow({
   row: LotRow
   allRows: LotRow[]
   buildingOptions: string[]
+  clesCharge: ClefCharge[]
   updateRow: (key: string, patch: Partial<LotRow>, options?: { immediate?: boolean }) => void
   removeRow: (row: LotRow) => void
   onLink: (row: LotRow, parentLotId: string | null) => void
 }) {
+  const [repartitionOpen, setRepartitionOpen] = useState(false)
   // Lots "principaux" (isLinkable non coché) pouvant servir de parent -
   // jamais la ligne elle-même.
   const parentOptions = allRows.filter(
@@ -1229,6 +1661,15 @@ function SortableLotRow({
         />
       </TableCell>
       <TableCell>
+        <Input
+          type="number"
+          min={0}
+          className="w-20"
+          value={row.tantiemes}
+          onChange={(e) => updateRow(row.key, { tantiemes: Number(e.target.value) || 0 })}
+        />
+      </TableCell>
+      <TableCell>
         <input
           type="checkbox"
           className="size-4 rounded border-input"
@@ -1258,29 +1699,193 @@ function SortableLotRow({
         )}
       </TableCell>
       <TableCell className="text-right">
-        <div className="flex justify-end gap-2">
-          {row.id && (
-            <Button
-              variant="outline"
-              size="sm"
-              render={<Link to={`/residences/${residenceId}/lots/${row.id}`} />}
-            >
+        {row.id && (
+          <LotClefsChargeDialog
+            open={repartitionOpen}
+            onOpenChange={setRepartitionOpen}
+            residenceId={residenceId}
+            lotId={row.id}
+            lotLabel={`${row.batiment} - Lot ${row.lot}`.trim()}
+            clesCharge={clesCharge}
+          />
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger className="ml-auto inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+            <MoreVertical className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={!row.id} onClick={() => setRepartitionOpen(true)}>
+              <Percent />
+              Répartition
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!row.id} render={<Link to={`/residences/${residenceId}/lots/${row.id}`} />}>
               <Eye />
-              Voir
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            disabled={row.idProprietaire.length > 0}
-            title={row.idProprietaire.length > 0 ? "Lot déjà rattaché à un propriétaire" : undefined}
-            onClick={() => removeRow(row)}
-          >
-            <Trash2 />
-          </Button>
-        </div>
+              Voir le lot
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={row.idProprietaire.length > 0}
+              onClick={() => removeRow(row)}
+            >
+              <Trash2 />
+              Supprimer
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </TableCell>
     </TableRow>
+  )
+}
+
+function voteStatusLabel(vote: Vote): string {
+  const isAG = vote.type === VoteType.assembleeGenerale
+  if (isAG && !isVoteStarted(vote)) return "En attente de lancement"
+  if (isAG && isVoteStarted(vote) && !isSessionFinished(vote)) return isVotePaused(vote) ? "En pause" : "En cours"
+  const closed = isAG ? isSessionFinished(vote) : isVoteClosed(vote)
+  return closed ? "Clos" : "Ouvert"
+}
+
+// Sondages et assemblées générales de la résidence - hub de gestion complet
+// (création, pilotage de la session live question par question, résultats),
+// dont le détail vit sur sa propre page (VoteDetailPage) car une session
+// d'AG a un cycle de vie bien plus riche qu'une simple ligne de tableau -
+// miroir de ManageVotesPage/VoteDetailPage côté app mobile (connectkasa).
+function VotesSection({ residenceId }: { residenceId: string }) {
+  const { user } = useAuth()
+  const [votes, setVotes] = useState<Vote[]>([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [lots, setLots] = useState<Lot[]>([])
+  const [clesCharge, setClesCharge] = useState<ClefCharge[]>([])
+  // Rafraîchit périodiquement le statut affiché (isSessionFinished/
+  // isVoteClosed sont des calculs purs basés sur l'heure courante, jamais
+  // stockés côté Firestore - rien d'autre ne les recalculerait ici).
+  const [, setTick] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    setLoading(true)
+    return subscribeToVotes(
+      residenceId,
+      (data) => {
+        setVotes(data)
+        setLoading(false)
+      },
+      (error) => {
+        toast.error("Impossible de charger les votes : " + error.message)
+        setLoading(false)
+      }
+    )
+  }, [residenceId])
+
+  useEffect(() => {
+    return subscribeToLots(residenceId, setLots, () => {})
+  }, [residenceId])
+
+  useEffect(() => {
+    return subscribeToClesCharge(residenceId, setClesCharge, () => {})
+  }, [residenceId])
+
+  async function handleDelete(vote: Vote) {
+    if (!confirm(`Supprimer "${vote.title || "ce vote"}" ?`)) return
+    try {
+      await deleteVote(residenceId, vote.id)
+      toast.success("Vote supprimé")
+    } catch (err) {
+      toast.error("Échec de la suppression : " + (err as Error).message)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Votes & assemblées générales</CardTitle>
+        <CardDescription>
+          Sondages et assemblées générales de la résidence. Le pilotage de la session (lancement des
+          questions, chronomètre, résultats) se fait depuis le détail de chaque vote.
+        </CardDescription>
+        <CardAction>
+          <Button type="button" variant="outline" onClick={() => setCreating(true)}>
+            <VoteIcon />
+            Créer un vote
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Titre</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Statut</TableHead>
+                <TableHead>Créé le</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {votes.map((vote) => {
+                const isAG = vote.type === VoteType.assembleeGenerale
+                const deletable = isAG ? !isSessionFinished(vote) : !isVoteClosed(vote)
+                return (
+                  <TableRow key={vote.id}>
+                    <TableCell className="font-medium">{vote.title || "(sans titre)"}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{isAG ? "Assemblée générale" : "Sondage"}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{voteStatusLabel(vote)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {vote.createdAt.toDate().toLocaleDateString("fr-FR")}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          render={<Link to={`/residences/${residenceId}/votes/${vote.id}`} />}
+                        >
+                          <Eye />
+                          Voir
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={!deletable}
+                          title={!deletable ? "Vote clos, non supprimable" : undefined}
+                          onClick={() => handleDelete(vote)}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+              {!loading && votes.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    Aucun vote pour l'instant.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+
+      <VoteFormDialog
+        open={creating}
+        onOpenChange={setCreating}
+        residenceId={residenceId}
+        uid={user?.uid ?? ""}
+        lots={lots}
+        clesCharge={clesCharge}
+      />
+    </Card>
   )
 }
