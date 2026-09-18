@@ -1,4 +1,6 @@
 import {
+  arrayRemove,
+  arrayUnion,
   collection,
   deleteDoc,
   deleteField,
@@ -192,5 +194,49 @@ export async function linkLot(residenceId: string, childLotId: string, parentLot
   await updateDoc(doc(db, "residences", residenceId, "lots", childLotId), {
     parentLotId: parentLotId ?? deleteField(),
     groupedWithParent: parentLotId !== null,
+  })
+}
+
+export type LotRole = "Propriétaire" | "Locataire"
+
+// Rattache un uid comme propriétaire/locataire d'un lot depuis le BO
+// (ResidentDetailPage "Ajouter un lot", LotDetailPage "Ajouter") - écrit
+// directement idProprietaire/idLocataire (réservé isSuperAdmin côté
+// firestore.rules, jamais ouvert à Agence/Agent sur ce champ précis,
+// contrairement à isApprovedLot) plutôt que de créer users/{uid}/lots
+// nous-mêmes (create y exige isOwner(uid), impossible depuis le BO). La
+// Cloud Function sync_lot_tenants (functions_python/main.py) réagit à cet
+// ArrayUnion et crée elle-même users/{uid}/lots/{lotId} (isApprovedLot:
+// true) si besoin - même mécanisme que l'ajout d'un locataire par son
+// propriétaire côté app.
+export async function grantLotRole(
+  residenceId: string,
+  lotId: string,
+  uid: string,
+  role: LotRole
+) {
+  const field = role === "Propriétaire" ? "idProprietaire" : "idLocataire"
+  await updateDoc(doc(db, "residences", residenceId, "lots", lotId), {
+    [field]: arrayUnion(uid),
+  })
+}
+
+// Retire un uid de idProprietaire/idLocataire (même garde côté règles que
+// grantLotRole ci-dessus) - sync_lot_tenants archive alors users/{uid}/
+// lots/{lotId} (et ses documents) sous lotsOld avant de le supprimer,
+// exactement comme une révocation faite par le propriétaire lui-même côté
+// app. Ne PAS supprimer users/{uid}/lots/{lotId} directement depuis le BO :
+// ce document ne serait alors plus dans idProprietaire/idLocataire côté
+// résidence, mais l'inverse resterait vrai (incohérence), et l'archivage
+// lotsOld n'aurait pas lieu.
+export async function revokeLotRole(
+  residenceId: string,
+  lotId: string,
+  uid: string,
+  role: LotRole
+) {
+  const field = role === "Propriétaire" ? "idProprietaire" : "idLocataire"
+  await updateDoc(doc(db, "residences", residenceId, "lots", lotId), {
+    [field]: arrayRemove(uid),
   })
 }

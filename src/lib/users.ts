@@ -50,6 +50,8 @@ function toKonodalUser(snapshot: DocumentSnapshot<DocumentData>): KonodalUser {
     isInfoCorrect: (userGroup.isInfoCorrect as boolean) ?? false,
     rejectionReason: (data.rejectionReason as string) ?? null,
     active: data.active as boolean | undefined,
+    pendingLotResidenceIds: (data.pendingLotResidenceIds as string[] | undefined) ?? [],
+    isCertified: (data.isCertified as boolean) ?? false,
   }
 }
 
@@ -137,6 +139,17 @@ export async function setUserApproved(uid: string, isApproved: boolean) {
     doc(usersCollection, uid),
     isApproved ? { isApproved, rejectionReason: deleteField() } : { isApproved }
   )
+}
+
+// Statut distinct de isApproved (cf. types/user.ts) - vérification manuelle
+// à part entière (pièce d'identité vérifiée ET données confirmées exactes),
+// jamais posée ni retirée automatiquement par un flux app (contrairement à
+// isApproved/rejectionReason, remis à zéro par submit_user.dart). Réservée
+// isSuperAdmin comme le reste de la validation d'identité - déjà couvert par
+// la règle update sans restriction de champ pour isSuperAdmin() côté
+// firestore.rules (users/{uid}), aucune règle supplémentaire nécessaire.
+export async function setUserCertified(uid: string, isCertified: boolean) {
+  await updateDoc(doc(usersCollection, uid), { isCertified })
 }
 
 // Refus explicite avec motif (affiché au résident dans l'app mobile,
@@ -405,6 +418,16 @@ export async function resolveUserLabels(uids: string[]): Promise<Map<string, str
 // geranceLocativeAgentUids, cf. AgencesPage), qui n'existent plus qu'en tant
 // qu'uid depuis qu'un agent = un compte déjà invité, plus un objet séparé
 // saisi à la main.
+// Recherche un compte par email exact (ResidentDetailPage "Ajouter un lot",
+// LotDetailPage "Ajouter" propriétaire/locataire) - un CS member/superAdmin
+// ne connaît généralement que l'email du résident à rattacher, pas son uid.
+export async function findUserByEmail(email: string): Promise<KonodalUser | null> {
+  const trimmed = email.trim()
+  if (!trimmed) return null
+  const snapshot = await getDocs(query(usersCollection, where("email", "==", trimmed)))
+  return snapshot.empty ? null : toKonodalUser(snapshot.docs[0])
+}
+
 export async function resolveUsersByUids(uids: string[]): Promise<KonodalUser[]> {
   const unique = [...new Set(uids)]
   const snapshots = await Promise.all(unique.map((uid) => getDoc(doc(usersCollection, uid))))

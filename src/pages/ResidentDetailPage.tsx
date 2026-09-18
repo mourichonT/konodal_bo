@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Ban, Check, Eye, FileText, ImageOff, Play, RefreshCw, Save, Trash2, X } from "lucide-react"
+import { ArrowLeft, Ban, BadgeCheck, Check, Eye, FileText, ImageOff, PlusCircle, Play, Save, Trash2, Unlink } from "lucide-react"
 import { getDownloadURL, ref } from "firebase/storage"
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
@@ -16,16 +16,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { storage, db } from "@/firebase"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useSinistreMedia } from "@/hooks/useSinistreMedia"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
+import { subscribeToResidences } from "@/lib/residences"
+import { subscribeToLots, grantLotRole, revokeLotRole, type LotRole } from "@/lib/lots"
 import {
   approveUserLot,
   deleteUserAccount,
   rejectUser,
   setUserApproved,
+  setUserCertified,
   subscribeToUser,
   subscribeToUserDocuments,
   subscribeToUserLotDocuments,
@@ -36,6 +46,8 @@ import {
   type UserLot,
 } from "@/lib/users"
 import type { KonodalUser } from "@/types/user"
+import type { Residence } from "@/types/residence"
+import type { Lot } from "@/types/lot"
 
 function initialsFor(nameOrEmail: string): string {
   const parts = nameOrEmail.trim().split(/\s+/)
@@ -53,11 +65,19 @@ export default function ResidentDetailPage() {
   const [lots, setLots] = useState<UserLot[]>([])
   const [identityDocuments, setIdentityDocuments] = useState<UserDocument[]>([])
   const [savingApproval, setSavingApproval] = useState(false)
+  const [savingCertification, setSavingCertification] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const [savingRejection, setSavingRejection] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
+  const [addingLot, setAddingLot] = useState(false)
+  const [addResidences, setAddResidences] = useState<Residence[]>([])
+  const [addResidenceId, setAddResidenceId] = useState("")
+  const [addLots, setAddLots] = useState<Lot[]>([])
+  const [addLotId, setAddLotId] = useState("")
+  const [addRole, setAddRole] = useState<LotRole>("Propriétaire")
+  const [addingSaving, setAddingSaving] = useState(false)
 
   useEffect(() => {
     if (!uid) return
@@ -102,6 +122,33 @@ export default function ResidentDetailPage() {
     )
   }, [uid, scopeLoading, scopedResidenceIds])
 
+  // Résidences/lots du dialogue "Ajouter un lot" - chargés seulement une
+  // fois le dialogue ouvert (pas de fan-out permanent sur toutes les
+  // résidences pour une fiche résident qui n'en a pas besoin par défaut).
+  useEffect(() => {
+    if (!addingLot) return
+    return subscribeToResidences(
+      (data) => setAddResidences(data),
+      (error) => toast.error("Impossible de charger les résidences : " + error.message)
+    )
+  }, [addingLot])
+
+  useEffect(() => {
+    if (!addResidenceId) {
+      setAddLots([])
+      return
+    }
+    return subscribeToLots(
+      addResidenceId,
+      // Un lot enfant groupé (groupedWithParent) a son attribution
+      // entièrement mirroir de son parent (cf. sync_lot_tenants côté
+      // konodal_app) - lui attribuer un propriétaire/locataire directement
+      // ici serait écrasé au prochain écrit du parent, donc exclu du choix.
+      (data) => setAddLots(data.filter((l) => !l.groupedWithParent)),
+      (error) => toast.error("Impossible de charger les lots : " + error.message)
+    )
+  }, [addResidenceId])
+
   if (!uid) return null
 
   // Un compte refusé est gelé : plus aucune modification (identité,
@@ -111,16 +158,32 @@ export default function ResidentDetailPage() {
   // maquille un refus sans repasser par une vraie resoumission.
   const isRejected = !!user && !user.isApproved && !!user.rejectionReason
 
-  async function handleToggleApproved() {
+  // N'approuve plus que dans un sens (le bouton n'est visible que pour un
+  // compte non certifié, cf. plus bas) - bloquer se fait exclusivement via
+  // "Bloquer" (motif obligatoire), jamais ce toggle.
+  async function handleApprove() {
     if (!user) return
     setSavingApproval(true)
     try {
-      await setUserApproved(user.uid, !user.isApproved)
-      toast.success(user.isApproved ? "Identité révoquée" : "Identité approuvée")
+      await setUserApproved(user.uid, true)
+      toast.success("Identité approuvée")
     } catch (err) {
       toast.error("Échec de la mise à jour : " + (err as Error).message)
     } finally {
       setSavingApproval(false)
+    }
+  }
+
+  async function handleToggleCertified() {
+    if (!user) return
+    setSavingCertification(true)
+    try {
+      await setUserCertified(user.uid, !user.isCertified)
+      toast.success(user.isCertified ? "Certification retirée" : "Identité certifiée")
+    } catch (err) {
+      toast.error("Échec de la mise à jour : " + (err as Error).message)
+    } finally {
+      setSavingCertification(false)
     }
   }
 
@@ -129,11 +192,11 @@ export default function ResidentDetailPage() {
     setSavingRejection(true)
     try {
       await rejectUser(user.uid, rejectReason.trim())
-      toast.success("Identité refusée")
+      toast.success("Identité bloquée")
       setRejecting(false)
       setRejectReason("")
     } catch (err) {
-      toast.error("Échec du refus : " + (err as Error).message)
+      toast.error("Échec du blocage : " + (err as Error).message)
     } finally {
       setSavingRejection(false)
     }
@@ -149,6 +212,23 @@ export default function ResidentDetailPage() {
     } catch (err) {
       toast.error("Échec de la suppression : " + (err as Error).message)
       setDeleting(false)
+    }
+  }
+
+  async function handleAddLot() {
+    if (!uid || !addResidenceId || !addLotId) return
+    setAddingSaving(true)
+    try {
+      await grantLotRole(addResidenceId, addLotId, uid, addRole)
+      toast.success("Lot rattaché")
+      setAddingLot(false)
+      setAddResidenceId("")
+      setAddLotId("")
+      setAddRole("Propriétaire")
+    } catch (err) {
+      toast.error("Échec du rattachement : " + (err as Error).message)
+    } finally {
+      setAddingSaving(false)
     }
   }
 
@@ -176,23 +256,36 @@ export default function ResidentDetailPage() {
               {initialsFor(`${user.name} ${user.surname}`.trim() || user.email)}
             </div>
             <div className="min-w-[200px] flex-1">
-              <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
+              <h1 className="flex items-center gap-1.5 text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
                 {`${user.name} ${user.surname}`.trim() || user.email}
+                {/* Statut à part de isApproved ci-dessous - vérification
+                    manuelle de la pièce d'identité ET des données, jamais
+                    posée automatiquement, cf. lib/users.ts setUserCertified. */}
+                {user.isCertified && (
+                  <span title="Identité certifiée">
+                    <BadgeCheck className="size-5 shrink-0 fill-blue-500 text-white" />
+                  </span>
+                )}
               </h1>
               <div className="mt-0.5 text-[13px] text-[oklch(52%_0.01_150)]">{user.email}</div>
             </div>
+            {/* Vocabulaire aligné sur ResidentsPage (colonne Statut) - depuis
+                que isApproved n'est plus un prérequis d'accès à l'app
+                (compte créé approuvé par défaut, cf. types/user.ts),
+                "En attente d'approbation" laissait croire à un blocage qui
+                n'existe plus : ce n'est qu'une certification optionnelle. */}
             {user.isApproved ? (
               <Badge variant="default" className="gap-1.5 rounded-full">
-                Identité approuvée
+                Validé
               </Badge>
             ) : user.rejectionReason ? (
               <Badge variant="destructive" className="gap-1.5 rounded-full">
-                Refusée
+                Bloquée
               </Badge>
             ) : (
               <Badge variant="outline" className="gap-1.5 rounded-full border-transparent bg-amber-100 text-amber-800">
                 <span className="size-[6px] rounded-full bg-current" />
-                En attente d'approbation
+                Non certifiée
               </Badge>
             )}
             {/* Suppression de compte réservée superAdmin (comme côté serveur,
@@ -223,22 +316,27 @@ export default function ResidentDetailPage() {
                   {/* Validation d'identité (isApproved) réservée Superadmin -
                       ni Agence ni Agent, cf. matrice de droits BO : c'est une
                       vérification de pièce d'identité, pas une correction de
-                      fiche courante. Masqués une fois refusé (isRejected) :
-                      plus aucune action possible tant qu'une nouvelle
-                      soumission n'arrive pas de l'application. */}
-                  {isSuperAdmin && !isRejected && (
+                      fiche courante. Visible uniquement pour un compte non
+                      certifié (ni déjà approuvé, ni bloqué) - une fois
+                      approuvé, seul "Bloquer" (avec motif) permet de revenir
+                      en arrière, jamais ce toggle muet (cf. discussion :
+                      "Révoquer" bloquait sans motif, faisait doublon avec
+                      Bloquer). Masqué une fois bloqué (isRejected) : plus
+                      aucune action possible tant qu'une nouvelle soumission
+                      n'arrive pas de l'application. */}
+                  {isSuperAdmin && !isRejected && !user.isApproved && (
                     <Button
-                      variant={user.isApproved ? "outline" : "default"}
+                      variant="default"
                       size="sm"
                       disabled={savingApproval}
-                      onClick={handleToggleApproved}
-                      className={user.isApproved ? undefined : PRIMARY_CTA_CLASS}
+                      onClick={handleApprove}
+                      className={PRIMARY_CTA_CLASS}
                     >
-                      {user.isApproved ? <X /> : <Check />}
-                      {user.isApproved ? "Révoquer l'identité" : "Approuver l'identité"}
+                      <Check />
+                      Approuver l'identité
                     </Button>
                   )}
-                  {isSuperAdmin && !user.isApproved && !isRejected && (
+                  {isSuperAdmin && !isRejected && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -246,7 +344,28 @@ export default function ResidentDetailPage() {
                       onClick={() => setRejecting(true)}
                     >
                       <Ban />
-                      Refuser
+                      Bloquer
+                    </Button>
+                  )}
+                  {/* Certification : statut à part de isApproved ci-dessus
+                      (cf. types/user.ts) - toujours disponible, jamais gelée
+                      par isRejected (une certification déjà accordée reste
+                      un fait vérifié, indépendant d'un blocage ultérieur
+                      pour un autre motif). */}
+                  {isSuperAdmin && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={savingCertification}
+                      onClick={handleToggleCertified}
+                      className={
+                        user.isCertified
+                          ? undefined
+                          : "border-blue-200 text-blue-700 hover:bg-blue-50"
+                      }
+                    >
+                      <Check />
+                      {user.isCertified ? "Retirer la certification" : "Certifier l'identité"}
                     </Button>
                   )}
                 </CardAction>
@@ -254,7 +373,7 @@ export default function ResidentDetailPage() {
               <CardContent className="flex flex-col gap-3">
                 {isRejected && (
                   <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                    <span className="font-medium">Motif du refus : </span>
+                    <span className="font-medium">Motif du blocage : </span>
                     {user.rejectionReason}
                     <p className="mt-1.5 text-xs text-destructive/80">
                       Fiche gelée : plus aucune modification possible tant que ce compte n'a pas resoumis son
@@ -283,7 +402,6 @@ export default function ResidentDetailPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Pièce d'identité</CardTitle>
-                  <CardDescription>Déposée à l'inscription.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <IdentityDocuments documents={identityDocuments} />
@@ -292,16 +410,29 @@ export default function ResidentDetailPage() {
             )}
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Lots</CardTitle>
-              <CardDescription>
-                {user.isApproved
-                  ? "Rattachement propriétaire/locataire à valider par lot."
-                  : "Approuve d'abord l'identité ci-dessus pour pouvoir valider les lots."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-lg font-semibold">Lots</h2>
+                <p className="text-sm text-muted-foreground">
+                  {user.isApproved
+                    ? "Rattachement propriétaire/locataire à valider par lot."
+                    : "Approuve d'abord l'identité ci-dessus pour pouvoir valider les lots."}
+                </p>
+              </div>
+              {/* Rattacher un lot écrit directement idProprietaire/
+                  idLocataire côté résidence (cf. lib/lots.ts, grantLotRole) -
+                  réservé isSuperAdmin côté firestore.rules, jamais ouvert à
+                  Agence/Agent sur ce champ précis (contrairement à
+                  isApprovedLot, cf. canApprove plus bas). */}
+              {isSuperAdmin && (
+                <Button variant="outline" size="sm" onClick={() => setAddingLot(true)}>
+                  <PlusCircle />
+                  Ajouter un lot
+                </Button>
+              )}
+            </div>
+            <div
               className={cn(
                 "flex flex-col gap-2",
                 !user.isApproved && "pointer-events-none opacity-50"
@@ -317,10 +448,11 @@ export default function ResidentDetailPage() {
                   lot={lot}
                   userApproved={user.isApproved}
                   canApprove={isSuperAdmin || isAgence}
+                  canRevoke={isSuperAdmin}
                 />
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </>
       )}
 
@@ -329,12 +461,12 @@ export default function ResidentDetailPage() {
           <div className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
             <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
               <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Identité</span>
-              <DialogTitle>Refuser l'identité</DialogTitle>
+              <DialogTitle>Bloquer l'identité</DialogTitle>
             </DialogHeader>
 
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="reject-reason">Motif du refus</Label>
+                <Label htmlFor="reject-reason">Motif du blocage</Label>
                 <textarea
                   id="reject-reason"
                   required
@@ -361,7 +493,7 @@ export default function ResidentDetailPage() {
                 onClick={handleReject}
               >
                 <Ban />
-                Confirmer le refus
+                Confirmer le blocage
               </Button>
             </DialogFooter>
           </div>
@@ -393,6 +525,97 @@ export default function ResidentDetailPage() {
               Supprimer définitivement
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addingLot} onOpenChange={setAddingLot}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
+            <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+              <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Lots</span>
+              <DialogTitle>Ajouter un lot</DialogTitle>
+            </DialogHeader>
+
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
+              <div className="flex flex-col gap-1.5">
+                <Label>Résidence</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-left text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                    {addResidences.find((r) => r.id === addResidenceId)?.name ?? "Choisir une résidence…"}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-72">
+                    <DropdownMenuRadioGroup
+                      value={addResidenceId}
+                      onValueChange={(v) => {
+                        setAddResidenceId(v)
+                        setAddLotId("")
+                      }}
+                    >
+                      {addResidences.map((r) => (
+                        <DropdownMenuRadioItem key={r.id} value={r.id}>
+                          {r.name}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label>Lot</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    disabled={!addResidenceId}
+                    className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-left text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                  >
+                    {addLots.find((l) => l.id === addLotId)
+                      ? [addLots.find((l) => l.id === addLotId)?.batiment, addLots.find((l) => l.id === addLotId)?.lot]
+                          .filter(Boolean)
+                          .join(" — ")
+                      : "Choisir un lot…"}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-72">
+                    <DropdownMenuRadioGroup value={addLotId} onValueChange={setAddLotId}>
+                      {addLots.map((l) => (
+                        <DropdownMenuRadioItem key={l.id} value={l.id}>
+                          {[l.batiment, l.lot].filter(Boolean).join(" — ") || l.refLot || l.id}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label>Rôle</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-left text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                    {addRole}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-72">
+                    <DropdownMenuRadioGroup value={addRole} onValueChange={(v) => setAddRole(v as LotRole)}>
+                      <DropdownMenuRadioItem value="Propriétaire">Propriétaire</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="Locataire">Locataire</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAddingLot(false)}>
+                Annuler
+              </Button>
+              <Button
+                disabled={addingSaving || !addResidenceId || !addLotId}
+                onClick={handleAddLot}
+                className={PRIMARY_CTA_CLASS}
+              >
+                <PlusCircle />
+                Rattacher
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
@@ -677,6 +900,7 @@ function LotRow({
   lot,
   userApproved,
   canApprove,
+  canRevoke,
 }: {
   uid: string
   lot: UserLot
@@ -686,6 +910,10 @@ function LotRow({
   // matrice de droits BO (même logique que isApproved sur l'identité, en
   // moins strict : ici une Agence gérance/syndic garde la main).
   canApprove: boolean
+  // Révoquer écrit idProprietaire/idLocataire (cf. lib/lots.ts,
+  // revokeLotRole) - réservé isSuperAdmin côté firestore.rules, contrairement
+  // à isApprovedLot ci-dessus qui reste ouvert à Agence.
+  canRevoke: boolean
 }) {
   const [residenceName, setResidenceName] = useState<string | null>(null)
   const [lotInfo, setLotInfo] = useState<{ refLot: string; batiment: string; lot: string } | null>(
@@ -704,6 +932,7 @@ function LotRow({
     { id: string; refLot: string; batiment: string; lot: string }[]
   >([])
   const [approving, setApproving] = useState(false)
+  const [revoking, setRevoking] = useState(false)
   const [documents, setDocuments] = useState<UserDocument[]>([])
 
   useEffect(() => {
@@ -827,8 +1056,23 @@ function LotRow({
     }
   }
 
+  const role = lot.statutResident || resolvedStatut
+
+  async function handleRevoke() {
+    if (!lot.residenceId || (role !== "Propriétaire" && role !== "Locataire")) return
+    setRevoking(true)
+    try {
+      await revokeLotRole(lot.residenceId, lot.id, uid, role)
+      toast.success("Accès au lot révoqué")
+    } catch (err) {
+      toast.error("Échec de la révocation : " + (err as Error).message)
+    } finally {
+      setRevoking(false)
+    }
+  }
+
   return (
-    <div className="flex flex-col overflow-hidden rounded-[18px] border border-[oklch(93%_0.005_100)]">
+    <div className="flex flex-col overflow-hidden rounded-[18px] border border-[oklch(93%_0.005_100)] bg-white">
       <div className="flex flex-wrap items-center justify-between gap-3 bg-[oklch(98%_0.003_100)] p-[14px_18px]">
         <div className="flex flex-col text-sm">
           <span className="font-bold text-[oklch(22%_0.01_150)]">
@@ -854,7 +1098,7 @@ function LotRow({
           <Badge variant={lot.isApprovedLot ? "default" : "destructive"} className="rounded-full">
             {lot.isApprovedLot ? "Approuvé" : "En attente"}
           </Badge>
-          {canApprove && (
+          {canApprove && !lot.isApprovedLot && (
             <Button
               size="sm"
               disabled={approving || !userApproved}
@@ -862,8 +1106,20 @@ function LotRow({
               onClick={handleApprove}
               className={PRIMARY_CTA_CLASS}
             >
-              {lot.isApprovedLot ? <RefreshCw /> : <Check />}
-              {lot.isApprovedLot ? "Actualiser" : "Approuver"}
+              <Check />
+              Approuver
+            </Button>
+          )}
+          {canRevoke && (role === "Propriétaire" || role === "Locataire") && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={revoking}
+              onClick={handleRevoke}
+              className="border-red-200 text-red-700 hover:bg-red-50"
+            >
+              <Unlink />
+              Révoquer
             </Button>
           )}
         </div>

@@ -30,4 +30,22 @@ export type KonodalUser = {
   // Firestore ; ce champ n'est qu'un signal lisible directement sur la
   // fiche, pas un mécanisme d'autorisation.
   active?: boolean
+  // Résidences pour lesquelles ce compte a au moins un lot en attente de
+  // validation (isApprovedLot: false côté users/{uid}/lots) - dénormalisé
+  // côté serveur par sync_pending_lot_residences (functions_python/main.py,
+  // repo konodal_app), qui n'a pas de collectionGroup disponible sur "lots"
+  // pour le calculer à la volée. Depuis que isApproved (identité) n'est plus
+  // le prérequis d'accès à l'app (compte créé approuvé par défaut, la
+  // validation d'identité devient une certification optionnelle), c'est ce
+  // champ qui pilote la pastille "Utilisateurs" (cf. usePendingUsersCount),
+  // pas isApproved.
+  pendingLotResidenceIds: string[]
+  // Statut distinct de isApproved (qui n'est plus qu'un prérequis
+  // automatique, cf. plus haut) : "Certifié" est une vérification manuelle
+  // à part entière, accordée par un superAdmin une fois la pièce
+  // d'identité vérifiée ET les données confirmées exactes - jamais posé
+  // automatiquement, jamais retiré par une resoumission côté app
+  // (contrairement à isApproved/rejectionReason, remis à zéro par
+  // submit_user.dart).
+  isCertified: boolean
 }
