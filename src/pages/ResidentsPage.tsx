@@ -126,7 +126,7 @@ export default function ResidentsPage() {
   const filteredResidents = useMemo(() => {
     const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null
     const toDate = dateTo ? new Date(`${dateTo}T23:59:59`) : null
-    return residents.filter((user) => {
+    const filtered = residents.filter((user) => {
       if (statusFilter === "approved" && !user.isApproved) return false
       if (statusFilter === "unapproved" && (user.isApproved || user.rejectionReason)) return false
       if (statusFilter === "rejected" && (user.isApproved || !user.rejectionReason)) return false
@@ -135,7 +135,11 @@ export default function ResidentsPage() {
       if (toDate && (!user.createdDate || user.createdDate > toDate)) return false
       return matchesSearch(user, search)
     })
-  }, [residents, search, statusFilter, lotFilter, dateFrom, dateTo])
+    // Comptes ayant un lot à valider en tête (tri stable) : depuis que
+    // isApproved est automatique, c'est la seule action en attente de la
+    // liste - sans ce tri, elle se noyait parmi les comptes "Validé".
+    return [...filtered.filter(isPendingLot), ...filtered.filter((u) => !isPendingLot(u))]
+  }, [residents, search, statusFilter, lotFilter, dateFrom, dateTo, scopedResidenceIds])
 
   return (
     <div className="flex flex-col gap-6">

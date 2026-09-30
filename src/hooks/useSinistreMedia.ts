@@ -5,7 +5,10 @@ import { storage } from "@/firebase"
 export type SinistreMediaState =
   | { status: "loading" }
   | { status: "error" }
-  | { status: "ready"; url: string; isVideo: boolean }
+  // isPdf : justificatifs (domicile, bail...) déposés en PDF côté app -
+  // aperçu via <iframe> plutôt qu'<img>, cf. DocumentThumbnail
+  // (ResidentDetailPage).
+  | { status: "ready"; url: string; isVideo: boolean; isPdf: boolean }
 
 // Le champ `isVideo` côté Firestore peut être faux (bug historique de
 // certains flux de mise à jour qui l'écrasent) - on se fie plutôt au
@@ -23,8 +26,9 @@ export function useSinistreMedia(pathImage: string): SinistreMediaState {
       (metadata) => {
         if (cancelled) return
         const isVideo = metadata.contentType?.startsWith("video/") ?? false
+        const isPdf = metadata.contentType === "application/pdf"
         getDownloadURL(fileRef).then(
-          (url) => !cancelled && setState({ status: "ready", url, isVideo }),
+          (url) => !cancelled && setState({ status: "ready", url, isVideo, isPdf }),
           () => !cancelled && setState({ status: "error" })
         )
       },

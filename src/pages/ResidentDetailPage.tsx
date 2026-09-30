@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Ban, BadgeCheck, Check, Eye, FileText, ImageOff, PlusCircle, Play, Save, Trash2, Unlink } from "lucide-react"
-import { getDownloadURL, ref } from "firebase/storage"
+import { ArrowLeft, Ban, BadgeCheck, Check, Eye, Home, ImageOff, PlusCircle, Play, Save, Trash2, Unlink } from "lucide-react"
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -23,7 +22,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { storage, db } from "@/firebase"
+import { db } from "@/firebase"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useSinistreMedia } from "@/hooks/useSinistreMedia"
@@ -150,6 +149,11 @@ export default function ResidentDetailPage() {
   }, [addResidenceId])
 
   if (!uid) return null
+
+  const canApproveLots = isSuperAdmin || isAgence
+  const pendingLots = lots.filter((lot) => !lot.isApprovedLot)
+  // Lots en attente en tête : c'est l'action à mener sur la fiche.
+  const sortedLots = [...pendingLots, ...lots.filter((lot) => lot.isApprovedLot)]
 
   // Un compte refusé est gelé : plus aucune modification (identité,
   // téléphone, statut) tant qu'une nouvelle soumission n'est pas faite
@@ -305,6 +309,32 @@ export default function ResidentDetailPage() {
             )}
           </div>
 
+          {/* Depuis que isApproved est posé automatiquement à l'inscription
+              (cf. types/user.ts), la seule action réellement en attente sur
+              une fiche est la validation d'un lot (isApprovedLot) - sans ce
+              bandeau, elle n'apparaissait qu'en bas de page. */}
+          {canApproveLots && pendingLots.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 rounded-[14px] border border-amber-200 bg-amber-50 p-[12px_16px] text-sm text-amber-900">
+              <Home className="size-4 shrink-0" />
+              <span className="flex-1">
+                <span className="font-semibold">
+                  {pendingLots.length === 1
+                    ? "1 demande de lot en attente de validation"
+                    : `${pendingLots.length} demandes de lot en attente de validation`}
+                </span>
+                {" "}— vérifier le justificatif puis approuver.
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                onClick={() => document.getElementById("lots")?.scrollIntoView({ behavior: "smooth" })}
+              >
+                Voir les lots
+              </Button>
+            </div>
+          )}
+
           <div className={cn("grid gap-5", isSuperAdmin ? "lg:grid-cols-[1.7fr_1fr]" : "grid-cols-1")}>
             <Card>
               <CardHeader>
@@ -410,7 +440,7 @@ export default function ResidentDetailPage() {
             )}
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div id="lots" className="flex scroll-mt-6 flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-col gap-1">
                 <h2 className="text-lg font-semibold">Lots</h2>
@@ -441,13 +471,13 @@ export default function ResidentDetailPage() {
               {lots.length === 0 && (
                 <p className="text-sm text-muted-foreground">Aucun lot rattaché à ce compte.</p>
               )}
-              {lots.map((lot) => (
+              {sortedLots.map((lot) => (
                 <LotRow
                   key={lot.id}
                   uid={uid}
                   lot={lot}
                   userApproved={user.isApproved}
-                  canApprove={isSuperAdmin || isAgence}
+                  canApprove={canApproveLots}
                   canRevoke={isSuperAdmin}
                 />
               ))}
@@ -786,9 +816,9 @@ function IdentityDocuments({ documents }: { documents: UserDocument[] }) {
               <span className="text-xs font-medium text-muted-foreground">{document.type}</span>
             )}
             <div className="flex flex-col items-center gap-3">
-              <IdentityDocumentThumbnail path={document.documentPathRecto} label="Recto" />
+              <DocumentThumbnail path={document.documentPathRecto} label="Recto" />
               {document.documentPathVerso && (
-                <IdentityDocumentThumbnail path={document.documentPathVerso} label="Verso" />
+                <DocumentThumbnail path={document.documentPathVerso} label="Verso" />
               )}
             </div>
           </div>
@@ -799,12 +829,14 @@ function IdentityDocuments({ documents }: { documents: UserDocument[] }) {
 }
 
 // Vignette cliquable ouvrant l'original en overlay (Dialog), pas dans un
-// nouvel onglet : une pièce d'identité se vérifie sans quitter la fiche en
-// cours d'examen, contrairement au simple bouton "Ouvrir" de DocumentRow
-// ci-dessous.
-function IdentityDocumentThumbnail({ path, label }: { path: string; label: string }) {
+// nouvel onglet : une pièce d'identité ou un justificatif de lot se vérifie
+// sans quitter la fiche en cours d'examen. Un PDF (justificatif de
+// domicile, bail...) est rendu dans une <iframe> - aperçu de la première
+// page en vignette, document complet dans le Dialog.
+function DocumentThumbnail({ path, label }: { path: string; label: string }) {
   const state = useSinistreMedia(path)
   const url = state.status === "ready" ? state.url : undefined
+  const isPdf = state.status === "ready" && state.isPdf
   const [open, setOpen] = useState(false)
 
   return (
@@ -815,7 +847,7 @@ function IdentityDocumentThumbnail({ path, label }: { path: string; label: strin
         onClick={() => setOpen(true)}
         className="flex max-w-64 flex-col items-center gap-1.5 disabled:cursor-default"
       >
-        {state.status === "ready" && !state.isVideo ? (
+        {state.status === "ready" && !state.isVideo && !state.isPdf ? (
           // Pas de hauteur fixée ni object-cover : la vignette suit le ratio
           // réel du document (portrait ou paysage selon la pièce déposée)
           // plutôt que de le rogner dans une boîte imposée. Pas de w-full non
@@ -823,6 +855,14 @@ function IdentityDocumentThumbnail({ path, label }: { path: string; label: strin
           // sur un document naturellement plus étroit, au lieu de rester à sa
           // taille réelle et centrée (cf. items-center sur les parents).
           <img src={state.url} alt={label} className="max-w-full rounded-lg border" />
+        ) : isPdf ? (
+          // pointer-events-none : le clic doit atteindre le <button> (ouverture
+          // du Dialog), pas le viewer PDF embarqué.
+          <iframe
+            src={`${url}#toolbar=0&navpanes=0&view=FitH`}
+            title={label}
+            className="pointer-events-none h-72 w-52 rounded-lg border bg-white"
+          />
         ) : (
           <div className="flex h-40 w-64 items-center justify-center overflow-hidden rounded-lg border bg-muted">
             {state.status === "loading" && <div className="size-full animate-pulse" />}
@@ -845,53 +885,22 @@ function IdentityDocumentThumbnail({ path, label }: { path: string; label: strin
                 controls
                 className="max-h-[75vh] w-full rounded-lg bg-black object-contain"
               />
+            ) : isPdf ? (
+              <iframe src={url} title={label} className="h-[75vh] w-full rounded-lg border" />
             ) : (
               <img src={url} alt={label} className="max-h-[75vh] w-full rounded-lg object-contain" />
             ))}
+          {url && (
+            <DialogFooter>
+              <Button variant="outline" size="sm" render={<a href={url} target="_blank" rel="noreferrer" />}>
+                <Eye />
+                Ouvrir dans un onglet
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </>
-  )
-}
-
-function DocumentRow({ document }: { document: UserDocument }) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [error, setError] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    if (!document.documentPathRecto) return
-    getDownloadURL(ref(storage, document.documentPathRecto))
-      .then((resolved) => {
-        if (!cancelled) setUrl(resolved)
-      })
-      .catch(() => {
-        if (!cancelled) setError(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [document.documentPathRecto])
-
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-[10px] border border-[oklch(93%_0.005_100)] p-2.5">
-      <div className="flex items-center gap-2.5 text-sm">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-[9px] bg-[oklch(93%_0.05_150)]">
-          <FileText className="size-[15px] text-[oklch(38%_0.09_155)]" />
-        </div>
-        <span className="font-semibold">{document.type || document.name || "Document"}</span>
-      </div>
-      {url ? (
-        <Button variant="outline" size="sm" render={<a href={url} target="_blank" rel="noreferrer" />}>
-          <Eye />
-          Ouvrir
-        </Button>
-      ) : (
-        <span className="text-xs text-muted-foreground">
-          {error ? "Fichier introuvable" : "Chargement…"}
-        </span>
-      )}
-    </div>
   )
 }
 
@@ -1072,8 +1081,18 @@ function LotRow({
   }
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-[18px] border border-[oklch(93%_0.005_100)] bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[oklch(98%_0.003_100)] p-[14px_18px]">
+    <div
+      className={cn(
+        "flex flex-col overflow-hidden rounded-[18px] border bg-white",
+        lot.isApprovedLot ? "border-[oklch(93%_0.005_100)]" : "border-amber-300 ring-2 ring-amber-100"
+      )}
+    >
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3 p-[14px_18px]",
+          lot.isApprovedLot ? "bg-[oklch(98%_0.003_100)]" : "bg-amber-50"
+        )}
+      >
         <div className="flex flex-col text-sm">
           <span className="font-bold text-[oklch(22%_0.01_150)]">
             {residenceName ?? lot.residenceId}
@@ -1158,7 +1177,29 @@ function LotRow({
         {documents.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucun document déposé pour ce lot.</p>
         ) : (
-          documents.map((document) => <DocumentRow key={document.id} document={document} />)
+          // Aperçu direct (comme la pièce d'identité) plutôt qu'un simple
+          // bouton "Ouvrir" : le justificatif se vérifie sans quitter la
+          // fiche avant d'approuver le lot.
+          <div className="flex flex-wrap items-start gap-4">
+            {documents.map((document) => (
+              <div key={document.id} className="flex flex-col items-center gap-1.5">
+                {document.documentPathVerso && (
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {document.type || document.name || "Document"}
+                  </span>
+                )}
+                <div className="flex flex-wrap items-start gap-3">
+                  <DocumentThumbnail
+                    path={document.documentPathRecto}
+                    label={document.documentPathVerso ? "Recto" : document.type || document.name || "Document"}
+                  />
+                  {document.documentPathVerso && (
+                    <DocumentThumbnail path={document.documentPathVerso} label="Verso" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
