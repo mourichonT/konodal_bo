@@ -148,8 +148,16 @@ export async function setUserApproved(uid: string, isApproved: boolean) {
 // isSuperAdmin comme le reste de la validation d'identité - déjà couvert par
 // la règle update sans restriction de champ pour isSuperAdmin() côté
 // firestore.rules (users/{uid}), aucune règle supplémentaire nécessaire.
+// Certification manuelle (comptes certifiés avant le parcours app, ou
+// retrait) : efface aussi un éventuel statut de demande en cours/refusée
+// (certificationRequests, cf. lib/certification.ts), sans quoi le résident
+// resterait affiché "Vérification en cours" après une décision manuelle.
 export async function setUserCertified(uid: string, isCertified: boolean) {
-  await updateDoc(doc(usersCollection, uid), { isCertified })
+  await updateDoc(doc(usersCollection, uid), {
+    isCertified,
+    certificationStatus: deleteField(),
+    certificationRejectionReason: deleteField(),
+  })
 }
 
 // Refus explicite avec motif (affiché au résident dans l'app mobile,

@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { db } from "@/firebase"
+import { CertificationRequestCard } from "@/components/CertificationRequestCard"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useSinistreMedia } from "@/hooks/useSinistreMedia"
@@ -428,6 +429,10 @@ export default function ResidentDetailPage() {
                 restriction de lecture que la sous-collection Firestore dont
                 elle dépend (cf. l'useEffect de subscribeToUserDocuments) -
                 absente pour Agence/Agent, pas juste vide. */}
+            {/* Demande de certification envoyée depuis l'app (pièce +
+                selfie + score de ressemblance), décision Super Admin. */}
+            {isSuperAdmin && <CertificationRequestCard uid={user.uid} isCertified={user.isCertified} />}
+
             {isSuperAdmin && (
               <Card>
                 <CardHeader>
@@ -476,6 +481,7 @@ export default function ResidentDetailPage() {
                   key={lot.id}
                   uid={uid}
                   lot={lot}
+                  userLotIds={lots.map((l) => l.id)}
                   userApproved={user.isApproved}
                   canApprove={canApproveLots}
                   canRevoke={isSuperAdmin}
@@ -907,12 +913,16 @@ function DocumentThumbnail({ path, label }: { path: string; label: string }) {
 function LotRow({
   uid,
   lot,
+  userLotIds,
   userApproved,
   canApprove,
   canRevoke,
 }: {
   uid: string
   lot: UserLot
+  // Ids de tous les users/{uid}/lots de la fiche - sert à masquer un lot
+  // enfant groupé dont le parent est déjà affiché (cf. groupedParentId).
+  userLotIds: string[]
   userApproved: boolean
   // Approuver/actualiser l'accès à un lot (isApprovedLot) réservé
   // Superadmin/Agence - un simple Agent reste en lecture seule, cf.
@@ -934,6 +944,7 @@ function LotRow({
     lot: string
   } | null>(null)
   const [resolvedStatut, setResolvedStatut] = useState<string | null>(null)
+  const [groupedParentId, setGroupedParentId] = useState<string | null>(null)
   const [groupedChildren, setGroupedChildren] = useState<
     { id: string; refLot: string; batiment: string; lot: string }[]
   >([])
@@ -1031,6 +1042,7 @@ function LotRow({
       if (idProprietaire.includes(uid)) setResolvedStatut("Propriétaire")
       else if (idLocataire.includes(uid)) setResolvedStatut("Locataire")
       const parentLotId = data.parentLotId as string | undefined
+      setGroupedParentId(data.groupedWithParent && parentLotId ? parentLotId : null)
       if (!parentLotId) return
       getDoc(doc(db, "residences", lot.residenceId, "lots", parentLotId)).then((parentSnap) => {
         if (!parentSnap.exists()) return
@@ -1080,128 +1092,143 @@ function LotRow({
     }
   }
 
+  // Lot enfant groupé (parking/cave...) dont le lot parent est aussi sur
+  // cette fiche : déjà listé dans "Lots groupés avec celui-ci" du parent,
+  // l'afficher une seconde fois en ligne à part ferait doublon. Un enfant
+  // simplement rattaché (non groupé) garde sa propre ligne.
+  if (groupedParentId && userLotIds.includes(groupedParentId)) return null
+
   return (
-    <div
-      className={cn(
-        "flex flex-col overflow-hidden rounded-[18px] border bg-white",
-        lot.isApprovedLot ? "border-[oklch(93%_0.005_100)]" : "border-amber-300 ring-2 ring-amber-100"
-      )}
-    >
+    // Même découpage que "Informations du compte" / "Pièce d'identité" : le
+    // justificatif dans sa propre carte à droite, sur la même ligne que le
+    // lot, se vérifie d'un coup d'œil à côté du bouton "Approuver".
+    <div className="grid items-start gap-5 lg:grid-cols-[1.7fr_1fr]">
       <div
         className={cn(
-          "flex flex-wrap items-center justify-between gap-3 p-[14px_18px]",
-          lot.isApprovedLot ? "bg-[oklch(98%_0.003_100)]" : "bg-amber-50"
+          "flex flex-col overflow-hidden rounded-[18px] border bg-white",
+          lot.isApprovedLot ? "border-[oklch(93%_0.005_100)]" : "border-amber-300 ring-2 ring-amber-100"
         )}
       >
-        <div className="flex flex-col text-sm">
-          <span className="font-bold text-[oklch(22%_0.01_150)]">
-            {residenceName ?? lot.residenceId}
-            {lotInfo?.batiment ? ` — ${lotInfo.batiment}` : ""}
-            {lotInfo?.lot ? ` — ${lotInfo.lot}` : ""}
-          </span>
-          <span className="pl-3 text-muted-foreground">
-            {lotInfo?.refLot ? `Réf. ${lotInfo.refLot}` : "—"}
-          </span>
-          {parentLotInfo && (
-            <span className="text-muted-foreground">
-              Rattaché à{parentLotInfo.batiment ? ` ${parentLotInfo.batiment}` : ""}
-              {parentLotInfo.lot ? ` — ${parentLotInfo.lot}` : ""}
-              {parentLotInfo.refLot ? ` · Réf. ${parentLotInfo.refLot}` : ""}
-            </span>
+        <div
+          className={cn(
+            "flex flex-wrap items-center justify-between gap-3 p-[14px_18px]",
+            lot.isApprovedLot ? "bg-[oklch(98%_0.003_100)]" : "bg-amber-50"
           )}
-        </div>
-        <div className="flex-1 text-center text-sm text-muted-foreground">
-          {lot.statutResident || resolvedStatut || "—"}
-        </div>
-        <div className="flex items-center gap-3">
-          <Badge variant={lot.isApprovedLot ? "default" : "destructive"} className="rounded-full">
-            {lot.isApprovedLot ? "Approuvé" : "En attente"}
-          </Badge>
-          {canApprove && !lot.isApprovedLot && (
-            <Button
-              size="sm"
-              disabled={approving || !userApproved}
-              title={!userApproved ? "Approuve d'abord l'identité pour que la synchronisation fonctionne" : undefined}
-              onClick={handleApprove}
-              className={PRIMARY_CTA_CLASS}
-            >
-              <Check />
-              Approuver
-            </Button>
-          )}
-          {canRevoke && (role === "Propriétaire" || role === "Locataire") && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={revoking}
-              onClick={handleRevoke}
-              className="border-red-200 text-red-700 hover:bg-red-50"
-            >
-              <Unlink />
-              Révoquer
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {groupedChildren.length > 0 && (
-        <div className="flex flex-col gap-1 border-b border-[oklch(95%_0.003_100)] p-[14px_18px] text-sm">
-          <span className="font-medium text-muted-foreground">Lots groupés avec celui-ci</span>
-          {groupedChildren.map((child) => (
-            <span key={child.id} className="pl-3 text-muted-foreground">
-              {child.batiment || child.id}
-              {child.lot ? ` — ${child.lot}` : ""}
-              {child.refLot ? ` · Réf. ${child.refLot}` : ""}
+        >
+          <div className="flex flex-col text-sm">
+            <span className="font-bold text-[oklch(22%_0.01_150)]">
+              {residenceName ?? lot.residenceId}
+              {lotInfo?.batiment ? ` — ${lotInfo.batiment}` : ""}
+              {lotInfo?.lot ? ` — ${lotInfo.lot}` : ""}
             </span>
-          ))}
-        </div>
-      )}
-
-      {pendingChildrenInfo.length > 0 && (
-        <div className="flex flex-col gap-1 border-b border-[oklch(95%_0.003_100)] p-[14px_18px] text-sm">
-          <span className="font-medium text-muted-foreground">
-            Lot(s) supplémentaire(s) demandé(s) à l'inscription (rattaché(s) automatiquement à l'approbation de ce lot)
-          </span>
-          {pendingChildrenInfo.map((child) => (
-            <span key={child.id} className="pl-3 text-muted-foreground">
-              {child.batiment || child.id}
-              {child.lot ? ` — ${child.lot}` : ""}
-              {child.refLot ? ` · Réf. ${child.refLot}` : ""}
+            <span className="pl-3 text-muted-foreground">
+              {lotInfo?.refLot ? `Réf. ${lotInfo.refLot}` : "—"}
             </span>
-          ))}
+            {parentLotInfo && (
+              <span className="text-muted-foreground">
+                Rattaché à{parentLotInfo.batiment ? ` ${parentLotInfo.batiment}` : ""}
+                {parentLotInfo.lot ? ` — ${parentLotInfo.lot}` : ""}
+                {parentLotInfo.refLot ? ` · Réf. ${parentLotInfo.refLot}` : ""}
+              </span>
+            )}
+          </div>
+          <div className="flex-1 text-center text-sm text-muted-foreground">
+            {lot.statutResident || resolvedStatut || "—"}
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant={lot.isApprovedLot ? "default" : "destructive"} className="rounded-full">
+              {lot.isApprovedLot ? "Approuvé" : "En attente"}
+            </Badge>
+            {canApprove && !lot.isApprovedLot && (
+              <Button
+                size="sm"
+                disabled={approving || !userApproved}
+                title={!userApproved ? "Approuve d'abord l'identité pour que la synchronisation fonctionne" : undefined}
+                onClick={handleApprove}
+                className={PRIMARY_CTA_CLASS}
+              >
+                <Check />
+                Approuver
+              </Button>
+            )}
+            {canRevoke && (role === "Propriétaire" || role === "Locataire") && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={revoking}
+                onClick={handleRevoke}
+                className="border-red-200 text-red-700 hover:bg-red-50"
+              >
+                <Unlink />
+                Révoquer
+              </Button>
+            )}
+          </div>
         </div>
-      )}
 
-      <div className="flex flex-col gap-2 p-[14px_18px]">
-        <Label className="mb-1 font-bold">Document(s)</Label>
-        {documents.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Aucun document déposé pour ce lot.</p>
-        ) : (
-          // Aperçu direct (comme la pièce d'identité) plutôt qu'un simple
-          // bouton "Ouvrir" : le justificatif se vérifie sans quitter la
-          // fiche avant d'approuver le lot.
-          <div className="flex flex-wrap items-start gap-4">
-            {documents.map((document) => (
-              <div key={document.id} className="flex flex-col items-center gap-1.5">
-                {document.documentPathVerso && (
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {document.type || document.name || "Document"}
-                  </span>
-                )}
-                <div className="flex flex-wrap items-start gap-3">
-                  <DocumentThumbnail
-                    path={document.documentPathRecto}
-                    label={document.documentPathVerso ? "Recto" : document.type || document.name || "Document"}
-                  />
-                  {document.documentPathVerso && (
-                    <DocumentThumbnail path={document.documentPathVerso} label="Verso" />
-                  )}
-                </div>
-              </div>
+        {groupedChildren.length > 0 && (
+          <div className="flex flex-col gap-1 border-b border-[oklch(95%_0.003_100)] p-[14px_18px] text-sm">
+            <span className="font-medium text-muted-foreground">Lots groupés avec celui-ci</span>
+            {groupedChildren.map((child) => (
+              <span key={child.id} className="pl-3 text-muted-foreground">
+                {child.batiment || child.id}
+                {child.lot ? ` — ${child.lot}` : ""}
+                {child.refLot ? ` · Réf. ${child.refLot}` : ""}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {pendingChildrenInfo.length > 0 && (
+          <div className="flex flex-col gap-1 border-b border-[oklch(95%_0.003_100)] p-[14px_18px] text-sm">
+            <span className="font-medium text-muted-foreground">
+              Lot(s) supplémentaire(s) demandé(s) à l'inscription (rattaché(s) automatiquement à l'approbation de ce lot)
+            </span>
+            {pendingChildrenInfo.map((child) => (
+              <span key={child.id} className="pl-3 text-muted-foreground">
+                {child.batiment || child.id}
+                {child.lot ? ` — ${child.lot}` : ""}
+                {child.refLot ? ` · Réf. ${child.refLot}` : ""}
+              </span>
             ))}
           </div>
         )}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Justificatif(s)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {documents.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucun document déposé pour ce lot.</p>
+          ) : (
+            // Aperçu direct (comme la pièce d'identité) plutôt qu'un simple
+            // bouton "Ouvrir" : le justificatif se vérifie sans quitter la
+            // fiche avant d'approuver le lot.
+            <div className="flex flex-col items-center gap-4">
+              {documents.map((document) => (
+                <div key={document.id} className="flex flex-col items-center gap-1.5">
+                  {document.documentPathVerso && (
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {document.type || document.name || "Document"}
+                    </span>
+                  )}
+                  <div className="flex flex-col items-center gap-3">
+                    <DocumentThumbnail
+                      path={document.documentPathRecto}
+                      label={document.documentPathVerso ? "Recto" : document.type || document.name || "Document"}
+                    />
+                    {document.documentPathVerso && (
+                      <DocumentThumbnail path={document.documentPathVerso} label="Verso" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
