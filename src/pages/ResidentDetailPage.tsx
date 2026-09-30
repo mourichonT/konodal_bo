@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Ban, BadgeCheck, Check, Eye, Home, ImageOff, PlusCircle, Play, Save, Trash2, Unlink } from "lucide-react"
+import { ArrowLeft, Ban, BadgeCheck, Check, Home, PlusCircle, Save, Trash2, Unlink } from "lucide-react"
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -24,9 +24,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { db } from "@/firebase"
 import { CertificationRequestCard } from "@/components/CertificationRequestCard"
+import { DocumentThumbnail } from "@/components/DocumentThumbnail"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
-import { useSinistreMedia } from "@/hooks/useSinistreMedia"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { subscribeToResidences } from "@/lib/residences"
 import { subscribeToLots, grantLotRole, revokeLotRole, type LotRole } from "@/lib/lots"
@@ -37,7 +37,6 @@ import {
   setUserApproved,
   setUserCertified,
   subscribeToUser,
-  subscribeToUserDocuments,
   subscribeToUserLotDocuments,
   subscribeToUserLots,
   updateUserIdentity,
@@ -63,7 +62,6 @@ export default function ResidentDetailPage() {
   const [user, setUser] = useState<KonodalUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [lots, setLots] = useState<UserLot[]>([])
-  const [identityDocuments, setIdentityDocuments] = useState<UserDocument[]>([])
   const [savingApproval, setSavingApproval] = useState(false)
   const [savingCertification, setSavingCertification] = useState(false)
   const [rejecting, setRejecting] = useState(false)
@@ -94,19 +92,6 @@ export default function ResidentDetailPage() {
       }
     )
   }, [uid])
-
-  useEffect(() => {
-    // users/{uid}/documents (pièce d'identité déposée à l'inscription) n'est
-    // lisible que par isSuperAdmin côté firestore.rules - souscrire sans ce
-    // garde renverrait une erreur de permission pour Agence/Agent, qui
-    // consultent pourtant cette fiche (identité en lecture seule pour eux).
-    if (!uid || !isSuperAdmin) return
-    return subscribeToUserDocuments(
-      uid,
-      (data) => setIdentityDocuments(data),
-      (error) => toast.error("Impossible de charger la pièce d'identité : " + error.message)
-    )
-  }, [uid, isSuperAdmin])
 
   useEffect(() => {
     // Attend la résolution du périmètre (agence/agent) avant de souscrire :
@@ -383,7 +368,11 @@ export default function ResidentDetailPage() {
                       par isRejected (une certification déjà accordée reste
                       un fait vérifié, indépendant d'un blocage ultérieur
                       pour un autre motif). */}
-                  {isSuperAdmin && (
+                  {/* Masqué tant qu'une demande app est en attente : la
+                      décision se prend alors dans CertificationRequestCard
+                      (seule à reporter les informations lues sur la pièce),
+                      pas de second CTA de validation. */}
+                  {isSuperAdmin && (user.isCertified || user.certificationStatus !== "pending") && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -423,26 +412,13 @@ export default function ResidentDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Carte séparée plutôt qu'empilée dans "Compte" : la pièce
-                d'identité se consulte d'un coup d'œil pendant qu'on corrige
-                les champs à gauche, pas en scrollant au-dessus. Même
-                restriction de lecture que la sous-collection Firestore dont
-                elle dépend (cf. l'useEffect de subscribeToUserDocuments) -
-                absente pour Agence/Agent, pas juste vide. */}
             {/* Demande de certification envoyée depuis l'app (pièce +
-                selfie + score de ressemblance), décision Super Admin. */}
+                selfie + score de ressemblance), décision Super Admin - à
+                droite des champs d'identité pour les comparer d'un coup
+                d'œil. Remplace l'ancienne carte "Pièce d'identité"
+                (users/{uid}/documents, pièce déposée à l'inscription) : la
+                pièce fait désormais partie de la demande. */}
             {isSuperAdmin && <CertificationRequestCard uid={user.uid} isCertified={user.isCertified} />}
-
-            {isSuperAdmin && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Pièce d'identité</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <IdentityDocuments documents={identityDocuments} />
-                </CardContent>
-              </Card>
-            )}
           </div>
 
           <div id="lots" className="flex scroll-mt-6 flex-col gap-3">
@@ -755,11 +731,11 @@ function IdentityFields({
           canEdit : gèle tout le monde, superAdmin compris. */}
       <div className={cn("grid gap-3 text-sm sm:grid-cols-2", (!canEdit || locked) && "pointer-events-none opacity-50")}>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="identity-name">Prénom</Label>
+          <Label htmlFor="identity-name">Nom</Label>
           <Input id="identity-name" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="identity-surname">Nom</Label>
+          <Label htmlFor="identity-surname">Prénom</Label>
           <Input id="identity-surname" value={surname} onChange={(e) => setSurname(e.target.value)} />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -807,106 +783,6 @@ function IdentityFields({
         </div>
       )}
     </div>
-  )
-}
-
-function IdentityDocuments({ documents }: { documents: UserDocument[] }) {
-  return (
-    <div className="flex flex-col items-center gap-4">
-      {documents.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Aucune pièce d'identité déposée.</p>
-      ) : (
-        documents.map((document) => (
-          <div key={document.id} className="flex flex-col items-center gap-1.5">
-            {document.type && (
-              <span className="text-xs font-medium text-muted-foreground">{document.type}</span>
-            )}
-            <div className="flex flex-col items-center gap-3">
-              <DocumentThumbnail path={document.documentPathRecto} label="Recto" />
-              {document.documentPathVerso && (
-                <DocumentThumbnail path={document.documentPathVerso} label="Verso" />
-              )}
-            </div>
-          </div>
-        ))
-      )}
-    </div>
-  )
-}
-
-// Vignette cliquable ouvrant l'original en overlay (Dialog), pas dans un
-// nouvel onglet : une pièce d'identité ou un justificatif de lot se vérifie
-// sans quitter la fiche en cours d'examen. Un PDF (justificatif de
-// domicile, bail...) est rendu dans une <iframe> - aperçu de la première
-// page en vignette, document complet dans le Dialog.
-function DocumentThumbnail({ path, label }: { path: string; label: string }) {
-  const state = useSinistreMedia(path)
-  const url = state.status === "ready" ? state.url : undefined
-  const isPdf = state.status === "ready" && state.isPdf
-  const [open, setOpen] = useState(false)
-
-  return (
-    <>
-      <button
-        type="button"
-        disabled={!url}
-        onClick={() => setOpen(true)}
-        className="flex max-w-64 flex-col items-center gap-1.5 disabled:cursor-default"
-      >
-        {state.status === "ready" && !state.isVideo && !state.isPdf ? (
-          // Pas de hauteur fixée ni object-cover : la vignette suit le ratio
-          // réel du document (portrait ou paysage selon la pièce déposée)
-          // plutôt que de le rogner dans une boîte imposée. Pas de w-full non
-          // plus : sans ça l'image s'étirerait jusqu'au plafond max-w-64 même
-          // sur un document naturellement plus étroit, au lieu de rester à sa
-          // taille réelle et centrée (cf. items-center sur les parents).
-          <img src={state.url} alt={label} className="max-w-full rounded-lg border" />
-        ) : isPdf ? (
-          // pointer-events-none : le clic doit atteindre le <button> (ouverture
-          // du Dialog), pas le viewer PDF embarqué.
-          <iframe
-            src={`${url}#toolbar=0&navpanes=0&view=FitH`}
-            title={label}
-            className="pointer-events-none h-72 w-52 rounded-lg border bg-white"
-          />
-        ) : (
-          <div className="flex h-40 w-64 items-center justify-center overflow-hidden rounded-lg border bg-muted">
-            {state.status === "loading" && <div className="size-full animate-pulse" />}
-            {state.status === "error" && <ImageOff className="size-5 text-muted-foreground" />}
-            {state.status === "ready" && state.isVideo && <Play className="size-5 text-muted-foreground" />}
-          </div>
-        )}
-        <span className="text-xs text-muted-foreground">{label}</span>
-      </button>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader className="pb-4">
-            <DialogTitle>{label}</DialogTitle>
-          </DialogHeader>
-          {url &&
-            (state.status === "ready" && state.isVideo ? (
-              <video
-                src={url}
-                controls
-                className="max-h-[75vh] w-full rounded-lg bg-black object-contain"
-              />
-            ) : isPdf ? (
-              <iframe src={url} title={label} className="h-[75vh] w-full rounded-lg border" />
-            ) : (
-              <img src={url} alt={label} className="max-h-[75vh] w-full rounded-lg object-contain" />
-            ))}
-          {url && (
-            <DialogFooter>
-              <Button variant="outline" size="sm" render={<a href={url} target="_blank" rel="noreferrer" />}>
-                <Eye />
-                Ouvrir dans un onglet
-              </Button>
-            </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
   )
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { subscribeToUsers } from "@/lib/users"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
+import { useAccountRole } from "@/hooks/useAccountRole"
 import type { KonodalUser } from "@/types/user"
 
 // Pastille sidebar "Utilisateurs" : nombre de comptes ayant au moins une
@@ -15,9 +16,14 @@ import type { KonodalUser } from "@/types/user"
 // Pas de suivi "vu/non vu" : la pastille reflète simplement le nombre de
 // comptes en attente à l'instant T, elle disparaît d'elle-même une fois les
 // lots traités (approuvés).
+// Superadmin uniquement : s'y ajoutent les demandes de certification en
+// attente (certificationStatus "pending") - décision réservée superAdmin,
+// cf. CertificationRequestCard. Un compte est compté une seule fois même
+// s'il a les deux.
 export function usePendingUsersCount(): number {
   const [users, setUsers] = useState<KonodalUser[]>([])
   const { scopedResidenceIds } = useScopedResidenceIds()
+  const { isSuperAdmin } = useAccountRole()
 
   useEffect(() => {
     return subscribeToUsers(setUsers, () => {})
@@ -25,10 +31,11 @@ export function usePendingUsersCount(): number {
 
   return useMemo(() => {
     const residents = users.filter((u) => (u.accountType || "utilisateur") === "utilisateur")
-    const isPending = (u: KonodalUser) => u.pendingLotResidenceIds.length > 0
-    if (!scopedResidenceIds) return residents.filter(isPending).length
-    return residents.filter((u) =>
-      u.pendingLotResidenceIds.some((residenceId) => scopedResidenceIds.has(residenceId))
-    ).length
-  }, [users, scopedResidenceIds])
+    const isPendingLot = (u: KonodalUser) =>
+      scopedResidenceIds
+        ? u.pendingLotResidenceIds.some((residenceId) => scopedResidenceIds.has(residenceId))
+        : u.pendingLotResidenceIds.length > 0
+    const isPendingCertification = (u: KonodalUser) => isSuperAdmin && u.certificationStatus === "pending"
+    return residents.filter((u) => isPendingLot(u) || isPendingCertification(u)).length
+  }, [users, scopedResidenceIds, isSuperAdmin])
 }

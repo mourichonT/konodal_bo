@@ -52,6 +52,10 @@ function toKonodalUser(snapshot: DocumentSnapshot<DocumentData>): KonodalUser {
     active: data.active as boolean | undefined,
     pendingLotResidenceIds: (data.pendingLotResidenceIds as string[] | undefined) ?? [],
     isCertified: (data.isCertified as boolean) ?? false,
+    certificationStatus:
+      data.certificationStatus === "pending" || data.certificationStatus === "rejected"
+        ? data.certificationStatus
+        : null,
   }
 }
 

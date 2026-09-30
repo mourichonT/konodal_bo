@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { BadgeCheck, CheckCircle2, Eye, Home, Search, User as UserIcon, Users } from "lucide-react"
+import { BadgeCheck, CheckCircle2, Eye, Home, Search, ShieldQuestion, User as UserIcon, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -28,6 +28,7 @@ import { subscribeToUsers } from "@/lib/users"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useAllLots } from "@/hooks/useAllLots"
+import { cn } from "@/lib/utils"
 import type { KonodalUser } from "@/types/user"
 
 type StatusFilter = "all" | "approved" | "unapproved" | "rejected"
@@ -55,6 +56,7 @@ export default function ResidentsPage() {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [lotFilter, setLotFilter] = useState<LotFilter>("all")
+  const [certificationFilter, setCertificationFilter] = useState(false)
   // Sur createdDate ("Date de la demande" dans le tableau) - "YYYY-MM-DD",
   // même format que DateInput/DashboardPage.
   const [dateFrom, setDateFrom] = useState("")
@@ -122,6 +124,12 @@ export default function ResidentsPage() {
   // FilterKpiCard ci-dessous.
   const approvedCount = residents.filter((u) => u.isApproved).length
   const pendingLotCount = residents.filter(isPendingLot).length
+  // Décision de certification réservée superAdmin (cf.
+  // CertificationRequestCard) - jamais signalée à agence/agent.
+  const isPendingCertification = (user: KonodalUser) =>
+    isSuperAdmin && user.certificationStatus === "pending"
+  const pendingCertificationCount = residents.filter(isPendingCertification).length
+  const needsAction = (user: KonodalUser) => isPendingLot(user) || isPendingCertification(user)
 
   const filteredResidents = useMemo(() => {
     const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null
@@ -131,6 +139,7 @@ export default function ResidentsPage() {
       if (statusFilter === "unapproved" && (user.isApproved || user.rejectionReason)) return false
       if (statusFilter === "rejected" && (user.isApproved || !user.rejectionReason)) return false
       if (lotFilter === "pending" && !isPendingLot(user)) return false
+      if (certificationFilter && !isPendingCertification(user)) return false
       if (fromDate && (!user.createdDate || user.createdDate < fromDate)) return false
       if (toDate && (!user.createdDate || user.createdDate > toDate)) return false
       return matchesSearch(user, search)
@@ -138,8 +147,8 @@ export default function ResidentsPage() {
     // Comptes ayant un lot à valider en tête (tri stable) : depuis que
     // isApproved est automatique, c'est la seule action en attente de la
     // liste - sans ce tri, elle se noyait parmi les comptes "Validé".
-    return [...filtered.filter(isPendingLot), ...filtered.filter((u) => !isPendingLot(u))]
-  }, [residents, search, statusFilter, lotFilter, dateFrom, dateTo, scopedResidenceIds])
+    return [...filtered.filter(needsAction), ...filtered.filter((u) => !needsAction(u))]
+  }, [residents, search, statusFilter, lotFilter, certificationFilter, dateFrom, dateTo, scopedResidenceIds, isSuperAdmin])
 
   return (
     <div className="flex flex-col gap-6">
@@ -150,7 +159,7 @@ export default function ResidentsPage() {
           tous les rôles, cf. canApprove dans ResidentDetailPage. Cliquer sur
           une carte pilote le même état que les dropdowns "Statut"/"Lot"
           ci-dessous (deux affordances pour le même filtre). */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className={cn("grid grid-cols-1 gap-4", isSuperAdmin ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3")}>
         {isSuperAdmin && (
           <>
             <FilterKpiCard
@@ -179,6 +188,16 @@ export default function ResidentsPage() {
           active={lotFilter === "pending"}
           onClick={() => setLotFilter((prev) => (prev === "pending" ? "all" : "pending"))}
         />
+        {isSuperAdmin && (
+          <FilterKpiCard
+            label="Certification à vérifier"
+            value={pendingCertificationCount}
+            icon={ShieldQuestion}
+            colorClass="bg-blue-100 text-blue-600"
+            active={certificationFilter}
+            onClick={() => setCertificationFilter((prev) => !prev)}
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -280,6 +299,11 @@ export default function ResidentsPage() {
                           <span title="Identité certifiée">
                             <BadgeCheck className="size-4 shrink-0 fill-blue-500 text-white" />
                           </span>
+                        )}
+                        {isPendingCertification(user) && (
+                          <Badge className="border-transparent bg-blue-100 text-blue-800">
+                            Certification à vérifier
+                          </Badge>
                         )}
                       </span>
                     </div>

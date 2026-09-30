@@ -48,4 +48,10 @@ export type KonodalUser = {
   // (contrairement à isApproved/rejectionReason, remis à zéro par
   // submit_user.dart).
   isCertified: boolean
+  // Demande de certification envoyée depuis l'app (certificationRequests/
+  // {uid}, cf. lib/certification.ts) : "pending" tant qu'un superAdmin n'a
+  // pas tranché, "rejected" après refus - null sinon (jamais demandée, ou
+  // certifiée). Posé par submit_certification_request côté serveur,
+  // effacé/mis à jour par la décision BO.
+  certificationStatus: "pending" | "rejected" | null
 }

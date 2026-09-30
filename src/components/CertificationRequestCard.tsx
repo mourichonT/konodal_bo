@@ -4,6 +4,7 @@ import { BadgeCheck, Ban, ShieldQuestion } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { DocumentThumbnail } from "@/components/DocumentThumbnail"
 import { useAuth } from "@/lib/auth-context"
 import {
   approveCertification,
@@ -43,21 +44,17 @@ function ScoreBadge({ request }: { request: CertificationRequest }) {
   )
 }
 
+// Même vignette que les justificatifs de lot (DocumentThumbnail : ratio
+// réel, ouverture en grand dans un Dialog) ; le selfie, supprimé dès la
+// décision, laisse un emplacement vide explicite.
 function Photo({ url, label }: { url: string | null; label: string }) {
+  if (url) return <DocumentThumbnail path={url} label={label} />
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-semibold uppercase tracking-wide text-[oklch(52%_0.01_150)]">
-        {label}
-      </span>
-      {url ? (
-        <a href={url} target="_blank" rel="noreferrer">
-          <img src={url} alt={label} className="h-44 w-full rounded-lg border object-cover" />
-        </a>
-      ) : (
-        <div className="flex h-44 items-center justify-center rounded-lg border border-dashed text-sm text-[oklch(52%_0.01_150)]">
-          Supprimé après décision
-        </div>
-      )}
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="flex h-40 w-64 items-center justify-center rounded-lg border border-dashed text-sm text-[oklch(52%_0.01_150)]">
+        Supprimé après décision
+      </div>
+      <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   )
 }
@@ -73,13 +70,31 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
 
   useEffect(
     () =>
+      // Toast plutôt que console seule : une règle firestore absente ou pas
+      // encore déployée masquait silencieusement la demande.
       subscribeToCertificationRequest(uid, setRequest, (err) =>
-        console.error("Demande de certification illisible", err)
+        toast.error("Impossible de charger la demande de certification : " + err.message)
       ),
     [uid]
   )
 
-  if (!request) return null
+  // Carte toujours présente (à droite des champs d'identité, cf.
+  // ResidentDetailPage) : un état vide plutôt qu'un trou dans la grille.
+  if (!request) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ShieldQuestion className="size-5" />
+            Demande de certification
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Aucune demande de certification.</p>
+        </CardContent>
+      </Card>
+    )
+  }
   // Certifié entre-temps à la main (bouton de la carte Compte) : plus de
   // décision à prendre sur cette demande.
   const pending = request.status === "pending" && !isCertified
@@ -135,9 +150,9 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
           <ScoreBadge request={request} />
           <span className="text-sm text-[oklch(52%_0.01_150)]">{request.idType}</span>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="flex flex-col items-center gap-3">
           <Photo url={request.idRectoUrl} label="Recto" />
-          {request.idVersoUrl ? <Photo url={request.idVersoUrl} label="Verso" /> : <div />}
+          {request.idVersoUrl && <Photo url={request.idVersoUrl} label="Verso" />}
           <Photo url={request.selfieUrl} label="Selfie" />
         </div>
         {extracted.length > 0 && (
@@ -153,7 +168,7 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
         {pending && (
           <p className="text-xs text-[oklch(52%_0.01_150)]">
             Le score est une aide : comparez la pièce et le selfie avant de décider. Le selfie est supprimé
-            dès la décision.
+            dès la décision. Certifier complète le compte avec les informations lues ci-dessus, sans écraser celles déjà renseignées.
           </p>
         )}
         {pending && !rejecting && (

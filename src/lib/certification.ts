@@ -1,4 +1,4 @@
-import { deleteField, doc, onSnapshot, serverTimestamp, writeBatch } from "firebase/firestore"
+import { deleteField, doc, getDoc, onSnapshot, serverTimestamp, writeBatch } from "firebase/firestore"
 import { deleteObject, ref } from "firebase/storage"
 import { db, storage } from "@/firebase"
 
@@ -75,9 +75,57 @@ async function deleteSelfie(request: CertificationRequest) {
   }
 }
 
+// Champs lus sur la pièce (clés de `extracted`, cf. certification_flow_page
+// côté app) -> champs du groupe 'user' du compte. name = Nom de famille,
+// surname = Prénom, comme à l'inscription (step0_name/step0_surname).
+const EXTRACTED_TO_USER_FIELD: Record<string, string> = {
+  name: "user.name",
+  surname: "user.surname",
+  sex: "user.sex",
+  nationality: "user.nationality",
+  placeOfBorn: "user.placeOfborn",
+}
+
+// "jj/mm/aaaa" -> Date (minuit UTC, même convention que _parse_birthday
+// côté serveur) ; null si illisible.
+function parseBirthday(value: string | undefined): Date | null {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((value ?? "").trim())
+  if (!match) return null
+  const [, day, month, year] = match
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)))
+  return date.getUTCDate() === Number(day) ? date : null
+}
+
+// Informations lues sur la pièce reportées sur le compte au moment de
+// certifier, uniquement là où le compte n'a rien : jamais d'écrasement
+// d'une valeur déjà saisie (même règle que submit_certification_request à
+// la soumission, qui a pu tourner avant que le profil ne soit complet).
+// Date de naissance considérée absente si nulle ou au 01/01/1970 (valeur
+// par défaut côté app).
+function missingIdentityFrom(
+  extracted: Record<string, string>,
+  userGroup: Record<string, unknown>
+): Record<string, unknown> {
+  const updates: Record<string, unknown> = {}
+  for (const [key, field] of Object.entries(EXTRACTED_TO_USER_FIELD)) {
+    const value = extracted[key]?.trim()
+    const current = userGroup[field.slice("user.".length)]
+    if (value && !(typeof current === "string" && current.trim())) updates[field] = value
+  }
+  const birthday = parseBirthday(extracted.birthday)
+  const currentBirthday = userGroup.birthday as { toDate?: () => Date } | null | undefined
+  const hasBirthday =
+    typeof currentBirthday?.toDate === "function" && currentBirthday.toDate().getUTCFullYear() > 1970
+  if (birthday && !hasBirthday) updates["user.birthday"] = birthday
+  return updates
+}
+
 export async function approveCertification(request: CertificationRequest, deciderUid: string) {
+  const userSnap = await getDoc(doc(db, "users", request.uid))
+  const userGroup = (userSnap.data()?.user as Record<string, unknown> | undefined) ?? {}
   const batch = writeBatch(db)
   batch.update(doc(db, "users", request.uid), {
+    ...missingIdentityFrom(request.extracted, userGroup),
     isCertified: true,
     certificationStatus: deleteField(),
     certificationRejectionReason: deleteField(),
