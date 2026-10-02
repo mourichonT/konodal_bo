@@ -12,7 +12,7 @@ import {
   type DocumentSnapshot,
   type Unsubscribe,
 } from "firebase/firestore"
-import { db } from "@/firebase"
+import { auth, db } from "@/firebase"
 import type { Sinistre, SinistrePriority, SinistreStatus } from "@/types/sinistre"
 
 function toDateOrNull(value: unknown): Date | null {
@@ -160,9 +160,15 @@ export async function deleteSinistre(residenceId: string, postId: string) {
 const GENERATE_REPORT_URL = `https://europe-west9-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net/generate_report`
 
 export async function fetchSinistreReportPdf(residenceId: string, postId: string): Promise<Blob> {
+  // Jeton de connexion : la fonction vérifie l'accès à la résidence
+  // (cf. _check_residence_caller, functions_python/main.py).
+  const token = await auth.currentUser?.getIdToken()
   const response = await fetch(GENERATE_REPORT_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({ postId, residenceId }),
   })
   if (!response.ok) {
