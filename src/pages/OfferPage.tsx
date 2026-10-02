@@ -107,6 +107,14 @@ export default function OfferPage() {
     offer?.pricePerSeatCents != null && offer.priceCurrency
       ? formatAmount(offer.pricePerSeatCents, offer.priceCurrency)
       : "—"
+  // Durée en jours côté Stripe (90) : affichée en mois quand elle tombe juste.
+  const trialDays = offer?.trialDays ?? 0
+  const trialLabel =
+    trialDays <= 0
+      ? null
+      : trialDays % 30 === 0
+        ? `${trialDays / 30} mois offert${trialDays / 30 > 1 ? "s" : ""}`
+        : `${trialDays} jours offerts`
 
   return (
     <div
@@ -224,9 +232,16 @@ export default function OfferPage() {
               className="rounded-[28px] border border-[oklch(93%_0.005_100)] bg-white p-8 sm:p-9"
               style={{ boxShadow: CARD_SHADOW }}
             >
-              <h2 className="m-0 mb-6 text-xl font-bold tracking-tight text-[oklch(22%_0.01_150)]">
-                Choisir votre offre
-              </h2>
+              <div className="mb-6 flex flex-wrap items-center gap-3">
+                <h2 className="m-0 text-xl font-bold tracking-tight text-[oklch(22%_0.01_150)]">
+                  Choisir votre offre
+                </h2>
+                {trialLabel && (
+                  <span className="rounded-full bg-[oklch(93%_0.04_155)] px-3 py-1 text-[13px] font-bold text-[oklch(38%_0.08_155)]">
+                    {trialLabel}
+                  </span>
+                )}
+              </div>
 
               <div className="flex flex-wrap items-center justify-between gap-6">
                 <div>
@@ -283,6 +298,11 @@ export default function OfferPage() {
                 <CreditCard className="h-4 w-4" />
                 Passer au paiement
               </button>
+              {trialLabel && (
+                <p className="mt-3 mb-0 text-center text-[13px] text-[oklch(55%_0.01_150)]">
+                  Aucun prélèvement pendant l'essai, puis {total} / mois.
+                </p>
+              )}
             </div>
           </>
         )}

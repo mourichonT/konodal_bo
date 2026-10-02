@@ -13,6 +13,9 @@ export type Offer = {
   existingSeatCount: number
   pricePerSeatCents: number | null
   priceCurrency: string | null
+  // Essai gratuit appliqué au paiement (0 = aucun). Optionnel tant que
+  // get_offer n'est pas redéployée partout.
+  trialDays?: number
   // Paiement déjà confirmé côté serveur (webhook Stripe déjà passé) - permet
   // de proposer directement "définir mon mot de passe" si l'invité rouvre le
   // lien de l'email après coup, sans dépendre du seul ?checkout=success.

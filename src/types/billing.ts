@@ -8,6 +8,7 @@ export const BILLING_STATUSES = [
   "past_due",
   "canceled",
   "unpaid",
+  "paused",
 ] as const
 export type BillingStatus = (typeof BILLING_STATUSES)[number]
 
@@ -18,6 +19,7 @@ export const billingStatusLabels: Record<BillingStatus, string> = {
   past_due: "Paiement en retard",
   canceled: "Annulé",
   unpaid: "Impayé",
+  paused: "Suspendu",
 }
 
 // Même pattern que statusBadgeClass (SinistresListPage.tsx) : un
@@ -29,6 +31,7 @@ export const billingStatusBadgeClass: Record<BillingStatus, string> = {
   past_due: "border-transparent bg-amber-100 text-amber-800",
   canceled: "border-transparent bg-red-100 text-red-800",
   unpaid: "border-transparent bg-red-100 text-red-800",
+  paused: "border-transparent bg-amber-100 text-amber-800",
 }
 
 export type GeranceBilling = {
