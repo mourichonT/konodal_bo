@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DocumentThumbnail } from "@/components/DocumentThumbnail"
 import { useAuth } from "@/lib/auth-context"
+import { subscribeToUserDocuments, type UserDocument } from "@/lib/users"
 import {
   approveCertification,
   rejectCertification,
@@ -78,6 +79,20 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
     [uid]
   )
 
+  // Comptes antérieurs au parcours de certification : pas de demande, mais
+  // une pièce déposée à l'inscription (users/{uid}/documents, lisible
+  // superAdmin seulement - cette carte n'est rendue que pour lui). Affichée
+  // ici à défaut de demande, depuis la suppression de la carte "Pièce
+  // d'identité" de la fiche.
+  const [legacyDocuments, setLegacyDocuments] = useState<UserDocument[]>([])
+  useEffect(
+    () =>
+      subscribeToUserDocuments(uid, setLegacyDocuments, (err) =>
+        toast.error("Impossible de charger la pièce d'identité : " + err.message)
+      ),
+    [uid]
+  )
+
   // Carte toujours présente (à droite des champs d'identité, cf.
   // ResidentDetailPage) : un état vide plutôt qu'un trou dans la grille.
   if (!request) {
@@ -88,10 +103,29 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
             <ShieldQuestion className="size-5" />
             Demande de certification
           </CardTitle>
+          <CardDescription>
+            {legacyDocuments.length > 0
+              ? "Aucune demande · pièce déposée à l'inscription"
+              : "Aucune demande de certification."}
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Aucune demande de certification.</p>
-        </CardContent>
+        {legacyDocuments.length > 0 && (
+          <CardContent className="flex flex-col items-center gap-4">
+            {legacyDocuments.map((document) => (
+              <div key={document.id} className="flex flex-col items-center gap-1.5">
+                {document.type && (
+                  <span className="text-xs font-medium text-muted-foreground">{document.type}</span>
+                )}
+                <div className="flex flex-col items-center gap-3">
+                  <DocumentThumbnail path={document.documentPathRecto} label="Recto" />
+                  {document.documentPathVerso && (
+                    <DocumentThumbnail path={document.documentPathVerso} label="Verso" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        )}
       </Card>
     )
   }
