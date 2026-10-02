@@ -123,6 +123,52 @@ export function subscribeToUsers(
   )
 }
 
+// Comptes d'un périmètre de résidences (agence/agent, cf.
+// useScopedResidenceIds) : résidents validés (memberResidencesIds, calculé
+// côté serveur par sync_lot_tenants) + demandes de rattachement en attente
+// (pendingLotResidenceIds). Avant, toute la collection users était chargée
+// puis filtrée dans le navigateur : une agence pouvait donc lire tous les
+// comptes Konodal. `scope` null = pas de restriction (superAdmin).
+// array-contains-any accepte au plus 30 valeurs : une requête par tranche.
+export function subscribeToUsersInScope(
+  scope: Set<string> | null,
+  onData: (users: KonodalUser[]) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  if (scope === null) return subscribeToUsers(onData, onError)
+  const residenceIds = [...scope]
+  if (residenceIds.length === 0) {
+    onData([])
+    return () => {}
+  }
+  const chunks: string[][] = []
+  for (let i = 0; i < residenceIds.length; i += 30) chunks.push(residenceIds.slice(i, i + 30))
+  const queries = chunks.flatMap((chunk) => [
+    query(usersCollection, where("memberResidencesIds", "array-contains-any", chunk)),
+    query(usersCollection, where("pendingLotResidenceIds", "array-contains-any", chunk)),
+  ])
+  const resultsByQuery: Map<string, KonodalUser>[] = queries.map(() => new Map())
+  const received = queries.map(() => false)
+  const emit = () => {
+    if (!received.every(Boolean)) return
+    const merged = new Map<string, KonodalUser>()
+    for (const results of resultsByQuery) for (const [uid, user] of results) merged.set(uid, user)
+    onData([...merged.values()])
+  }
+  const unsubscribes = queries.map((q, index) =>
+    onSnapshot(
+      q,
+      (snapshot) => {
+        resultsByQuery[index] = new Map(snapshot.docs.map((d) => [d.id, toKonodalUser(d)]))
+        received[index] = true
+        emit()
+      },
+      onError
+    )
+  )
+  return () => unsubscribes.forEach((unsubscribe) => unsubscribe())
+}
+
 export function subscribeToUser(
   uid: string,
   onData: (user: KonodalUser | null) => void,

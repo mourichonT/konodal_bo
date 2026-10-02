@@ -59,7 +59,7 @@ import { useAllSinistres } from "@/hooks/useAllSinistres"
 import { useAllEvents } from "@/hooks/useAllEvents"
 import { useAllContacts } from "@/hooks/useAllContacts"
 import { useAllLots } from "@/hooks/useAllLots"
-import { subscribeToUsers } from "@/lib/users"
+import { subscribeToUsersInScope } from "@/lib/users"
 import type { KonodalUser } from "@/types/user"
 import {
   SINISTRE_STATUSES,
@@ -191,7 +191,7 @@ function KpiCard({
 export default function DashboardPage() {
   const { user } = useAuth()
   const [users, setUsers] = useState<KonodalUser[]>([])
-  const { scopedResidenceIds } = useScopedResidenceIds()
+  const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   const { isAgent, isAgence, geranceId } = useAccountRole()
   // Un compte agence/agent n'a pas de prénom personnel pertinent (cf.
   // ProfilePage) - le "Bonjour" affiche le nom de la gérance plutôt que le
@@ -217,12 +217,16 @@ export default function DashboardPage() {
   const [dateTo, setDateTo] = useState("")
   const [fillRateView, setFillRateView] = useState<"percent" | "count">("percent")
 
+  // Utilisateurs du périmètre agence/agent seulement (avant : toute la base,
+  // chiffres compris) - abonnement ouvert une fois le périmètre connu.
   useEffect(() => {
-    return subscribeToUsers(
+    if (scopeLoading) return
+    return subscribeToUsersInScope(
+      scopedResidenceIds,
       (data) => setUsers(data),
       (error) => toast.error("Impossible de charger les utilisateurs : " + error.message)
     )
-  }, [])
+  }, [scopeLoading, scopedResidenceIds])
 
   const loading = sinistresLoading || eventsLoading || contactsLoading || lotsLoading
 

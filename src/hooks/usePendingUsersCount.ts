@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { subscribeToUsers } from "@/lib/users"
+import { subscribeToUsersInScope } from "@/lib/users"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import type { KonodalUser } from "@/types/user"
@@ -22,12 +22,15 @@ import type { KonodalUser } from "@/types/user"
 // s'il a les deux.
 export function usePendingUsersCount(): number {
   const [users, setUsers] = useState<KonodalUser[]>([])
-  const { scopedResidenceIds } = useScopedResidenceIds()
+  const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   const { isSuperAdmin } = useAccountRole()
 
+  // Périmètre de l'agence/agent seulement (cf. subscribeToUsersInScope),
+  // une fois connu - null pendant le chargement voudrait dire "tout".
   useEffect(() => {
-    return subscribeToUsers(setUsers, () => {})
-  }, [])
+    if (scopeLoading) return
+    return subscribeToUsersInScope(scopedResidenceIds, setUsers, () => {})
+  }, [scopeLoading, scopedResidenceIds])
 
   return useMemo(() => {
     const residents = users.filter((u) => (u.accountType || "utilisateur") === "utilisateur")

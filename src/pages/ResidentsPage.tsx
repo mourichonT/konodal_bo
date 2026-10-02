@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { DateInput } from "@/components/DateInput"
-import { subscribeToUsers } from "@/lib/users"
+import { subscribeToUsersInScope } from "@/lib/users"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useAllLots } from "@/hooks/useAllLots"
@@ -62,7 +62,7 @@ export default function ResidentsPage() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const { isSuperAdmin } = useAccountRole()
-  const { scopedResidenceIds } = useScopedResidenceIds()
+  const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   // Les utilisateurs ne portent pas de residenceId direct - le périmètre
   // RBAC se déduit des lots qu'ils possèdent/louent dans le périmètre
   // agence/agent (cf. useScopedResidenceIds).
@@ -72,9 +72,13 @@ export default function ResidentsPage() {
     [residences]
   )
 
+  // Abonnement ouvert seulement une fois le périmètre connu : pendant son
+  // chargement, scopedResidenceIds vaut null (= pas de restriction).
   useEffect(() => {
+    if (scopeLoading) return
     setLoading(true)
-    return subscribeToUsers(
+    return subscribeToUsersInScope(
+      scopedResidenceIds,
       (data) => {
         setUsers(data)
         setLoading(false)
@@ -84,7 +88,7 @@ export default function ResidentsPage() {
         setLoading(false)
       }
     )
-  }, [])
+  }, [scopeLoading, scopedResidenceIds])
 
   // Les comptes 'agence'/'agent'/'superAdmin' sont créés hors app
   // (backoffice, gérance) et n'ont pas leur place dans un annuaire
