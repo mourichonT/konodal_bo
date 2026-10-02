@@ -1,3 +1,4 @@
+import { appBaseUrl } from "@/lib/utils"
 import { doc, onSnapshot, type DocumentData, type DocumentSnapshot, type Unsubscribe } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
@@ -50,14 +51,14 @@ export function subscribeToGeranceBilling(
 // Cloud Functions réservées à l'agence elle-même ou Super Admin
 // (_require_superadmin_or_own_agence côté functions_python/main.py), même
 // patron d'appel que inviteAgencyAccount/revokeAgencyAccount (lib/gerances.ts).
-// `origin` (window.location.origin) permet à la Cloud Function de construire
+// `origin` (appBaseUrl(), préfixe /portail inclus) permet à la Cloud Function de construire
 // les URL de retour Stripe sans dépendre d'un domaine figé côté serveur.
 export async function createCheckoutSession(geranceId: string): Promise<{ url: string }> {
   const call = httpsCallable<{ geranceId: string; origin: string }, { url: string }>(
     functions,
     "create_checkout_session"
   )
-  const result = await call({ geranceId, origin: window.location.origin })
+  const result = await call({ geranceId, origin: appBaseUrl() })
   return result.data
 }
 
@@ -66,7 +67,7 @@ export async function createBillingPortalSession(geranceId: string): Promise<{ u
     functions,
     "create_billing_portal_session"
   )
-  const result = await call({ geranceId, origin: window.location.origin })
+  const result = await call({ geranceId, origin: appBaseUrl() })
   return result.data
 }
 

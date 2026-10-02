@@ -18,3 +18,12 @@ export const PRIMARY_CTA_CLASS =
 export const CARD_SHADOW = "0 1px 2px oklch(20% 0 0 / 0.04), 0 12px 32px -18px oklch(20% 0 0 / 0.12)"
 export const CTA_GRADIENT = "linear-gradient(135deg, oklch(45% 0.08 155), oklch(38% 0.075 158))"
 export const CTA_SHADOW = "0 10px 26px -10px oklch(38% 0.08 155 / 0.55)"
+
+// URL racine du BO (origine + préfixe de déploiement, sans slash final) à
+// transmettre aux Cloud Functions qui construisent des liens `${origin}/...`
+// (invitation /offre/:token, retours Stripe /facturation...). En prod le BO
+// est servi sous konodal.com/portail/ (cf. vite.config.ts) : window.location
+// .origin seul produirait des liens konodal.com/offre/... inexistants.
+export function appBaseUrl(): string {
+  return `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, "")
+}

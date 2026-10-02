@@ -1,3 +1,4 @@
+import { appBaseUrl } from "@/lib/utils"
 import {
   addDoc,
   collection,
@@ -176,10 +177,10 @@ export async function inviteAgencyAccount(
     { geranceId: string; serviceType: ServiceType; email: string; role: AgencyAccountRole; origin: string },
     InviteAgencyAccountResult
   >(functions, "invite_agency_account")
-  // origin (window.location.origin) : même convention que createCheckoutSession
+  // origin (appBaseUrl()) : même convention que createCheckoutSession
   // (lib/billing.ts) - sert à invite_agency_account à construire le lien de la
   // page d'offre publique (/offre/:token) sans domaine codé en dur côté serveur.
-  const result = await call({ geranceId, serviceType, email, role, origin: window.location.origin })
+  const result = await call({ geranceId, serviceType, email, role, origin: appBaseUrl() })
   return result.data
 }
 

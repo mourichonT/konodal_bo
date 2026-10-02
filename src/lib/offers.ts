@@ -1,3 +1,4 @@
+import { appBaseUrl } from "@/lib/utils"
 // Endpoints publics (aucune authentification Firebase) consommés par
 // OfferPage.tsx - même pattern que SharedInterventionPage/sinistres.ts
 // (@https_fn.on_request, appelés en fetch brut plutôt qu'en httpsCallable),
@@ -39,7 +40,7 @@ export async function createOfferCheckoutSession(token: string, quantity: number
   const response = await fetch(`${FUNCTIONS_BASE}/create_offer_checkout_session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, quantity, origin: window.location.origin }),
+    body: JSON.stringify({ token, quantity, origin: appBaseUrl() }),
   })
   return parseJsonOrThrow<{ url: string }>(response, "Échec de l'ouverture du paiement.")
 }
