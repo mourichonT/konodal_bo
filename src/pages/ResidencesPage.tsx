@@ -64,7 +64,7 @@ export default function ResidencesPage() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [search, setSearch] = useState("")
-  const { scopedResidenceIds } = useScopedResidenceIds()
+  const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   const { isSuperAdmin } = useIsSuperAdmin()
   const { user } = useAuth()
   // Une Agence (pas un simple Agent) peut créer sa propre résidence, mais
@@ -88,12 +88,21 @@ export default function ResidencesPage() {
     )
   }, [])
 
-  const filteredResidences = useMemo(
+  // Périmètre du compte (résidences de la gérance ; tout pour un Super
+  // Admin, scopedResidenceIds null) - base commune des stats, de la carte et
+  // du tableau, pour ne pas compter des résidences que le compte ne voit pas.
+  // Vide tant que le périmètre charge : null y vaut aussi "tout".
+  const scopedResidences = useMemo(
     () =>
-      residences
-        .filter((residence) => !scopedResidenceIds || scopedResidenceIds.has(residence.id))
-        .filter((residence) => matchesSearch(residence, search)),
-    [residences, search, scopedResidenceIds]
+      scopeLoading
+        ? []
+        : residences.filter((residence) => !scopedResidenceIds || scopedResidenceIds.has(residence.id)),
+    [residences, scopedResidenceIds, scopeLoading]
+  )
+
+  const filteredResidences = useMemo(
+    () => scopedResidences.filter((residence) => matchesSearch(residence, search)),
+    [scopedResidences, search]
   )
 
   // Géocodage paresseux : une résidence sans lat/lng est géocodée une seule
@@ -104,7 +113,7 @@ export default function ResidencesPage() {
   // chaque mise à jour de `residences`, y compris juste après l'écriture).
   const geocodingRef = useRef(new Set<string>())
   useEffect(() => {
-    for (const residence of residences) {
+    for (const residence of scopedResidences) {
       if (residence.lat != null && residence.lng != null) continue
       if (geocodingRef.current.has(residence.id)) continue
       geocodingRef.current.add(residence.id)
@@ -116,11 +125,11 @@ export default function ResidencesPage() {
         })
         .finally(() => geocodingRef.current.delete(residence.id))
     }
-  }, [residences])
+  }, [scopedResidences])
 
   const topCities = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const residence of residences) {
+    for (const residence of scopedResidences) {
       const city = residence.address.city?.trim()
       if (!city) continue
       counts.set(city, (counts.get(city) ?? 0) + 1)
@@ -129,7 +138,7 @@ export default function ResidencesPage() {
       .map(([city, count]) => ({ city, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5)
-  }, [residences])
+  }, [scopedResidences])
 
   return (
     <div className="flex flex-col gap-6">
@@ -140,7 +149,7 @@ export default function ResidencesPage() {
           <Card>
             <CardContent className="flex flex-col gap-1">
               <span className="text-sm text-muted-foreground">Total résidences</span>
-              <span className="text-3xl font-semibold">{residences.length}</span>
+              <span className="text-3xl font-semibold">{scopedResidences.length}</span>
             </CardContent>
           </Card>
 
@@ -204,7 +213,7 @@ export default function ResidencesPage() {
                   </div>
                 }
               >
-                <ResidencesMap residences={residences} />
+                <ResidencesMap residences={scopedResidences} />
               </Suspense>
             </div>
           </CardContent>
@@ -274,10 +283,10 @@ export default function ResidencesPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {!loading && filteredResidences.length === 0 && (
+              {!loading && !scopeLoading && filteredResidences.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                    {residences.length === 0
+                    {scopedResidences.length === 0
                       ? "Aucune résidence pour l'instant."
                       : "Aucun résultat pour cette recherche."}
                   </TableCell>
