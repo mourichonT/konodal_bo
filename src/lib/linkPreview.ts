@@ -4,6 +4,8 @@
 // permettre d'attacher un lien à une communication depuis le backoffice.
 // Le modèle stocké (Post.link, cf. link_preview.dart) est résolu une seule
 // fois à la création, jamais re-fetché à l'affichage.
+import { auth } from "@/firebase"
+
 const FUNCTIONS_BASE = `https://europe-west9-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net`
 
 export type LinkPreview = {
@@ -21,11 +23,17 @@ export type LinkPreview = {
 // avec un message clair plutôt qu'enregistrer un lien resté vide.
 export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   const trimmed = url.trim()
+  // Jeton de connexion Firebase : la fonction refuse les appels anonymes
+  // (cf. _check_caller_token, functions_python/main.py).
+  const token = await auth.currentUser?.getIdToken()
   let response: Response
   try {
     response = await fetch(`${FUNCTIONS_BASE}/fetch_link_preview`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ params: { url: trimmed } }),
     })
   } catch {
