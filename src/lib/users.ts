@@ -169,6 +169,47 @@ export function subscribeToUsersInScope(
   return () => unsubscribes.forEach((unsubscribe) => unsubscribe())
 }
 
+// Identité (audit sécurité point 9, étape 3) : date/lieu de naissance,
+// sexe, nationalité déplacés dans users/{uid}/private/identity (lisible par
+// le titulaire, son bailleur et le superAdmin). Pendant la transition, écrits
+// aux deux endroits et relus d'abord dans la sous-fiche, avec repli sur
+// users/{uid}.user - toujours le cas pour Agence/Agent, à qui la sous-fiche
+// est refusée.
+const IDENTITY_FIELDS = ["birthday", "sex", "nationality", "placeOfborn"] as const
+
+function identityDoc(uid: string) {
+  return doc(usersCollection, uid, "private", "identity")
+}
+
+async function withIdentity(user: KonodalUser): Promise<KonodalUser> {
+  try {
+    const snapshot = await getDoc(identityDoc(user.uid))
+    const identity = snapshot.data()
+    if (!identity) return user
+    return {
+      ...user,
+      birthday: identity.birthday != null ? toDateOrNull(identity.birthday) : user.birthday,
+      sex: (identity.sex as string | undefined) ?? user.sex,
+      nationality: (identity.nationality as string | undefined) ?? user.nationality,
+      placeOfborn: (identity.placeOfborn as string | undefined) ?? user.placeOfborn,
+    }
+  } catch {
+    return user
+  }
+}
+
+// Écrit dans la sous-fiche les champs d'identité présents dans `values`
+// (clés "user.birthday" ou "birthday").
+export async function writeIdentity(uid: string, values: Record<string, unknown>) {
+  const identity: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(values)) {
+    const field = key.startsWith("user.") ? key.slice("user.".length) : key
+    if ((IDENTITY_FIELDS as readonly string[]).includes(field)) identity[field] = value
+  }
+  if (Object.keys(identity).length === 0) return
+  await setDoc(identityDoc(uid), identity, { merge: true })
+}
+
 export function subscribeToUser(
   uid: string,
   onData: (user: KonodalUser | null) => void,
@@ -176,7 +217,10 @@ export function subscribeToUser(
 ): Unsubscribe {
   return onSnapshot(
     doc(usersCollection, uid),
-    (snapshot) => onData(snapshot.exists() ? toKonodalUser(snapshot) : null),
+    (snapshot) => {
+      if (!snapshot.exists()) return onData(null)
+      void withIdentity(toKonodalUser(snapshot)).then(onData)
+    },
     onError
   )
 }
@@ -244,15 +288,19 @@ export type UserIdentityInput = {
 // jamais email (identifiant du compte Firebase Auth, non modifiable ici) ni
 // isApproved/accountType/isInfoCorrect (gérés séparément).
 export async function updateUserIdentity(uid: string, input: UserIdentityInput) {
-  await updateDoc(doc(usersCollection, uid), {
-    "user.name": input.name,
-    "user.surname": input.surname,
+  const identity = {
     "user.sex": input.sex,
     "user.nationality": input.nationality,
     "user.placeOfborn": input.placeOfborn,
     "user.birthday": input.birthday ? Timestamp.fromDate(input.birthday) : null,
+  }
+  await updateDoc(doc(usersCollection, uid), {
+    "user.name": input.name,
+    "user.surname": input.surname,
+    ...identity,
     "profil.phone": input.phone,
   })
+  await writeIdentity(uid, identity)
 }
 
 // Correction isolée du téléphone (ResidentDetailPage) - contrairement à

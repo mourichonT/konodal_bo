@@ -123,9 +123,20 @@ function missingIdentityFrom(
 export async function approveCertification(request: CertificationRequest, deciderUid: string) {
   const userSnap = await getDoc(doc(db, "users", request.uid))
   const userGroup = (userSnap.data()?.user as Record<string, unknown> | undefined) ?? {}
+  const missing = missingIdentityFrom(request.extracted, userGroup)
   const batch = writeBatch(db)
+  // Sous-fiche identité (audit sécurité point 9, étape 3) : mêmes valeurs,
+  // écrites aussi dans users/{uid}/private/identity pendant la transition.
+  const identity: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(missing)) {
+    const field = key.slice("user.".length)
+    if (["birthday", "sex", "nationality", "placeOfborn"].includes(field)) identity[field] = value
+  }
+  if (Object.keys(identity).length > 0) {
+    batch.set(doc(db, "users", request.uid, "private", "identity"), identity, { merge: true })
+  }
   batch.update(doc(db, "users", request.uid), {
-    ...missingIdentityFrom(request.extracted, userGroup),
+    ...missing,
     isCertified: true,
     certificationStatus: deleteField(),
     certificationRejectionReason: deleteField(),
