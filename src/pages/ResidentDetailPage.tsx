@@ -34,6 +34,7 @@ import {
   approveUserLot,
   deleteUserAccount,
   rejectUser,
+  resolveUserLabels,
   setUserApproved,
   setUserCertified,
   subscribeToUser,
@@ -830,6 +831,16 @@ function LotRow({
   const [approving, setApproving] = useState(false)
   const [revoking, setRevoking] = useState(false)
   const [documents, setDocuments] = useState<UserDocument[]>([])
+  const [ownerLabel, setOwnerLabel] = useState<string | null>(null)
+
+  useEffect(() => {
+    setOwnerLabel(null)
+    if (!lot.approvedByOwner || !lot.invitedBy) return
+    const invitedBy = lot.invitedBy
+    resolveUserLabels([invitedBy])
+      .then((labels) => setOwnerLabel(labels.get(invitedBy) ?? null))
+      .catch(() => {})
+  }, [lot.approvedByOwner, lot.invitedBy])
 
   useEffect(() => {
     if (!lot.residenceId) return
@@ -1075,9 +1086,24 @@ function LotRow({
         <CardHeader>
           <CardTitle className="text-lg">Justificatif(s)</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
+          {/* Parcours sans justificatif (invitation/demande acceptée par un
+              propriétaire en place côté app, cf. UserLot.approvedByOwner) :
+              l'absence de document est normale, on le dit plutôt que de
+              laisser croire à un oubli. */}
+          {lot.approvedByOwner && (
+            <div className="flex items-start gap-2 rounded-[12px] bg-emerald-50 p-[10px_12px] text-sm text-emerald-800">
+              <BadgeCheck className="mt-0.5 size-4 shrink-0" />
+              <span>
+                <span className="font-semibold">Validé par le propriétaire</span>
+                {ownerLabel ? ` (${ownerLabel})` : ""}
+              </span>
+            </div>
+          )}
           {documents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Aucun document déposé pour ce lot.</p>
+            !lot.approvedByOwner && (
+              <p className="text-sm text-muted-foreground">Aucun document déposé pour ce lot.</p>
+            )
           ) : (
             // Aperçu direct (comme la pièce d'identité) plutôt qu'un simple
             // bouton "Ouvrir" : le justificatif se vérifie sans quitter la

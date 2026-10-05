@@ -417,6 +417,17 @@ export type UserLot = {
   // n'a aucune visibilité sur ce second lot réclamé avant d'approuver à
   // l'aveugle. Jamais modifié depuis le BO.
   pendingChildLotIds: string[]
+  // Lot validé directement par un propriétaire déjà en place côté app (et
+  // non par le BO) : invitation acceptée (inviteCoOwner/
+  // respondToCoOwnerInvite), demande de bailleur acceptée
+  // (respondToLandlordRequest) - invitedBy = uid du propriétaire - ou
+  // demande de copropriétaire/colocataire acceptée
+  // (respondToCoOccupantRequest, pendingPeerApproval repassé à false avec
+  // isApprovedLot: true, sans trace de l'uid qui a répondu). Aucun
+  // justificatif n'est déposé dans ces parcours : sert à l'expliquer sur la
+  // fiche. Cf. functions/index.js côté konodal_app.
+  approvedByOwner: boolean
+  invitedBy: string | null
 }
 
 // users/{uid}/lots : jamais créé depuis le backoffice (toujours en
@@ -467,6 +478,11 @@ export function subscribeToUserLots(
             statutResident: (data.statutResident as string) ?? "",
             isApprovedLot: (data.isApprovedLot as boolean) ?? false,
             pendingChildLotIds: (data.pendingChildLotIds as string[] | undefined) ?? [],
+            // pendingPeerApproval: false seul ne suffit pas : onAccountRejected
+            // le remet aussi à false (demande annulée), mais sans approuver.
+            approvedByOwner:
+              data.isApprovedLot === true && (!!data.invitedBy || data.pendingPeerApproval === false),
+            invitedBy: (data.invitedBy as string | undefined) ?? null,
           }
         })
       )
