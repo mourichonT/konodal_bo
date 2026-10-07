@@ -23,6 +23,10 @@ export const LOT_IMPORT_HEADERS = [
   "Rattachable",
   "Tantièmes",
   "Rattaché à (référence)",
+  // Facultative, en dernière colonne fixe (ne décale pas les listes
+  // déroulantes D/E/F du modèle) : sert à renseigner les étages des
+  // bâtiments créés à l'import, pas stockée sur le lot.
+  "Étage",
 ] as const
 
 // Une colonne par clé de charge, nommée "Clé : <nom de la clé>" - le
@@ -59,9 +63,19 @@ export function lotImportTemplateClefNames(existingClefNames: string[]): string[
 function lotImportExampleRows(clefNames: string[]): (string | number)[][] {
   const clefValues = (values: number[]) => clefNames.map((_, i) => (i === 0 ? values[0] : values[1] ?? ""))
   return [
-    ["Bâtiment A", "1", `${EXAMPLE_REF_PREFIX}001`, "Appartement", "Non", 250, "", ...clefValues([300, 250])],
-    ["Bâtiment A", "2", `${EXAMPLE_REF_PREFIX}002`, "Appartement", "Non", 180, "", ...clefValues([200, 180])],
-    ["Bâtiment A", "C1", `${EXAMPLE_REF_PREFIX}C01`, "Cave", "Oui", 10, `${EXAMPLE_REF_PREFIX}001`, ...clefValues([0, 0])],
+    ["Bâtiment A", "1", `${EXAMPLE_REF_PREFIX}001`, "Appartement", "Non", 250, "", "R+1", ...clefValues([300, 250])],
+    ["Bâtiment A", "2", `${EXAMPLE_REF_PREFIX}002`, "Appartement", "Non", 180, "", "R+2", ...clefValues([200, 180])],
+    [
+      "Bâtiment A",
+      "C1",
+      `${EXAMPLE_REF_PREFIX}C01`,
+      "Cave",
+      "Oui",
+      10,
+      `${EXAMPLE_REF_PREFIX}001`,
+      "Sous-sol -1",
+      ...clefValues([0, 0]),
+    ],
     [
       "Parking Extérieur",
       "P1",
@@ -70,6 +84,7 @@ function lotImportExampleRows(clefNames: string[]): (string | number)[][] {
       "Oui",
       15,
       `${EXAMPLE_REF_PREFIX}002`,
+      "",
       ...clefValues([0, 0]),
     ],
   ]
@@ -124,6 +139,7 @@ export async function downloadLotImportTemplateXlsx(existingClefNames: string[])
     { width: 14 },
     { width: 12 },
     { width: 24 },
+    { width: 12 },
     ...clefNames.map((nom) => ({ width: Math.max(14, CLEF_HEADER_PREFIX.length + nom.length + 2) })),
   ]
   sheet.views = [{ state: "frozen", ySplit: 1 }]
@@ -139,6 +155,7 @@ export async function downloadLotImportTemplateXlsx(existingClefNames: string[])
     "Bâtiment, N° et Référence sont obligatoires.",
     `Bâtiment : "<type> <nom>", type parmi ${structureTypeOptions.join(", ")} -`,
     'ex. "Bâtiment A", "Parking Extérieur". Un bâtiment absent de la résidence est créé à l\'import.',
+    'Étage (facultatif) : "RdC", "R+2", "2", "Sous-sol -1"... - donne les étages des bâtiments créés.',
     "Rattaché à : référence du lot principal (appartement...) pour une cave, un",
     "parking... marqué Rattachable = Oui - lot du fichier ou déjà existant.",
     `Une colonne "${CLEF_HEADER_PREFIX}<nom>" par clé de charge : tantièmes du lot pour`,
@@ -322,6 +339,40 @@ function parseStructureLabel(label: string): { type: string; name: string } | nu
   return null
 }
 
+// Niveau d'un étage saisi librement : 0 = rez-de-chaussée, n > 0 = étage n,
+// n < 0 = sous-sol n. null = non renseigné ("", "-", "Ext."), undefined =
+// non reconnu (ligne en erreur).
+export function parseEtageLevel(raw: string): number | null | undefined {
+  const v = raw
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ")
+  if (v === "" || v === "-" || v === "ext" || v === "ext." || v === "exterieur") return null
+  if (/^(rdc|r\.?d\.?c\.?|rez[- ]de[- ]chaussee|rez de jardin|0)$/.test(v)) return 0
+  let m = /^(?:sous[- ]?sol|ss|s\/sol)\s*-?\s*(\d*)$/.exec(v)
+  if (m) return -(Number(m[1]) || 1)
+  m = /^(?:r\s*-\s*|-\s*)(\d+)$/.exec(v)
+  if (m) return -Number(m[1])
+  m = /^(?:r\s*\+\s*|etage\s*)?(\d+)\s*(?:er|e|eme|ème)?(?:\s*etage)?$/.exec(v)
+  if (m) return Number(m[1])
+  return undefined
+}
+
+// Liste d'étages d'un bâtiment, même format que buildEtage (saisie manuelle
+// dans la configuration de la résidence) : du RDC à l'étage le plus haut,
+// puis les sous-sols.
+function etagesFromLevels(levels: number[]): { etage: string[]; hasUnderground: boolean } {
+  if (levels.length === 0) return { etage: [], hasUnderground: false }
+  const max = Math.max(0, ...levels)
+  const min = Math.min(0, ...levels)
+  const etage = ["RDC"]
+  for (let i = 1; i <= max; i++) etage.push(`étage ${i}`)
+  for (let i = 1; i <= -min; i++) etage.push(`Sous-sol -${i}`)
+  return { etage, hasUnderground: min < 0 }
+}
+
 // Tolère les variations d'en-tête (accents, casse, "N°" avec son symbole
 // degré non couvert par la normalisation NFD des diacritiques classiques).
 function normalizeHeader(h: string): string {
@@ -342,6 +393,7 @@ export type RawLotImportRow = {
   isLinkableRaw: string
   tantiemesRaw: string
   parentRefRaw: string
+  etageRaw: string
   // Valeur brute par nom de clé de charge (colonnes "Clé : <nom>").
   clefsRaw: Record<string, string>
 }
@@ -366,6 +418,7 @@ export function mapLotImportHeaders(
     // "Rattaché à (référence)" -> "rattacheareference" ; jamais confondu
     // avec "rattachable" (comparé exactement ci-dessus).
     parentRef: normalized.findIndex((h) => h.startsWith("rattachea")),
+    etage: normalized.indexOf("etage"),
   }
   const clefColumns: { nom: string; index: number }[] = []
   headers.forEach((h, index) => {
@@ -398,6 +451,7 @@ export function mapLotImportHeaders(
         isLinkableRaw: col.isLinkable >= 0 ? (cols[col.isLinkable] ?? "").trim() : "",
         tantiemesRaw: col.tantiemes >= 0 ? (cols[col.tantiemes] ?? "").trim() : "",
         parentRefRaw: col.parentRef >= 0 ? (cols[col.parentRef] ?? "").trim() : "",
+        etageRaw: col.etage >= 0 ? (cols[col.etage] ?? "").trim() : "",
         clefsRaw: Object.fromEntries(clefColumns.map(({ nom, index }) => [nom, (cols[index] ?? "").trim()])),
       })),
   }
@@ -438,7 +492,10 @@ export type LotImportValidation = {
   clefs: { nom: string; existingId: string | null }[]
   // Bâtiments cités par le fichier et absents de la résidence, créés à
   // l'import (structures/{id}) ; les lots portent déjà leur libellé final.
-  structuresToCreate: { type: string; name: string; label: string }[]
+  // `etage`/`hasUnderground` : même format que la saisie manuelle
+  // (buildEtage, ResidenceDetailPage : "RDC", "étage 1"..., "Sous-sol -1"...),
+  // déduits des étages des lots du fichier ; vides si aucun n'est renseigné.
+  structuresToCreate: { type: string; name: string; label: string; etage: string[]; hasUnderground: boolean }[]
   linkedCount: number
   exampleRowsIgnored: number
 }
@@ -466,7 +523,7 @@ export function validateLotImportRows(
   // Libellé final du bâtiment de chaque ligne : celui de la structure
   // existante correspondante, sinon celui de la structure qui sera créée.
   const labelByKey = new Map(existingStructures.map((s) => [structureLabelKey(structureLabel(s)), structureLabel(s)]))
-  const structuresToCreate: LotImportValidation["structuresToCreate"] = []
+  const structuresToCreate: { type: string; name: string; label: string }[] = []
   function resolveBatiment(raw: string): string | null {
     const key = structureLabelKey(raw)
     const known = labelByKey.get(key)
@@ -497,6 +554,9 @@ export function validateLotImportRows(
   const seenCombos = new Set<string>()
 
   const toCreate: (LotImportInput & { rowNumber: number; parentRefRaw: string })[] = []
+  // Niveau d'étage de chaque lot retenu (par référence) - sert uniquement à
+  // renseigner les étages des bâtiments créés.
+  const levelByRef = new Map<string, number>()
   const duplicatesExisting: string[] = []
   const duplicatesInFile: string[] = []
   const errors: string[] = []
@@ -520,6 +580,11 @@ export function validateLotImportRows(
       continue
     }
     row.batiment = batiment
+    const etageLevel = parseEtageLevel(row.etageRaw)
+    if (etageLevel === undefined) {
+      errors.push(`${label} : étage "${row.etageRaw}" non reconnu (ex. "RdC", "R+2", "2", "Sous-sol -1").`)
+      continue
+    }
     if (row.typeLot && !(typeLotOptions as readonly string[]).includes(row.typeLot)) {
       errors.push(`${label} : type "${row.typeLot}" inconnu.`)
       continue
@@ -565,6 +630,7 @@ export function validateLotImportRows(
       errors.push(`${label} : un lot ne peut pas être rattaché à lui-même.`)
       continue
     }
+    if (etageLevel !== null) levelByRef.set(row.refLot, etageLevel)
     seenRefs.add(row.refLot)
     seenCombos.add(combo)
     toCreate.push({
@@ -631,14 +697,21 @@ export function validateLotImportRows(
 
   // Bâtiment créé uniquement si une ligne retenue l'utilise (pas pour une
   // ligne en erreur ou en doublon).
-  const usedLabels = new Set(resolved.map((l) => l.batiment))
+  const levelsByLabel = new Map<string, number[]>()
+  for (const lot of resolved) {
+    const level = levelByRef.get(lot.refLot)
+    if (!levelsByLabel.has(lot.batiment)) levelsByLabel.set(lot.batiment, [])
+    if (level !== undefined) levelsByLabel.get(lot.batiment)!.push(level)
+  }
   return {
     toCreate: resolved,
     duplicatesExisting,
     duplicatesInFile,
     errors,
     clefs,
-    structuresToCreate: structuresToCreate.filter((s) => usedLabels.has(s.label)),
+    structuresToCreate: structuresToCreate
+      .filter((s) => levelsByLabel.has(s.label))
+      .map((s) => ({ ...s, ...etagesFromLevels(levelsByLabel.get(s.label)!) })),
     linkedCount,
     exampleRowsIgnored,
   }

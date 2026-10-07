@@ -138,7 +138,8 @@ function LotImportDialogContent({
           </div>
           <p className="text-xs text-muted-foreground">
             Colonnes : Bâtiment, N°, Référence (obligatoires), Type, Rattachable (Oui/Non), Tantièmes (nombre
-            entier, 0 si vide), Rattaché à (référence du lot principal, pour un lot rattachable). Bâtiment au
+            entier, 0 si vide), Rattaché à (référence du lot principal, pour un lot rattachable), Étage
+            (facultatif, ex. RdC, R+2 : donne les étages des bâtiments créés). Bâtiment au
             format « type nom » (ex. Bâtiment A, Parking Extérieur) : s'il n'existe pas sur la résidence, il est
             créé à l'import.
           </p>
@@ -205,7 +206,16 @@ function LotImportDialogContent({
               <div className="rounded-lg border p-3 text-sm font-medium text-amber-700">
                 Bâtiment{validation.structuresToCreate.length > 1 ? "s" : ""} créé
                 {validation.structuresToCreate.length > 1 ? "s" : ""} à l'import :{" "}
-                {validation.structuresToCreate.map((s) => s.label).join(", ")}
+                {validation.structuresToCreate
+                  .map((s) => {
+                    const floors = s.etage.filter((e) => e.startsWith("étage ")).length
+                    const basements = s.etage.filter((e) => e.startsWith("Sous-sol")).length
+                    if (s.etage.length === 0) return s.label
+                    const detail = [`RDC${floors ? ` + ${floors} étage${floors > 1 ? "s" : ""}` : ""}`]
+                    if (basements) detail.push(`${basements} sous-sol${basements > 1 ? "s" : ""}`)
+                    return `${s.label} (${detail.join(", ")})`
+                  })
+                  .join(", ")}
               </div>
             )}
 

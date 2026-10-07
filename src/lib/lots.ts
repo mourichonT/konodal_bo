@@ -195,13 +195,13 @@ export async function importLots(
 
   type BatchOperation = (batch: ReturnType<typeof writeBatch>) => void
   const structureOperations: BatchOperation[] = validation.structuresToCreate.map(
-    ({ type, name }, index) =>
+    ({ type, name, etage, hasUnderground }, index) =>
       (batch) =>
         batch.set(doc(collection(db, "residences", residenceId, "structures")), {
           name,
           type,
-          etage: [],
-          hasUnderground: false,
+          etage,
+          hasUnderground,
           elements: [],
           order: startStructureOrder + index,
           hasDifferentSyndic: false,
