@@ -35,6 +35,45 @@ export function lotImportTemplateHeaders(clefNames: string[]): string[] {
   return [...LOT_IMPORT_HEADERS, ...clefNames.map((nom) => CLEF_HEADER_PREFIX + nom)]
 }
 
+// Lignes d'exemple des modèles : toute ligne dont la référence commence par
+// ce préfixe est ignorée à l'import (validateLotImportRows) - oublier de les
+// supprimer ne crée donc jamais de faux lots.
+export const EXAMPLE_REF_PREFIX = "EXEMPLE-"
+
+export function isExampleRef(refLot: string): boolean {
+  return refLot.trim().toUpperCase().startsWith(EXAMPLE_REF_PREFIX)
+}
+
+// Clé d'exemple proposée dans le modèle d'une résidence qui n'en a encore
+// aucune - créée seulement si des tantièmes réels y sont saisis (une clé
+// inconnue sans aucune valeur n'est jamais créée, cf. validateLotImportRows).
+const EXAMPLE_CLEF_NAME = "Ascenseur"
+
+export function lotImportTemplateClefNames(existingClefNames: string[]): string[] {
+  return existingClefNames.length > 0 ? existingClefNames : [EXAMPLE_CLEF_NAME]
+}
+
+// Deux logements, une cave rattachée au premier, un parking au second -
+// couvre chaque colonne, dont "Rattaché à" vers un lot du même fichier.
+function lotImportExampleRows(clefNames: string[]): (string | number)[][] {
+  const clefValues = (values: number[]) => clefNames.map((_, i) => (i === 0 ? values[0] : values[1] ?? ""))
+  return [
+    ["Bâtiment A", "1", `${EXAMPLE_REF_PREFIX}001`, "Appartement", "Non", 250, "", ...clefValues([300, 250])],
+    ["Bâtiment A", "2", `${EXAMPLE_REF_PREFIX}002`, "Appartement", "Non", 180, "", ...clefValues([200, 180])],
+    ["Bâtiment A", "C1", `${EXAMPLE_REF_PREFIX}C01`, "Cave", "Oui", 10, `${EXAMPLE_REF_PREFIX}001`, ...clefValues([0, 0])],
+    [
+      "Bâtiment A",
+      "P1",
+      `${EXAMPLE_REF_PREFIX}P01`,
+      "Place de parking",
+      "Oui",
+      15,
+      `${EXAMPLE_REF_PREFIX}002`,
+      ...clefValues([0, 0]),
+    ],
+  ]
+}
+
 // Lignes couvertes par les listes déroulantes du modèle .xlsx - largement
 // au-delà de la taille d'une copropriété.
 const TEMPLATE_VALIDATION_ROWS = 1000
@@ -52,8 +91,12 @@ const UTF8_BOM = String.fromCharCode(0xfeff)
 
 // clefNames : clés de charge déjà définies sur la résidence, une colonne
 // chacune dans le modèle.
-export function downloadLotImportTemplateCsv(clefNames: string[]) {
-  const csv = lotImportTemplateHeaders(clefNames).join(";") + "\r\n"
+export function downloadLotImportTemplateCsv(existingClefNames: string[]) {
+  const clefNames = lotImportTemplateClefNames(existingClefNames)
+  const csv =
+    [lotImportTemplateHeaders(clefNames), ...lotImportExampleRows(clefNames)]
+      .map((row) => row.join(";"))
+      .join("\r\n") + "\r\n"
   // BOM UTF-8 : Excel ouvre sinon les accents (Bâtiment, Référence) mal
   // encodés sur un CSV sans BOM.
   downloadBlob(new Blob([UTF8_BOM + csv], { type: "text/csv;charset=utf-8" }), "modele_lots.csv")
@@ -62,12 +105,16 @@ export function downloadLotImportTemplateCsv(clefNames: string[]) {
 // exceljs chargé à la demande (uniquement quand ce fichier sert vraiment) -
 // même raison que ResidencesMap/maplibre-gl : évite d'alourdir le bundle
 // principal pour une fonctionnalité utilisée occasionnellement.
-export async function downloadLotImportTemplateXlsx(clefNames: string[]) {
+export async function downloadLotImportTemplateXlsx(existingClefNames: string[]) {
+  const clefNames = lotImportTemplateClefNames(existingClefNames)
   const ExcelJS = await import("exceljs")
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet("Lots")
   sheet.addRow(lotImportTemplateHeaders(clefNames))
   sheet.getRow(1).font = { bold: true }
+  for (const example of lotImportExampleRows(clefNames)) {
+    sheet.addRow(example).font = { italic: true, color: { argb: "FF808080" } }
+  }
   sheet.columns = [
     { width: 20 },
     { width: 8 },
@@ -93,6 +140,8 @@ export async function downloadLotImportTemplateXlsx(clefNames: string[]) {
     "parking... marqué Rattachable = Oui - lot du fichier ou déjà existant.",
     `Une colonne "${CLEF_HEADER_PREFIX}<nom>" par clé de charge : tantièmes du lot pour`,
     "cette clé. Une clé qui n'existe pas encore est créée à l'import.",
+    `Les lignes dont la référence commence par "${EXAMPLE_REF_PREFIX}" sont des exemples,`,
+    "ignorés à l'import : remplacez-les ou laissez-les.",
   ]
   typeLotOptions.forEach((type, i) => valuesSheet.addRow([type, "", help[i] ?? ""]))
   valuesSheet.getColumn(1).width = 22
@@ -347,6 +396,7 @@ export type LotImportValidation = {
   // null si elle sera créée à l'import.
   clefs: { nom: string; existingId: string | null }[]
   linkedCount: number
+  exampleRowsIgnored: number
 }
 
 export type ExistingLotForImport = {
@@ -382,7 +432,12 @@ export function validateLotImportRows(
   const duplicatesInFile: string[] = []
   const errors: string[] = []
 
+  let exampleRowsIgnored = 0
   for (const row of rawRows) {
+    if (isExampleRef(row.refLot)) {
+      exampleRowsIgnored++
+      continue
+    }
     const label = `Ligne ${row.rowNumber}`
     if (!row.batiment || !row.lot || !row.refLot) {
       errors.push(`${label} : bâtiment, n° et référence sont obligatoires.`)
@@ -487,11 +542,15 @@ export function validateLotImportRows(
   }
 
   const existingClefByKey = new Map(existingClefs.map((c) => [clefNameKey(c.nom), c.id]))
-  const clefs = clefNames.map((nom) => ({ nom, existingId: existingClefByKey.get(clefNameKey(nom)) ?? null }))
+  // Une clé à créer sans aucune valeur saisie (ex: colonne d'exemple du
+  // modèle laissée vide) est écartée plutôt que créée vide.
+  const clefs = clefNames
+    .map((nom) => ({ nom, existingId: existingClefByKey.get(clefNameKey(nom)) ?? null }))
+    .filter((c) => c.existingId || resolved.some((lot) => lot.clefTantiemes[c.nom]))
 
   // Erreurs de rattachement relevées après les autres : retri par ligne.
   const lineOf = (e: string) => Number(/^Ligne (\d+)/.exec(e)?.[1] ?? 0)
   errors.sort((x, y) => lineOf(x) - lineOf(y))
 
-  return { toCreate: resolved, duplicatesExisting, duplicatesInFile, errors, clefs, linkedCount }
+  return { toCreate: resolved, duplicatesExisting, duplicatesInFile, errors, clefs, linkedCount, exampleRowsIgnored }
 }

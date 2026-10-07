@@ -11,6 +11,7 @@ import {
   parseLotImportFile,
   validateLotImportRows,
   CLEF_HEADER_PREFIX,
+  EXAMPLE_REF_PREFIX,
   type ExistingLotForImport,
   type LotImportValidation,
 } from "@/lib/lotImportExport"
@@ -129,7 +130,7 @@ function LotImportDialogContent({
           <p className="text-xs text-muted-foreground">
             Puis une colonne « {CLEF_HEADER_PREFIX}nom » par clé de charge, avec les tantièmes du lot pour cette
             clé{clefNames.length > 0 ? " (le modèle reprend les clés déjà définies)" : ""}. Une clé qui n'existe pas
-            encore est créée à l'import.
+            encore est créée à l'import. Les lignes d'exemple (référence « {EXAMPLE_REF_PREFIX}… ») sont ignorées.
           </p>
         </div>
 
@@ -177,6 +178,13 @@ function LotImportDialogContent({
               {validation.linkedCount > 0 &&
                 `, dont ${validation.linkedCount} rattaché${validation.linkedCount > 1 ? "s" : ""} à un lot principal`}
             </div>
+
+            {validation.exampleRowsIgnored > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {validation.exampleRowsIgnored} ligne{validation.exampleRowsIgnored > 1 ? "s" : ""} d'exemple
+                ignorée{validation.exampleRowsIgnored > 1 ? "s" : ""} (référence commençant par « {EXAMPLE_REF_PREFIX} »).
+              </p>
+            )}
 
             {validation.clefs.length > 0 && (
               <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm text-muted-foreground">
