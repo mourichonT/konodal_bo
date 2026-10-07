@@ -43,6 +43,8 @@ import {
   createGerance,
   inviteAgencyAccount,
   revokeAgencyAccount,
+  revokeSuccessMessage,
+  REVOKE_CONFIRM_MESSAGE,
   setDeptAccountUid,
   subscribeToGerances,
   updateGerance,
@@ -649,6 +651,12 @@ function ServiceSection({
   // il faut d'abord tous les révoquer.
   const uidField = AGENT_UID_FIELD[type]
   const deptHasActiveAccount = (gerance?.[uidField]?.length ?? 0) > 0
+  // Adresse verrouillée uniquement tant qu'un compte ACTIF y est rattaché
+  // (identifiant de la licence). Compte révoqué ou jamais invité : elle peut
+  // être remplacée (ex. compte de test -> vraie adresse de l'agence).
+  const persistedDept = gerance?.services[type]
+  const mailLocked =
+    !!persistedDept?.mail && !!persistedDept.uid && !!gerance?.[uidField]?.includes(persistedDept.uid)
 
   return (
     <div className="rounded-[18px] border border-[oklch(93%_0.005_100)] p-[18px_20px]">
@@ -679,13 +687,22 @@ function ServiceSection({
                 id={`${type}-mail`}
                 type="email"
                 value={dept.mail}
-                // Verrouillé dès qu'une adresse est déjà persistée (rattachée
-                // à une licence, cf. AccountControl ci-dessous) - modifiable
-                // uniquement tant que le service vient d'être activé et n'a
-                // encore jamais été enregistré avec un email.
-                disabled={!!gerance?.services[type]?.mail}
-                title={gerance?.services[type]?.mail ? "Rattaché à une licence, non modifiable" : undefined}
-                onChange={(e) => onChange({ ...dept, mail: e.target.value })}
+                disabled={mailLocked}
+                title={mailLocked ? "Rattaché à un compte actif : révoquer l'accès pour changer d'adresse" : undefined}
+                // Nouvelle adresse = plus le même compte : l'uid de l'ancien
+                // (révoqué) est détaché, sanitizeServices ne le réécrit pas à
+                // l'enregistrement - "Inviter" s'affiche alors pour la
+                // nouvelle adresse. Revenir à l'adresse enregistrée restaure
+                // son uid.
+                onChange={(e) => {
+                  const mail = e.target.value
+                  const { uid: _uid, ...rest } = dept
+                  onChange(
+                    mail === persistedDept?.mail && persistedDept?.uid
+                      ? { ...rest, mail, uid: persistedDept.uid }
+                      : { ...rest, mail }
+                  )
+                }}
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -798,10 +815,10 @@ function AccountControl({
 
   async function handleRevoke() {
     if (!persistedUid) return
+    if (!confirm(REVOKE_CONFIRM_MESSAGE)) return
     setSubmitting(true)
     try {
-      await revokeAgencyAccount(gerance.id, serviceType, persistedUid)
-      toast.success("Accès révoqué")
+      toast.success(revokeSuccessMessage(await revokeAgencyAccount(gerance.id, serviceType, persistedUid)))
     } catch (err) {
       toast.error("Échec de la révocation : " + (err as Error).message)
     } finally {
@@ -907,9 +924,9 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
   }
 
   async function handleRevoke(uid: string) {
+    if (!confirm(REVOKE_CONFIRM_MESSAGE)) return
     try {
-      await revokeAgencyAccount(gerance.id, type, uid)
-      toast.success("Accès révoqué")
+      toast.success(revokeSuccessMessage(await revokeAgencyAccount(gerance.id, type, uid)))
     } catch (err) {
       toast.error("Échec de la révocation : " + (err as Error).message)
     }

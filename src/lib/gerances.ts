@@ -184,16 +184,29 @@ export async function inviteAgencyAccount(
   return result.data
 }
 
+// Révocation = suppression de la licence (revoke_agency_account) : siège
+// Stripe décompté (abonnement résilié en fin de période si c'était le
+// dernier), adresse du service libérée, et compte supprimé - sauf s'il sert
+// encore ailleurs (agent d'une autre gérance, compte résident) :
+// accountDeleted indique lequel des deux.
 export async function revokeAgencyAccount(
   geranceId: string,
   serviceType: ServiceType,
   uid: string
-): Promise<void> {
-  const call = httpsCallable<{ geranceId: string; serviceType: ServiceType; uid: string }, { success: boolean }>(
-    functions,
-    "revoke_agency_account"
-  )
-  await call({ geranceId, serviceType, uid })
+): Promise<{ accountDeleted: boolean }> {
+  const call = httpsCallable<
+    { geranceId: string; serviceType: ServiceType; uid: string },
+    { success: boolean; accountDeleted?: boolean }
+  >(functions, "revoke_agency_account")
+  const { data } = await call({ geranceId, serviceType, uid })
+  return { accountDeleted: !!data.accountDeleted }
+}
+
+export const REVOKE_CONFIRM_MESSAGE =
+  "Révoquer cet accès supprime la licence : le compte est supprimé définitivement (sauf s'il sert ailleurs) et le siège n'est plus facturé. Continuer ?"
+
+export function revokeSuccessMessage({ accountDeleted }: { accountDeleted: boolean }): string {
+  return accountDeleted ? "Licence supprimée et compte supprimé" : "Licence supprimée (compte conservé, utilisé ailleurs)"
 }
 
 // Compte BO lié à l'adresse générique du service (pas d'agent nommé - cas
