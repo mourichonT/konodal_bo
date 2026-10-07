@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react"
-import { Link } from "react-router-dom"
-import { toast } from "sonner"
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import {
   Briefcase,
   Check,
@@ -13,14 +13,14 @@ import {
   Save,
   Search,
   ShieldOff,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
-import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput";
+import { ZipCodeCityInput } from "@/components/ZipCodeCityInput";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +28,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -36,9 +36,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { FilterKpiCard } from "@/components/FilterKpiCard"
-import { PRIMARY_CTA_CLASS } from "@/lib/utils"
+} from "@/components/ui/table";
+import { FilterKpiCard } from "@/components/FilterKpiCard";
+import { PRIMARY_CTA_CLASS } from "@/lib/utils";
 import {
   createGerance,
   inviteAgencyAccount,
@@ -53,15 +53,19 @@ import {
   updateGeranceName,
   type AgencyAccountRole,
   type GeranceInput,
-} from "@/lib/gerances"
-import { resolveUsersByUids } from "@/lib/users"
-import { subscribeToGeranceBilling } from "@/lib/billing"
-import { searchCompanies, type CompanySearchResult } from "@/lib/companySearch"
-import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
-import { useAccountRole } from "@/hooks/useAccountRole"
-import { useAuth } from "@/lib/auth-context"
-import { emptyAddress } from "@/types/residence"
-import { billingStatusBadgeClass, billingStatusLabels, type GeranceBilling } from "@/types/billing"
+} from "@/lib/gerances";
+import { resolveUsersByUids } from "@/lib/users";
+import { subscribeToGeranceBilling } from "@/lib/billing";
+import { searchCompanies, type CompanySearchResult } from "@/lib/companySearch";
+import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin";
+import { useAccountRole } from "@/hooks/useAccountRole";
+import { useAuth } from "@/lib/auth-context";
+import { emptyAddress } from "@/types/residence";
+import {
+  billingStatusBadgeClass,
+  billingStatusLabels,
+  type GeranceBilling,
+} from "@/types/billing";
 import {
   AGENT_UID_FIELD,
   emptyAgencyDept,
@@ -69,58 +73,68 @@ import {
   type AgencyDept,
   type Gerance,
   type ServiceType,
-} from "@/types/gerance"
-import type { KonodalUser } from "@/types/user"
+} from "@/types/gerance";
+import type { KonodalUser } from "@/types/user";
 
-const serviceTypes: ServiceType[] = ["serviceSyndic", "geranceLocative"]
+const serviceTypes: ServiceType[] = ["serviceSyndic", "geranceLocative"];
 
 // Nom affiché de l'agence : limite demandée explicitement, avec blocage à
 // l'enregistrement (pas seulement une troncature silencieuse via maxLength,
 // qui ne rattrape pas un nom déjà trop long chargé depuis Firestore avant
 // l'ajout de cette limite).
-const AGENCY_NAME_MAX_LENGTH = 20
+const AGENCY_NAME_MAX_LENGTH = 20;
 
 function geranceToInput(gerance: Gerance): GeranceInput {
   return {
     name: gerance.name,
     address: gerance.address,
     services: gerance.services,
-  }
+  };
 }
 
 function matchesSearch(gerance: Gerance, search: string): boolean {
-  const haystack = [gerance.name, gerance.address.street, gerance.address.zipCode, gerance.address.city]
+  const haystack = [
+    gerance.name,
+    gerance.address.street,
+    gerance.address.zipCode,
+    gerance.address.city,
+  ]
     .join(" ")
-    .toLowerCase()
-  return haystack.includes(search.toLowerCase())
+    .toLowerCase();
+  return haystack.includes(search.toLowerCase());
 }
 
 export default function AgencesPage() {
-  const [allGerances, setAllGerances] = useState<Gerance[]>([])
-  const [loading, setLoading] = useState(true)
+  const [allGerances, setAllGerances] = useState<Gerance[]>([]);
+  const [loading, setLoading] = useState(true);
   // ID plutôt qu'un snapshot Gerance : le statut "compte actif" affiché dans
   // le dialog (posé par inviteAgencyAccount) doit rester à jour en direct
   // pendant que le dialog reste ouvert, pas figé sur l'état au moment du
   // clic "Modifier".
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
-  const [search, setSearch] = useState("")
-  const [serviceFilter, setServiceFilter] = useState<ServiceType | null>(null)
-  const { isSuperAdmin, isAgence, isAgent, geranceId: ownGeranceId } = useAccountRole()
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState("");
+  const [serviceFilter, setServiceFilter] = useState<ServiceType | null>(null);
+  const {
+    isSuperAdmin,
+    isAgence,
+    isAgent,
+    geranceId: ownGeranceId,
+  } = useAccountRole();
 
   useEffect(() => {
-    setLoading(true)
+    setLoading(true);
     return subscribeToGerances(
       (data) => {
-        setAllGerances(data)
-        setLoading(false)
+        setAllGerances(data);
+        setLoading(false);
       },
       (error) => {
-        toast.error("Impossible de charger les agences : " + error.message)
-        setLoading(false)
-      }
-    )
-  }, [])
+        toast.error("Impossible de charger les agences : " + error.message);
+        setLoading(false);
+      },
+    );
+  }, []);
 
   // Une agence/agent ne doit voir/gérer que SA PROPRE fiche, jamais
   // l'annuaire complet (coordonnées et agents des autres agences, y compris
@@ -129,24 +143,32 @@ export default function AgencesPage() {
   // résidence par conception, cf. recherche par email côté app), c'est ici
   // une restriction volontaire côté BO.
   const gerances = useMemo(() => {
-    if (isSuperAdmin) return allGerances
-    if (isAgence || isAgent) return allGerances.filter((g) => g.id === ownGeranceId)
-    return []
-  }, [allGerances, isSuperAdmin, isAgence, isAgent, ownGeranceId])
+    if (isSuperAdmin) return allGerances;
+    if (isAgence || isAgent)
+      return allGerances.filter((g) => g.id === ownGeranceId);
+    return [];
+  }, [allGerances, isSuperAdmin, isAgence, isAgent, ownGeranceId]);
 
-  const editingGerance = useMemo(() => gerances.find((g) => g.id === editingId) ?? null, [gerances, editingId])
+  const editingGerance = useMemo(
+    () => gerances.find((g) => g.id === editingId) ?? null,
+    [gerances, editingId],
+  );
 
   const filteredGerances = useMemo(
     () =>
       gerances.filter((gerance) => {
-        if (serviceFilter && !gerance.services[serviceFilter]) return false
-        return matchesSearch(gerance, search)
+        if (serviceFilter && !gerance.services[serviceFilter]) return false;
+        return matchesSearch(gerance, search);
       }),
-    [gerances, search, serviceFilter]
-  )
+    [gerances, search, serviceFilter],
+  );
 
-  const totalSyndics = gerances.filter((gerance) => gerance.services.serviceSyndic).length
-  const totalAgencies = gerances.filter((gerance) => gerance.services.geranceLocative).length
+  const totalSyndics = gerances.filter(
+    (gerance) => gerance.services.serviceSyndic,
+  ).length;
+  const totalAgencies = gerances.filter(
+    (gerance) => gerance.services.geranceLocative,
+  ).length;
 
   // Une Agence/un Agent n'a ni vue agrégée (KPI sur TOUTES les agences n'a
   // pas de sens pour un compte scopé à la sienne) ni répertoire à parcourir
@@ -154,16 +176,22 @@ export default function AgencesPage() {
   // pages détail du BO (ResidenceDetailPage, SinistreDetailPage...) plutôt
   // que la liste/table pensée pour Superadmin. Agence peut la modifier
   // (matrice de droits BO), Agent est en lecture seule.
-  const isOwnAgencyView = isAgence || isAgent
-  const ownGerance = isOwnAgencyView ? (gerances[0] ?? null) : null
+  const isOwnAgencyView = isAgence || isAgent;
+  const ownGerance = isOwnAgencyView ? (gerances[0] ?? null) : null;
 
   return (
     <div className="flex flex-col gap-6">
       {isOwnAgencyView ? (
-        <OwnAgencyPage gerance={ownGerance} loading={loading} canEdit={isAgence} />
+        <OwnAgencyPage
+          gerance={ownGerance}
+          loading={loading}
+          canEdit={isAgence}
+        />
       ) : (
         <>
-          <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Agences</h1>
+          <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
+            Agences
+          </h1>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <FilterKpiCard
@@ -180,7 +208,11 @@ export default function AgencesPage() {
               icon={Landmark}
               colorClass="bg-sky-100 text-sky-600"
               active={serviceFilter === "serviceSyndic"}
-              onClick={() => setServiceFilter((prev) => (prev === "serviceSyndic" ? null : "serviceSyndic"))}
+              onClick={() =>
+                setServiceFilter((prev) =>
+                  prev === "serviceSyndic" ? null : "serviceSyndic",
+                )
+              }
             />
             <FilterKpiCard
               label="Total des agences"
@@ -188,13 +220,19 @@ export default function AgencesPage() {
               icon={Home}
               colorClass="bg-emerald-100 text-emerald-600"
               active={serviceFilter === "geranceLocative"}
-              onClick={() => setServiceFilter((prev) => (prev === "geranceLocative" ? null : "geranceLocative"))}
+              onClick={() =>
+                setServiceFilter((prev) =>
+                  prev === "geranceLocative" ? null : "geranceLocative",
+                )
+              }
             />
           </div>
 
           <div className="flex flex-col gap-1">
             <h2 className="text-lg">Répertoire des agences</h2>
-            <p className="text-sm text-muted-foreground">Rechercher, filtrer et gérer toutes les agences.</p>
+            <p className="text-sm text-muted-foreground">
+              Rechercher, filtrer et gérer toutes les agences.
+            </p>
           </div>
 
           <Card>
@@ -209,7 +247,10 @@ export default function AgencesPage() {
                 />
               </div>
               {isSuperAdmin && (
-                <Button className={`ml-auto ${PRIMARY_CTA_CLASS}`} onClick={() => setCreating(true)}>
+                <Button
+                  className={`ml-auto ${PRIMARY_CTA_CLASS}`}
+                  onClick={() => setCreating(true)}
+                >
                   <Plus />
                   Ajouter une agence
                 </Button>
@@ -232,10 +273,12 @@ export default function AgencesPage() {
                 </TableHeader>
                 <TableBody className="bg-white">
                   {filteredGerances.map((gerance) => {
-                    const activeServices = serviceTypes.filter((type) => gerance.services[type])
+                    const activeServices = serviceTypes.filter(
+                      (type) => gerance.services[type],
+                    );
                     const primaryContact = activeServices
                       .map((type) => gerance.services[type]?.mail)
-                      .find((mail) => mail)
+                      .find((mail) => mail);
                     return (
                       <TableRow key={gerance.id}>
                         <TableCell className="font-medium">
@@ -262,17 +305,24 @@ export default function AgencesPage() {
                         </TableCell>
                         <TableCell>{primaryContact || "—"}</TableCell>
                         <TableCell className="text-right">
-                          <Button variant="outline" size="sm" onClick={() => setEditingId(gerance.id)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditingId(gerance.id)}
+                          >
                             <Pencil />
                             Modifier
                           </Button>
                         </TableCell>
                       </TableRow>
-                    )
+                    );
                   })}
                   {!loading && filteredGerances.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                      <TableCell
+                        colSpan={6}
+                        className="py-8 text-center text-muted-foreground"
+                      >
                         {gerances.length === 0
                           ? "Aucune agence pour l'instant."
                           : "Aucun résultat pour cette recherche."}
@@ -289,9 +339,9 @@ export default function AgencesPage() {
             onOpenChange={setCreating}
             title="Ajouter une agence"
             onSubmit={async (input) => {
-              await createGerance(input)
-              toast.success("Agence créée")
-              setCreating(false)
+              await createGerance(input);
+              toast.success("Agence créée");
+              setCreating(false);
             }}
           />
         </>
@@ -307,14 +357,14 @@ export default function AgencesPage() {
         initial={editingGerance ? geranceToInput(editingGerance) : undefined}
         gerance={editingGerance}
         onSubmit={async (input) => {
-          if (!editingGerance) return
-          await updateGerance(editingGerance.id, input)
-          toast.success("Agence mise à jour")
-          setEditingId(null)
+          if (!editingGerance) return;
+          await updateGerance(editingGerance.id, input);
+          toast.success("Agence mise à jour");
+          setEditingId(null);
         }}
       />
     </div>
-  )
+  );
 }
 
 // Résumé licences visible par le Superadmin dans la modale d'édition -
@@ -325,18 +375,25 @@ export default function AgencesPage() {
 // (_deduped_seat_uids, functions_python/main.py) : un même uid peut figurer
 // dans les deux tableaux de service, compté une seule fois.
 function BillingSummary({ gerance }: { gerance: Gerance }) {
-  const [billing, setBilling] = useState<GeranceBilling>({ status: "none", seatCount: 0, currentPeriodEnd: null })
+  const [billing, setBilling] = useState<GeranceBilling>({
+    status: "none",
+    seatCount: 0,
+    currentPeriodEnd: null,
+  });
 
   useEffect(() => {
-    return subscribeToGeranceBilling(gerance.id, setBilling, () => {})
-  }, [gerance.id])
+    return subscribeToGeranceBilling(gerance.id, setBilling, () => {});
+  }, [gerance.id]);
 
   const assignedCount = useMemo(
     () =>
-      new Set([...(gerance.serviceSyndicAgentUids ?? []), ...(gerance.geranceLocativeAgentUids ?? [])]).size,
-    [gerance]
-  )
-  const available = billing.seatCount - assignedCount
+      new Set([
+        ...(gerance.serviceSyndicAgentUids ?? []),
+        ...(gerance.geranceLocativeAgentUids ?? []),
+      ]).size,
+    [gerance],
+  );
+  const available = billing.seatCount - assignedCount;
 
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-[oklch(97%_0.006_155)] p-[14px_18px] text-[12.5px]">
@@ -348,23 +405,34 @@ function BillingSummary({ gerance }: { gerance: Gerance }) {
         {billingStatusLabels[billing.status]}
       </Badge>
       {billing.status === "none" ? (
-        <span className="text-muted-foreground">Aucune licence achetée pour l'instant</span>
+        <span className="text-muted-foreground">
+          Aucune licence achetée pour l'instant
+        </span>
       ) : (
         <>
           <div aria-hidden className="h-4 w-px bg-[oklch(88%_0.01_150)]" />
           <span className="font-semibold text-muted-foreground">
-            Licences achetées <strong className="font-bold text-foreground">{billing.seatCount}</strong>
+            Licences achetées{" "}
+            <strong className="font-bold text-foreground">
+              {billing.seatCount}
+            </strong>
           </span>
           <span className="font-semibold text-muted-foreground">
-            Attribuées <strong className="font-bold text-foreground">{assignedCount}</strong>
+            Attribuées{" "}
+            <strong className="font-bold text-foreground">
+              {assignedCount}
+            </strong>
           </span>
           <span className="font-semibold text-muted-foreground">
-            Disponibles <strong className="font-bold text-foreground">{Math.max(available, 0)}</strong>
+            Disponibles{" "}
+            <strong className="font-bold text-foreground">
+              {Math.max(available, 0)}
+            </strong>
           </span>
         </>
       )}
     </div>
-  )
+  );
 }
 
 function GeranceFormDialog({
@@ -375,96 +443,107 @@ function GeranceFormDialog({
   gerance,
   onSubmit,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  title: string
-  initial?: GeranceInput
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  initial?: GeranceInput;
   // Objet Gerance PERSISTÉ (distinct de `initial`, la copie de travail
   // éditable) - fourni uniquement en édition, jamais en création (une
   // agence pas encore enregistrée n'a pas d'id à invitier dessus). Passé
   // jusqu'à ServiceSection pour le statut "compte actif" par agent.
-  gerance?: Gerance | null
-  onSubmit: (input: GeranceInput) => Promise<void>
+  gerance?: Gerance | null;
+  onSubmit: (input: GeranceInput) => Promise<void>;
 }) {
-  const [name, setName] = useState(initial?.name ?? "")
-  const [street, setStreet] = useState(initial?.address.street ?? emptyAddress.street)
-  const [zipCode, setZipCode] = useState(initial?.address.zipCode ?? emptyAddress.zipCode)
-  const [city, setCity] = useState(initial?.address.city ?? emptyAddress.city)
-  const [siret, setSiret] = useState(initial?.siret ?? "")
-  const [responsableLegal, setResponsableLegal] = useState(initial?.responsableLegal ?? "")
-  const [services, setServices] = useState<Partial<Record<ServiceType, AgencyDept>>>(
-    initial?.services ?? {}
-  )
-  const [submitting, setSubmitting] = useState(false)
+  const [name, setName] = useState(initial?.name ?? "");
+  const [street, setStreet] = useState(
+    initial?.address.street ?? emptyAddress.street,
+  );
+  const [zipCode, setZipCode] = useState(
+    initial?.address.zipCode ?? emptyAddress.zipCode,
+  );
+  const [city, setCity] = useState(initial?.address.city ?? emptyAddress.city);
+  const [siret, setSiret] = useState(initial?.siret ?? "");
+  const [responsableLegal, setResponsableLegal] = useState(
+    initial?.responsableLegal ?? "",
+  );
+  const [services, setServices] = useState<
+    Partial<Record<ServiceType, AgencyDept>>
+  >(initial?.services ?? {});
+  const [submitting, setSubmitting] = useState(false);
 
   // Recherche recherche-entreprises.api.gouv.fr (cf. companySearch.ts) - même
   // usage que ProfilePage (agence éditant sa propre fiche), mais ici pas de
   // gerance.id à l'écriture directe : une agence pas encore créée n'a pas de
   // document Firestore à mettre à jour, donc un résultat choisi ne fait que
   // préremplir les champs ci-dessous, revus/corrigibles avant "Enregistrer".
-  const [companyQuery, setCompanyQuery] = useState("")
-  const [companyResults, setCompanyResults] = useState<CompanySearchResult[]>([])
-  const [searching, setSearching] = useState(false)
+  const [companyQuery, setCompanyQuery] = useState("");
+  const [companyResults, setCompanyResults] = useState<CompanySearchResult[]>(
+    [],
+  );
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setName(initial?.name ?? "")
-      setStreet(initial?.address.street ?? emptyAddress.street)
-      setZipCode(initial?.address.zipCode ?? emptyAddress.zipCode)
-      setCity(initial?.address.city ?? emptyAddress.city)
-      setSiret(initial?.siret ?? "")
-      setResponsableLegal(initial?.responsableLegal ?? "")
-      setServices(initial?.services ?? {})
-      setCompanyQuery("")
-      setCompanyResults([])
+      setName(initial?.name ?? "");
+      setStreet(initial?.address.street ?? emptyAddress.street);
+      setZipCode(initial?.address.zipCode ?? emptyAddress.zipCode);
+      setCity(initial?.address.city ?? emptyAddress.city);
+      setSiret(initial?.siret ?? "");
+      setResponsableLegal(initial?.responsableLegal ?? "");
+      setServices(initial?.services ?? {});
+      setCompanyQuery("");
+      setCompanyResults([]);
     }
-  }, [open, initial])
+  }, [open, initial]);
 
   async function handleSearchCompany() {
-    if (!companyQuery.trim()) return
-    setSearching(true)
+    if (!companyQuery.trim()) return;
+    setSearching(true);
     try {
-      const results = await searchCompanies(companyQuery)
-      setCompanyResults(results)
-      if (results.length === 0) toast.error("Aucun résultat pour cette recherche")
+      const results = await searchCompanies(companyQuery);
+      setCompanyResults(results);
+      if (results.length === 0)
+        toast.error("Aucun résultat pour cette recherche");
     } catch (err) {
-      toast.error("Recherche impossible : " + (err as Error).message)
+      toast.error("Recherche impossible : " + (err as Error).message);
     } finally {
-      setSearching(false)
+      setSearching(false);
     }
   }
 
   function handleApplyCompanyResult(result: CompanySearchResult) {
-    setName(result.name)
-    setStreet(result.address.street)
-    setZipCode(result.address.zipCode)
-    setCity(result.address.city)
-    setResponsableLegal(result.responsableLegal)
-    setSiret(result.siret)
-    setCompanyResults([])
-    setCompanyQuery("")
-    toast.success("Informations reprises depuis la recherche - vérifiez avant d'enregistrer")
+    setName(result.name);
+    setStreet(result.address.street);
+    setZipCode(result.address.zipCode);
+    setCity(result.address.city);
+    setResponsableLegal(result.responsableLegal);
+    setSiret(result.siret);
+    setCompanyResults([]);
+    setCompanyQuery("");
+    toast.success(
+      "Informations reprises depuis la recherche - vérifiez avant d'enregistrer",
+    );
   }
 
   function toggleService(type: ServiceType, enabled: boolean) {
     setServices((prev) => {
-      const next = { ...prev }
+      const next = { ...prev };
       if (enabled) {
-        next[type] = next[type] ?? { ...emptyAgencyDept }
+        next[type] = next[type] ?? { ...emptyAgencyDept };
       } else {
-        delete next[type]
+        delete next[type];
       }
-      return next
-    })
+      return next;
+    });
   }
 
   function updateDept(type: ServiceType, dept: AgencyDept) {
-    setServices((prev) => ({ ...prev, [type]: dept }))
+    setServices((prev) => ({ ...prev, [type]: dept }));
   }
 
   async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    setSubmitting(true)
+    event.preventDefault();
+    setSubmitting(true);
     try {
       await onSubmit({
         name,
@@ -472,20 +551,25 @@ function GeranceFormDialog({
         services,
         siret,
         responsableLegal,
-      })
+      });
     } catch (err) {
-      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+      toast.error("Échec de l'enregistrement : " + (err as Error).message);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
-        <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
+        <form
+          onSubmit={handleSubmit}
+          className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4"
+        >
           <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
-            <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Agence</span>
+            <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">
+              Agence
+            </span>
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
 
@@ -495,7 +579,9 @@ function GeranceFormDialog({
             <div className="flex flex-col gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-[oklch(78%_0.07_155)] bg-[oklch(98%_0.008_155)] p-[18px_20px]">
               <Label htmlFor="ger-company-search" className="font-bold">
                 Rechercher l'entreprise{" "}
-                <span className="font-medium text-muted-foreground">(SIREN, SIRET ou nom)</span>
+                <span className="font-medium text-muted-foreground">
+                  (SIREN, SIRET ou nom)
+                </span>
               </Label>
               <div className="flex flex-wrap gap-2.5">
                 <Input
@@ -504,7 +590,10 @@ function GeranceFormDialog({
                   className="max-w-xs"
                   value={companyQuery}
                   onChange={(e) => setCompanyQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSearchCompany())}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" &&
+                    (e.preventDefault(), handleSearchCompany())
+                  }
                 />
                 <Button
                   type="button"
@@ -528,13 +617,24 @@ function GeranceFormDialog({
                         <span className="font-medium">{result.name}</span>
                         <span className="text-muted-foreground">
                           {" — "}
-                          {[result.address.street, [result.address.zipCode, result.address.city].join(" ")]
+                          {[
+                            result.address.street,
+                            [result.address.zipCode, result.address.city].join(
+                              " ",
+                            ),
+                          ]
                             .filter(Boolean)
                             .join(" — ") || "—"}
-                          {result.responsableLegal ? ` · ${result.responsableLegal}` : ""}
+                          {result.responsableLegal
+                            ? ` · ${result.responsableLegal}`
+                            : ""}
                         </span>
                       </div>
-                      <Button type="button" size="sm" onClick={() => handleApplyCompanyResult(result)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleApplyCompanyResult(result)}
+                      >
                         Utiliser ces informations
                       </Button>
                     </div>
@@ -542,14 +642,20 @@ function GeranceFormDialog({
                 </div>
               )}
               <p className="m-0 text-xs leading-relaxed text-[oklch(48%_0.06_155)]">
-                Préremplit le nom, l'adresse, le SIRET et le responsable légal ci-dessous - à vérifier avant
-                d'enregistrer, ou à saisir/corriger manuellement sans passer par la recherche.
+                Préremplit le nom, l'adresse, le SIRET et le responsable légal
+                ci-dessous - à vérifier avant d'enregistrer, ou à
+                saisir/corriger manuellement sans passer par la recherche.
               </p>
             </div>
 
             <div className="mt-[20px] flex flex-col gap-1.5">
               <Label htmlFor="ger-name">Nom de l'agence</Label>
-              <Input id="ger-name" required value={name} onChange={(e) => setName(e.target.value)} />
+              <Input
+                id="ger-name"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ger-street">Adresse</Label>
@@ -559,9 +665,9 @@ function GeranceFormDialog({
                 value={street}
                 onChange={setStreet}
                 onSelect={(a) => {
-                  setStreet(a.street)
-                  setZipCode(a.zipCode)
-                  setCity(a.city)
+                  setStreet(a.street);
+                  setZipCode(a.zipCode);
+                  setCity(a.city);
                 }}
               />
             </div>
@@ -578,7 +684,12 @@ function GeranceFormDialog({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ger-city">Ville</Label>
-                <Input id="ger-city" required value={city} onChange={(e) => setCity(e.target.value)} />
+                <Input
+                  id="ger-city"
+                  required
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                />
               </div>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -616,10 +727,18 @@ function GeranceFormDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Annuler
             </Button>
-            <Button type="submit" disabled={submitting} className={PRIMARY_CTA_CLASS}>
+            <Button
+              type="submit"
+              disabled={submitting}
+              className={PRIMARY_CTA_CLASS}
+            >
               <Save />
               Enregistrer
             </Button>
@@ -627,7 +746,7 @@ function GeranceFormDialog({
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
 
 function ServiceSection({
@@ -637,26 +756,28 @@ function ServiceSection({
   onToggle,
   onChange,
 }: {
-  type: ServiceType
-  dept?: AgencyDept
-  gerance?: Gerance | null
-  onToggle: (enabled: boolean) => void
-  onChange: (dept: AgencyDept) => void
+  type: ServiceType;
+  dept?: AgencyDept;
+  gerance?: Gerance | null;
+  onToggle: (enabled: boolean) => void;
+  onChange: (dept: AgencyDept) => void;
 }) {
-  const enabled = dept !== undefined
+  const enabled = dept !== undefined;
 
   // Désactiver tout un service alors qu'il reste des comptes actifs dessus
   // (compte générique ou agents nommés, tous deux dans ce même tableau
   // désormais) le couperait sans passer par revoke_agency_account -
   // il faut d'abord tous les révoquer.
-  const uidField = AGENT_UID_FIELD[type]
-  const deptHasActiveAccount = (gerance?.[uidField]?.length ?? 0) > 0
+  const uidField = AGENT_UID_FIELD[type];
+  const deptHasActiveAccount = (gerance?.[uidField]?.length ?? 0) > 0;
   // Adresse verrouillée uniquement tant qu'un compte ACTIF y est rattaché
   // (identifiant de la licence). Compte révoqué ou jamais invité : elle peut
   // être remplacée (ex. compte de test -> vraie adresse de l'agence).
-  const persistedDept = gerance?.services[type]
+  const persistedDept = gerance?.services[type];
   const mailLocked =
-    !!persistedDept?.mail && !!persistedDept.uid && !!gerance?.[uidField]?.includes(persistedDept.uid)
+    !!persistedDept?.mail &&
+    !!persistedDept.uid &&
+    !!gerance?.[uidField]?.includes(persistedDept.uid);
 
   return (
     <div className="rounded-[18px] border border-[oklch(93%_0.005_100)] p-[18px_20px]">
@@ -688,20 +809,24 @@ function ServiceSection({
                 type="email"
                 value={dept.mail}
                 disabled={mailLocked}
-                title={mailLocked ? "Rattaché à un compte actif : révoquer l'accès pour changer d'adresse" : undefined}
+                title={
+                  mailLocked
+                    ? "Rattaché à un compte actif : révoquer l'accès pour changer d'adresse"
+                    : undefined
+                }
                 // Nouvelle adresse = plus le même compte : l'uid de l'ancien
                 // (révoqué) est détaché, sanitizeServices ne le réécrit pas à
                 // l'enregistrement - "Inviter" s'affiche alors pour la
                 // nouvelle adresse. Revenir à l'adresse enregistrée restaure
                 // son uid.
                 onChange={(e) => {
-                  const mail = e.target.value
-                  const { uid: _uid, ...rest } = dept
+                  const mail = e.target.value;
+                  const { uid: _uid, ...rest } = dept;
                   onChange(
                     mail === persistedDept?.mail && persistedDept?.uid
                       ? { ...rest, mail, uid: persistedDept.uid }
-                      : { ...rest, mail }
-                  )
+                      : { ...rest, mail },
+                  );
                 }}
               />
             </div>
@@ -718,16 +843,18 @@ function ServiceSection({
           {/* Cas "adresse globale par service" (pas d'agent nommé) : le
               compte se rattache directement à cette adresse générique,
               même mécanique que pour un agent précis ci-dessous. */}
-          {gerance && dept.mail && gerance.services[type]?.mail === dept.mail && (
-            <AccountControl
-              gerance={gerance}
-              serviceType={type}
-              mail={dept.mail}
-              role="agence"
-              persistedUid={gerance.services[type]?.uid}
-              onLinkUid={(uid) => setDeptAccountUid(gerance, type, uid)}
-            />
-          )}
+          {gerance &&
+            dept.mail &&
+            gerance.services[type]?.mail === dept.mail && (
+              <AccountControl
+                gerance={gerance}
+                serviceType={type}
+                mail={dept.mail}
+                role="agence"
+                persistedUid={gerance.services[type]?.uid}
+                onLinkUid={(uid) => setDeptAccountUid(gerance, type, uid)}
+              />
+            )}
 
           {gerance ? (
             <NamedAgentsManager gerance={gerance} type={type} />
@@ -739,7 +866,7 @@ function ServiceSection({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // Statut/actions du compte BO lié à CETTE adresse mail (une adresse mail =
@@ -758,32 +885,33 @@ function AccountControl({
   persistedUid,
   onLinkUid,
 }: {
-  gerance: Gerance
-  serviceType: ServiceType
-  mail: string
+  gerance: Gerance;
+  serviceType: ServiceType;
+  mail: string;
   // Déterminé par l'appelant selon le contexte (adresse générique du
   // service = "agence", agent nommé listé dessous = "agent") - jamais un
   // choix libre : à cette étape précise, le rôle est déjà connu.
-  role: AgencyAccountRole
-  persistedUid?: string
-  onLinkUid: (uid: string) => Promise<void>
+  role: AgencyAccountRole;
+  persistedUid?: string;
+  onLinkUid: (uid: string) => Promise<void>;
 }) {
-  const { isSuperAdmin } = useIsSuperAdmin()
+  const { isSuperAdmin } = useIsSuperAdmin();
   // Une Agence gère ses propres agents (inviter/révoquer) sans passer par un
   // superAdmin - Agent reste en lecture seule sur cette action (cf. matrice
   // de droits). Portée déjà garantie côté client : `gerances` (AgencesPage)
   // ne contient QUE la gérance de l'agence connectée, donc ce composant ne
   // peut jamais monter sur la fiche d'une autre agence. Côté serveur,
   // _require_superadmin_or_own_agence revérifie la même appartenance.
-  const { isAgence } = useAccountRole()
-  const { user } = useAuth()
-  const [submitting, setSubmitting] = useState(false)
+  const { isAgence } = useAccountRole();
+  const { user } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
 
-  if (!isSuperAdmin && !isAgence) return null
+  if (!isSuperAdmin && !isAgence) return null;
 
-  const uidField = AGENT_UID_FIELD[serviceType]
-  const isActive = !!persistedUid && !!gerance[uidField]?.includes(persistedUid)
-  const isRevoked = !!persistedUid && !isActive
+  const uidField = AGENT_UID_FIELD[serviceType];
+  const isActive =
+    !!persistedUid && !!gerance[uidField]?.includes(persistedUid);
+  const isRevoked = !!persistedUid && !isActive;
   // Une Agence gérant sa propre fiche peut tomber sur SON PROPRE compte
   // (adresse générique du service, ou elle-même listée comme agent) - se
   // révoquer soi-même couperait immédiatement l'accès en cours d'usage,
@@ -791,73 +919,104 @@ function AccountControl({
   // pour redemander l'accès à un superAdmin). Bouton masqué dans ce cas
   // précis, pas juste désactivé côté serveur : un superAdmin, lui, n'est
   // jamais concerné (il ne peut pas être le compte agence/agent affiché ici).
-  const isSelf = !!persistedUid && persistedUid === user?.uid
+  const isSelf = !!persistedUid && persistedUid === user?.uid;
 
   async function handleInvite() {
-    setSubmitting(true)
+    setSubmitting(true);
     try {
-      const result = await inviteAgencyAccount(gerance.id, serviceType, mail, role)
+      const result = await inviteAgencyAccount(
+        gerance.id,
+        serviceType,
+        mail,
+        role,
+      );
       if (result.pending) {
         // Rien à lier : aucun compte n'a été créé (pas d'abonnement actif),
         // seul un email commercial est parti - lier un uid inexistant
         // afficherait à tort "Compte actif" avant tout paiement.
-        toast.success(`Email envoyé à ${mail} — l'accès sera activé après paiement des licences`)
+        toast.success(
+          `Email envoyé à ${mail} — l'accès sera activé après paiement des licences`,
+        );
       } else {
-        await onLinkUid(result.uid)
-        toast.success(`Invitation envoyée à ${mail}`)
+        await onLinkUid(result.uid);
+        toast.success(`Invitation envoyée à ${mail}`);
       }
     } catch (err) {
-      toast.error("Échec de l'invitation : " + (err as Error).message)
+      toast.error("Échec de l'invitation : " + (err as Error).message);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   async function handleRevoke() {
-    if (!persistedUid) return
-    if (!confirm(REVOKE_CONFIRM_MESSAGE)) return
-    setSubmitting(true)
+    if (!persistedUid) return;
+    if (!confirm(REVOKE_CONFIRM_MESSAGE)) return;
+    setSubmitting(true);
     try {
-      toast.success(revokeSuccessMessage(await revokeAgencyAccount(gerance.id, serviceType, persistedUid)))
+      toast.success(
+        revokeSuccessMessage(
+          await revokeAgencyAccount(gerance.id, serviceType, persistedUid),
+        ),
+      );
     } catch (err) {
-      toast.error("Échec de la révocation : " + (err as Error).message)
+      toast.error("Échec de la révocation : " + (err as Error).message);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   if (isActive) {
     return (
       <div className="flex items-center gap-2 px-1">
-        <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-800">
+        <Badge
+          variant="outline"
+          className="border-transparent bg-emerald-100 text-emerald-800"
+        >
           <Check />
           Compte actif
         </Badge>
         {isSelf ? (
-          <span className="text-xs text-muted-foreground">C'est votre compte</span>
+          <span className="text-xs text-muted-foreground">
+            C'est votre compte
+          </span>
         ) : (
-          <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={handleRevoke}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={submitting}
+            onClick={handleRevoke}
+          >
             <ShieldOff />
             Révoquer l'accès
           </Button>
         )}
       </div>
-    )
+    );
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2 px-1">
       {isRevoked && (
-        <Badge variant="outline" className="border-transparent bg-red-100 text-red-800">
+        <Badge
+          variant="outline"
+          className="border-transparent bg-red-100 text-red-800"
+        >
           Accès révoqué
         </Badge>
       )}
-      <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={handleInvite}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={submitting}
+        onClick={handleInvite}
+      >
         <Mail />
         {isRevoked ? "Réinviter" : "Inviter"}
       </Button>
     </div>
-  )
+  );
 }
 
 // Liste des agents nommés d'un service - un agent n'existe QUE via
@@ -867,68 +1026,93 @@ function AccountControl({
 // même mécanique, seul le contexte d'appel diffère. Éditable par
 // superAdmin/agence, en lecture seule pour agent (même garde que
 // AccountControl).
-function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: ServiceType }) {
-  const { isSuperAdmin } = useIsSuperAdmin()
-  const { isAgence } = useAccountRole()
-  const { user } = useAuth()
-  const canEdit = isSuperAdmin || isAgence
+function NamedAgentsManager({
+  gerance,
+  type,
+}: {
+  gerance: Gerance;
+  type: ServiceType;
+}) {
+  const { isSuperAdmin } = useIsSuperAdmin();
+  const { isAgence } = useAccountRole();
+  const { user } = useAuth();
+  const canEdit = isSuperAdmin || isAgence;
 
-  const deptUid = gerance.services[type]?.uid
+  const deptUid = gerance.services[type]?.uid;
   const agentUids = useMemo(
-    () => (gerance[AGENT_UID_FIELD[type]] ?? []).filter((uid) => uid !== deptUid),
-    [gerance, type, deptUid]
-  )
-  const [profiles, setProfiles] = useState<KonodalUser[]>([])
-  const [loadingProfiles, setLoadingProfiles] = useState(false)
-  const [newAgentEmail, setNewAgentEmail] = useState("")
-  const [inviting, setInviting] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
+    () =>
+      (gerance[AGENT_UID_FIELD[type]] ?? []).filter((uid) => uid !== deptUid),
+    [gerance, type, deptUid],
+  );
+  const [profiles, setProfiles] = useState<KonodalUser[]>([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [newAgentEmail, setNewAgentEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (agentUids.length === 0) {
-      setProfiles([])
-      return
+      setProfiles([]);
+      return;
     }
-    let cancelled = false
-    setLoadingProfiles(true)
+    let cancelled = false;
+    setLoadingProfiles(true);
     resolveUsersByUids(agentUids)
       .then((users) => {
-        if (!cancelled) setProfiles(users)
+        if (!cancelled) setProfiles(users);
       })
       .finally(() => {
-        if (!cancelled) setLoadingProfiles(false)
-      })
+        if (!cancelled) setLoadingProfiles(false);
+      });
     return () => {
-      cancelled = true
-    }
-  }, [agentUids])
+      cancelled = true;
+    };
+  }, [agentUids]);
 
   async function handleInvite() {
-    const email = newAgentEmail.trim()
-    if (!email) return
-    setInviting(true)
+    const email = newAgentEmail.trim();
+    if (!email) return;
+    setInviting(true);
     try {
-      const result = await inviteAgencyAccount(gerance.id, type, email, "agent")
-      setNewAgentEmail("")
-      setConfirmOpen(false)
+      const result = await inviteAgencyAccount(
+        gerance.id,
+        type,
+        email,
+        "agent",
+      );
+      setNewAgentEmail("");
+      setConfirmOpen(false);
       toast.success(
         result.pending
           ? `Email envoyé à ${email} — l'accès sera activé après paiement des licences`
-          : `Invitation envoyée à ${email}`
-      )
+          : `Invitation envoyée à ${email}`,
+      );
     } catch (err) {
-      toast.error("Échec de l'invitation : " + (err as Error).message)
+      toast.error("Échec de l'invitation : " + (err as Error).message);
     } finally {
-      setInviting(false)
+      setInviting(false);
     }
   }
 
+  // Agents comptés comme sièges mais sans fiche utilisateur (compte supprimé
+  // hors révocation : console Firebase, script...) : invisibles sinon, donc
+  // impossibles à révoquer alors qu'ils restent facturés.
+  const orphanUids = useMemo(
+    () =>
+      loadingProfiles
+        ? []
+        : agentUids.filter((uid) => !profiles.some((p) => p.uid === uid)),
+    [agentUids, profiles, loadingProfiles],
+  );
+
   async function handleRevoke(uid: string) {
-    if (!confirm(REVOKE_CONFIRM_MESSAGE)) return
+    if (!confirm(REVOKE_CONFIRM_MESSAGE)) return;
     try {
-      toast.success(revokeSuccessMessage(await revokeAgencyAccount(gerance.id, type, uid)))
+      toast.success(
+        revokeSuccessMessage(await revokeAgencyAccount(gerance.id, type, uid)),
+      );
     } catch (err) {
-      toast.error("Échec de la révocation : " + (err as Error).message)
+      toast.error("Échec de la révocation : " + (err as Error).message);
     }
   }
 
@@ -939,39 +1123,73 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
         <p className="rounded-xl bg-[oklch(97%_0.005_100)] p-3 text-[12.5px] font-semibold text-muted-foreground">
           Chargement…
         </p>
-      ) : profiles.length === 0 ? (
+      ) : profiles.length === 0 && orphanUids.length === 0 ? (
         <p className="rounded-xl bg-[oklch(97%_0.005_100)] p-3 text-[12.5px] font-semibold text-muted-foreground">
           Aucun agent pour ce service.
         </p>
       ) : (
-        profiles.map((profile) => {
-          const isSelf = profile.uid === user?.uid
-          return (
+        <>
+          {orphanUids.map((uid) => (
             <div
-              key={profile.uid}
+              key={uid}
               className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 p-2.5"
             >
               <div className="text-sm">
-                <span className="font-medium">
-                  {`${profile.name} ${profile.surname}`.trim() || profile.email}
-                </span>
-                <span className="text-muted-foreground">
-                  {" — "}
-                  {[profile.email, profile.phone].filter(Boolean).join(" · ") || "—"}
-                </span>
+                <span className="font-medium">Compte supprimé</span>
+                <span className="text-muted-foreground">{` — siège toujours facturé (${uid.slice(0, 8)}…)`}</span>
               </div>
-              {canEdit &&
-                (isSelf ? (
-                  <span className="text-xs text-muted-foreground">C'est votre compte</span>
-                ) : (
-                  <Button type="button" variant="outline" size="sm" onClick={() => handleRevoke(profile.uid)}>
-                    <ShieldOff />
-                    Révoquer l'accès
-                  </Button>
-                ))}
+              {canEdit && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRevoke(uid)}
+                >
+                  <ShieldOff />
+                  Révoquer l'accès
+                </Button>
+              )}
             </div>
-          )
-        })
+          ))}
+          {profiles.map((profile) => {
+            const isSelf = profile.uid === user?.uid;
+            return (
+              <div
+                key={profile.uid}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 p-2.5"
+              >
+                <div className="text-sm">
+                  <span className="font-medium">
+                    {`${profile.name} ${profile.surname}`.trim() ||
+                      profile.email}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {" — "}
+                    {[profile.email, profile.phone]
+                      .filter(Boolean)
+                      .join(" · ") || "—"}
+                  </span>
+                </div>
+                {canEdit &&
+                  (isSelf ? (
+                    <span className="text-xs text-muted-foreground">
+                      C'est votre compte
+                    </span>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRevoke(profile.uid)}
+                    >
+                      <ShieldOff />
+                      Révoquer l'accès
+                    </Button>
+                  ))}
+              </div>
+            );
+          })}
+        </>
       )}
       {canEdit && (
         <div className="flex gap-2.5">
@@ -1003,15 +1221,25 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
             <DialogTitle>Confirmer l'invitation</DialogTitle>
           </DialogHeader>
           <DialogDescription>
-            Si <strong>{newAgentEmail.trim()}</strong> n'a pas déjà accès à konodal, cette
-            invitation ajoutera un nouveau siège facturé à votre abonnement, au prorata et dès
-            maintenant.
+            Si <strong>{newAgentEmail.trim()}</strong> n'a pas déjà accès à
+            konodal, cette invitation ajoutera un nouveau siège facturé à votre
+            abonnement, au prorata et dès maintenant.
           </DialogDescription>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)} disabled={inviting}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmOpen(false)}
+              disabled={inviting}
+            >
               Annuler
             </Button>
-            <Button type="button" onClick={handleInvite} disabled={inviting} className={PRIMARY_CTA_CLASS}>
+            <Button
+              type="button"
+              onClick={handleInvite}
+              disabled={inviting}
+              className={PRIMARY_CTA_CLASS}
+            >
               <Mail />
               Confirmer l'invitation
             </Button>
@@ -1019,7 +1247,7 @@ function NamedAgentsManager({ gerance, type }: { gerance: Gerance; type: Service
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }
 
 // Page détaillée de l'agence à laquelle un compte Agence/Agent est
@@ -1036,9 +1264,9 @@ function OwnAgencyPage({
   loading,
   canEdit,
 }: {
-  gerance: Gerance | null
-  loading: boolean
-  canEdit: boolean
+  gerance: Gerance | null;
+  loading: boolean;
+  canEdit: boolean;
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -1064,44 +1292,68 @@ function OwnAgencyPage({
           {serviceTypes
             .filter((type) => gerance.services[type])
             .map((type) => (
-              <AgencyServiceCard key={type} gerance={gerance} type={type} canEdit={canEdit} />
+              <AgencyServiceCard
+                key={type}
+                gerance={gerance}
+                type={type}
+                canEdit={canEdit}
+              />
             ))}
         </>
       )}
     </div>
-  )
+  );
 }
 
-function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boolean }) {
-  const [name, setName] = useState(gerance.name)
-  const [street, setStreet] = useState(gerance.address.street)
-  const [zipCode, setZipCode] = useState(gerance.address.zipCode)
-  const [city, setCity] = useState(gerance.address.city)
-  const [saving, setSaving] = useState(false)
+function AgencyInfoCard({
+  gerance,
+  canEdit,
+}: {
+  gerance: Gerance;
+  canEdit: boolean;
+}) {
+  const [name, setName] = useState(gerance.name);
+  const [street, setStreet] = useState(gerance.address.street);
+  const [zipCode, setZipCode] = useState(gerance.address.zipCode);
+  const [city, setCity] = useState(gerance.address.city);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setName(gerance.name)
-    setStreet(gerance.address.street)
-    setZipCode(gerance.address.zipCode)
-    setCity(gerance.address.city)
-  }, [gerance.id, gerance.name, gerance.address.street, gerance.address.zipCode, gerance.address.city])
+    setName(gerance.name);
+    setStreet(gerance.address.street);
+    setZipCode(gerance.address.zipCode);
+    setCity(gerance.address.city);
+  }, [
+    gerance.id,
+    gerance.name,
+    gerance.address.street,
+    gerance.address.zipCode,
+    gerance.address.city,
+  ]);
 
   async function handleSave() {
     if (name.trim().length > AGENCY_NAME_MAX_LENGTH) {
-      toast.error(`Le nom de l'agence ne peut pas dépasser ${AGENCY_NAME_MAX_LENGTH} caractères`)
-      return
+      toast.error(
+        `Le nom de l'agence ne peut pas dépasser ${AGENCY_NAME_MAX_LENGTH} caractères`,
+      );
+      return;
     }
-    setSaving(true)
+    setSaving(true);
     try {
       await Promise.all([
         updateGeranceName(gerance.id, name),
-        updateGeranceAddress(gerance.id, { ...emptyAddress, street, zipCode, city }),
-      ])
-      toast.success("Informations mises à jour")
+        updateGeranceAddress(gerance.id, {
+          ...emptyAddress,
+          street,
+          zipCode,
+          city,
+        }),
+      ]);
+      toast.success("Informations mises à jour");
     } catch (err) {
-      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+      toast.error("Échec de l'enregistrement : " + (err as Error).message);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
@@ -1136,9 +1388,9 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
                   value={street}
                   onChange={setStreet}
                   onSelect={(a) => {
-                    setStreet(a.street)
-                    setZipCode(a.zipCode)
-                    setCity(a.city)
+                    setStreet(a.street);
+                    setZipCode(a.zipCode);
+                    setCity(a.city);
                   }}
                 />
               </div>
@@ -1153,11 +1405,20 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="agency-city">Ville</Label>
-                <Input id="agency-city" value={city} onChange={(e) => setCity(e.target.value)} />
+                <Input
+                  id="agency-city"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                />
               </div>
             </div>
             <div className="flex justify-end">
-              <Button className={`w-fit ${PRIMARY_CTA_CLASS}`} size="sm" onClick={handleSave} disabled={saving || !name.trim()}>
+              <Button
+                className={`w-fit ${PRIMARY_CTA_CLASS}`}
+                size="sm"
+                onClick={handleSave}
+                disabled={saving || !name.trim()}
+              >
                 <Save />
                 Enregistrer
               </Button>
@@ -1171,13 +1432,15 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
             </div>
             <div>
               <span className="text-muted-foreground">Adresse : </span>
-              {[street, [zipCode, city].join(" ")].filter(Boolean).join(" — ") || "—"}
+              {[street, [zipCode, city].join(" ")]
+                .filter(Boolean)
+                .join(" — ") || "—"}
             </div>
           </div>
         )}
       </CardContent>
     </Card>
-  )
+  );
 }
 
 // Simple rappel de l'offre souscrite (statut + nombre de sièges actifs) -
@@ -1186,16 +1449,24 @@ function AgencyInfoCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boole
 // Page /facturation réservée à l'agence (jamais un Agent, cf. Sidebar.tsx) :
 // le bouton d'accès n'est donc affiché que pour canEdit=true, un Agent ne
 // voit que le statut/nombre de sièges en lecture seule sur cette card.
-function AgencyBillingCard({ gerance, canEdit }: { gerance: Gerance; canEdit: boolean }) {
-  const [billing, setBilling] = useState<GeranceBilling>({ status: "none", seatCount: 0, currentPeriodEnd: null })
+function AgencyBillingCard({
+  gerance,
+  canEdit,
+}: {
+  gerance: Gerance;
+  canEdit: boolean;
+}) {
+  const [billing, setBilling] = useState<GeranceBilling>({
+    status: "none",
+    seatCount: 0,
+    currentPeriodEnd: null,
+  });
 
   useEffect(() => {
-    return subscribeToGeranceBilling(
-      gerance.id,
-      setBilling,
-      (error) => toast.error("Impossible de charger l'abonnement : " + error.message)
-    )
-  }, [gerance.id])
+    return subscribeToGeranceBilling(gerance.id, setBilling, (error) =>
+      toast.error("Impossible de charger l'abonnement : " + error.message),
+    );
+  }, [gerance.id]);
 
   return (
     <Card>
@@ -1204,24 +1475,32 @@ function AgencyBillingCard({ gerance, canEdit }: { gerance: Gerance; canEdit: bo
       </CardHeader>
       <CardContent className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="outline" className={billingStatusBadgeClass[billing.status]}>
+          <Badge
+            variant="outline"
+            className={billingStatusBadgeClass[billing.status]}
+          >
             {billingStatusLabels[billing.status]}
           </Badge>
           {billing.status !== "none" && (
             <span className="text-sm text-muted-foreground">
-              {billing.seatCount} siège{billing.seatCount > 1 ? "s" : ""} actif{billing.seatCount > 1 ? "s" : ""}
+              {billing.seatCount} siège{billing.seatCount > 1 ? "s" : ""} actif
+              {billing.seatCount > 1 ? "s" : ""}
             </span>
           )}
         </div>
         {canEdit && (
-          <Button variant="outline" size="sm" render={<Link to="/facturation" />}>
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link to="/facturation" />}
+          >
             <CreditCard />
             Voir la facturation
           </Button>
         )}
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function AgencyServiceCard({
@@ -1229,20 +1508,20 @@ function AgencyServiceCard({
   type,
   canEdit,
 }: {
-  gerance: Gerance
-  type: ServiceType
-  canEdit: boolean
+  gerance: Gerance;
+  type: ServiceType;
+  canEdit: boolean;
 }) {
-  const dept = gerance.services[type]
-  const [phone, setPhone] = useState(dept?.phone ?? "")
-  const [savingContact, setSavingContact] = useState(false)
+  const dept = gerance.services[type];
+  const [phone, setPhone] = useState(dept?.phone ?? "");
+  const [savingContact, setSavingContact] = useState(false);
 
   useEffect(() => {
-    setPhone(dept?.phone ?? "")
-  }, [gerance.id, type, dept?.phone])
+    setPhone(dept?.phone ?? "");
+  }, [gerance.id, type, dept?.phone]);
 
-  if (!dept) return null
-  const currentDept = dept
+  if (!dept) return null;
+  const currentDept = dept;
 
   // Email du service jamais modifiable ici (contrairement au téléphone) :
   // c'est l'identifiant de la licence (une adresse mail = un compte
@@ -1250,14 +1529,17 @@ function AgencyServiceCard({
   // niserait l'email affiché du compte Firebase Auth réellement rattaché
   // (dept.uid), qui continuerait de pointer sur l'ancienne adresse.
   async function handleSaveContact() {
-    setSavingContact(true)
+    setSavingContact(true);
     try {
-      await updateGeranceDeptContact(gerance.id, type, { mail: currentDept.mail, phone })
-      toast.success("Service mis à jour")
+      await updateGeranceDeptContact(gerance.id, type, {
+        mail: currentDept.mail,
+        phone,
+      });
+      toast.success("Service mis à jour");
     } catch (err) {
-      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+      toast.error("Échec de l'enregistrement : " + (err as Error).message);
     } finally {
-      setSavingContact(false)
+      setSavingContact(false);
     }
   }
 
@@ -1281,10 +1563,19 @@ function AgencyServiceCard({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`${type}-svc-phone`}>Téléphone</Label>
-                <Input id={`${type}-svc-phone`} value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <Input
+                  id={`${type}-svc-phone`}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
               </div>
             </div>
-            <Button size="sm" onClick={handleSaveContact} disabled={savingContact} className={PRIMARY_CTA_CLASS}>
+            <Button
+              size="sm"
+              onClick={handleSaveContact}
+              disabled={savingContact}
+              className={PRIMARY_CTA_CLASS}
+            >
               <Save />
               Enregistrer
             </Button>
@@ -1318,5 +1609,5 @@ function AgencyServiceCard({
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
