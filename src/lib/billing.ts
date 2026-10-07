@@ -2,7 +2,14 @@ import { appBaseUrl } from "@/lib/utils"
 import { doc, onSnapshot, type DocumentData, type DocumentSnapshot, type Unsubscribe } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
-import type { BillingOverview, BillingStatus, InvoiceStatus, GeranceBilling } from "@/types/billing"
+import type {
+  BillingOverview,
+  BillingStatus,
+  InvoiceStatus,
+  GeranceBilling,
+  LicenseKpiAgency,
+  LicenseKpis,
+} from "@/types/billing"
 
 function billingRef(geranceId: string) {
   return doc(db, "gerances", geranceId, "billing", "current")
@@ -113,5 +120,24 @@ export async function getBillingOverview(geranceId: string): Promise<BillingOver
     customerEmail: data.customerEmail,
     pricePerSeatCents: data.pricePerSeatCents,
     priceCurrency: data.priceCurrency,
+  }
+}
+
+// KPI licences du dashboard (Super Admin uniquement, _require_superadmin
+// côté get_license_kpis) - même principe que getBillingOverview : appel
+// ponctuel chez Stripe, pas de listener.
+type LicenseKpisResponse = Omit<LicenseKpis, "agencies"> & {
+  agencies: (Omit<LicenseKpiAgency, "currentPeriodEnd"> & { currentPeriodEnd: number | null })[]
+}
+
+export async function getLicenseKpis(): Promise<LicenseKpis> {
+  const call = httpsCallable<void, LicenseKpisResponse>(functions, "get_license_kpis")
+  const { data } = await call()
+  return {
+    ...data,
+    agencies: data.agencies.map((agency) => ({
+      ...agency,
+      currentPeriodEnd: agency.currentPeriodEnd ? new Date(agency.currentPeriodEnd * 1000) : null,
+    })),
   }
 }

@@ -81,3 +81,53 @@ export type BillingOverview = {
   pricePerSeatCents: number | null
   priceCurrency: string | null
 }
+
+// Renvoyés par get_license_kpis (functions_python/main.py) - dashboard
+// Super Admin, interrogés en direct chez Stripe (historique mensuel
+// indisponible en Firestore, qui ne porte que l'état courant par gérance).
+export type LicenseKpiTotals = {
+  activeSeats: number
+  trialingSeats: number
+  pastDueSeats: number
+  payingAgencies: number
+  trialingAgencies: number
+  pastDueAgencies: number
+  cancelingAgencies: number
+  cancelingSeats: number
+  churnedAgencies30d: number
+  newAgencies30d: number
+  mrrCents: number
+  arrCents: number
+  arpaCents: number
+  openInvoicesCents: number
+  openInvoicesCount: number
+  revenue30dCents: number
+}
+
+export type LicenseKpiMonth = {
+  // "AAAA-MM"
+  month: string
+  seats: number
+  addedSeats: number
+  removedSeats: number
+  revenueCents: number
+  newAgencies: number
+}
+
+export type LicenseKpiAgency = {
+  geranceId: string
+  name: string
+  status: BillingStatus
+  seats: number
+  mrrCents: number
+  currentPeriodEnd: Date | null
+  cancelAtPeriodEnd: boolean
+}
+
+export type LicenseKpis = {
+  currency: string
+  pricePerSeatCents: number | null
+  totals: LicenseKpiTotals
+  monthly: LicenseKpiMonth[]
+  agencies: LicenseKpiAgency[]
+}

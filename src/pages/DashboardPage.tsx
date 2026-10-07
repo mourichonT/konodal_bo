@@ -32,11 +32,14 @@ import {
   HelpCircle,
   PlusCircle,
   Repeat,
+  Euro,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import { cn } from "@/lib/utils"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { subscribeToGerance } from "@/lib/gerances"
+import { LicenseKpisSection } from "@/components/LicenseKpisSection"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -188,11 +191,18 @@ function KpiCard({
   )
 }
 
+const dashboardTabs = [
+  { key: "operationnel", label: "Opérationnel", icon: Wrench },
+  { key: "financier", label: "Financier", icon: Euro },
+] as const
+type DashboardTabKey = (typeof dashboardTabs)[number]["key"]
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const [users, setUsers] = useState<KonodalUser[]>([])
   const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
-  const { isAgent, isAgence, geranceId } = useAccountRole()
+  const { isAgent, isAgence, isSuperAdmin, geranceId } = useAccountRole()
+  const [activeTab, setActiveTab] = useState<DashboardTabKey>("operationnel")
   // Un compte agence/agent n'a pas de prénom personnel pertinent (cf.
   // ProfilePage) - le "Bonjour" affiche le nom de la gérance plutôt que le
   // préfixe de l'email, qui n'aurait aucun sens ("Bonjour, pecoul").
@@ -624,6 +634,36 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {/* Onglet Financier (licences Stripe, toutes agences) réservé au
+          Super Admin - une agence/un agent ne voit que sa propre
+          facturation (/facturation) : pas de barre d'onglets pour eux.
+          Même barre que ResidenceDetailPage. */}
+      {isSuperAdmin && (
+        <div className="flex w-full items-center gap-1 rounded-2xl bg-[oklch(93%_0.005_100)] p-1.5">
+          {dashboardTabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-[13.5px] font-semibold transition-colors",
+                activeTab === tab.key
+                  ? "bg-[oklch(45%_0.1_155)] font-bold text-white shadow-[0_6px_16px_-6px_oklch(38%_0.08_155/0.5)]"
+                  : "text-[oklch(45%_0.01_150)] hover:bg-[oklch(98%_0.003_100)]"
+              )}
+            >
+              <tab.icon className="size-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isSuperAdmin && activeTab === "financier" && <LicenseKpisSection />}
+
+      {(!isSuperAdmin || activeTab === "operationnel") && (
+      <>
+
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3">
           <DropdownMenu>
@@ -996,6 +1036,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+      </>
+      )}
     </div>
     </TooltipProvider>
   )
