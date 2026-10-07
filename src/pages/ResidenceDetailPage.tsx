@@ -1573,8 +1573,9 @@ function LotsSection({
         open={importing}
         onOpenChange={setImporting}
         existingLots={rows}
+        clesCharge={clesCharge}
         onImport={async (validation) => {
-          await importLots(residenceId, validation.toCreate, rowsRef.current.length)
+          await importLots(residenceId, validation, rowsRef.current.length)
         }}
       />
     </Card>

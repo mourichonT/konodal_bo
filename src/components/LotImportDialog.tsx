@@ -10,6 +10,8 @@ import {
   mapLotImportHeaders,
   parseLotImportFile,
   validateLotImportRows,
+  CLEF_HEADER_PREFIX,
+  type ExistingLotForImport,
   type LotImportValidation,
 } from "@/lib/lotImportExport"
 
@@ -18,19 +20,23 @@ const ACCEPTED_FILE_TYPES = ".xlsx,.csv"
 type LotImportDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  existingLots: { refLot: string; batiment: string; lot: string }[]
+  existingLots: ExistingLotForImport[]
+  // Clés de charge de la résidence : une colonne chacune dans le modèle, et
+  // rapprochement des colonnes "Clé : <nom>" du fichier.
+  clesCharge: { id: string; nom: string }[]
   onImport: (validation: LotImportValidation) => Promise<void>
 }
 
 // Même patron que les autres modales de formulaire : contenu monté
 // seulement quand ouverte, pour repartir d'un état vierge à chaque fois.
-export function LotImportDialog({ open, onOpenChange, existingLots, onImport }: LotImportDialogProps) {
+export function LotImportDialog({ open, onOpenChange, existingLots, clesCharge, onImport }: LotImportDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         {open && (
           <LotImportDialogContent
             existingLots={existingLots}
+            clesCharge={clesCharge}
             onImport={onImport}
             onDone={() => onOpenChange(false)}
           />
@@ -42,13 +48,17 @@ export function LotImportDialog({ open, onOpenChange, existingLots, onImport }: 
 
 function LotImportDialogContent({
   existingLots,
+  clesCharge,
   onImport,
   onDone,
 }: {
-  existingLots: { refLot: string; batiment: string; lot: string }[]
+  existingLots: ExistingLotForImport[]
+  clesCharge: { id: string; nom: string }[]
   onImport: (validation: LotImportValidation) => Promise<void>
   onDone: () => void
 }) {
+  const clefNames = clesCharge.map((c) => c.nom).filter((nom) => nom.trim())
+  const newClefs = (validation: LotImportValidation) => validation.clefs.filter((c) => !c.existingId)
   const [fileName, setFileName] = useState<string | null>(null)
   const [parsing, setParsing] = useState(false)
   const [headerErrors, setHeaderErrors] = useState<string[]>([])
@@ -62,12 +72,15 @@ function LotImportDialogContent({
     setParsing(true)
     try {
       const { headers, rows } = await parseLotImportFile(file)
-      const { rows: mappedRows, headerErrors: mapErrors } = mapLotImportHeaders(headers, rows)
+      const { rows: mappedRows, clefNames: fileClefNames, headerErrors: mapErrors } = mapLotImportHeaders(
+        headers,
+        rows
+      )
       if (mapErrors.length > 0) {
         setHeaderErrors(mapErrors)
         return
       }
-      setValidation(validateLotImportRows(mappedRows, existingLots))
+      setValidation(validateLotImportRows(mappedRows, existingLots, fileClefNames, clesCharge))
     } catch (err) {
       toast.error("Impossible de lire le fichier : " + (err as Error).message)
     } finally {
@@ -100,17 +113,23 @@ function LotImportDialogContent({
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium">1. Téléchargez le modèle à remplir</p>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={downloadLotImportTemplateXlsx}>
+            <Button type="button" variant="outline" size="sm" onClick={() => downloadLotImportTemplateXlsx(clefNames)}>
               <Download />
               Modèle .xlsx
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={downloadLotImportTemplateCsv}>
+            <Button type="button" variant="outline" size="sm" onClick={() => downloadLotImportTemplateCsv(clefNames)}>
               <Download />
               Modèle .csv
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Colonnes : Bâtiment, N°, Référence (obligatoires), Type, Rattachable (Oui/Non).
+            Colonnes : Bâtiment, N°, Référence (obligatoires), Type, Rattachable (Oui/Non), Tantièmes (nombre
+            entier, 0 si vide), Rattaché à (référence du lot principal, pour un lot rattachable).
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Puis une colonne « {CLEF_HEADER_PREFIX}nom » par clé de charge, avec les tantièmes du lot pour cette
+            clé{clefNames.length > 0 ? " (le modèle reprend les clés déjà définies)" : ""}. Une clé qui n'existe pas
+            encore est créée à l'import.
           </p>
         </div>
 
@@ -155,7 +174,23 @@ function LotImportDialogContent({
               <CheckCircle2 className="size-4 shrink-0" />
               {validation.toCreate.length} lot{validation.toCreate.length > 1 ? "s" : ""} prêt
               {validation.toCreate.length > 1 ? "s" : ""} à importer
+              {validation.linkedCount > 0 &&
+                `, dont ${validation.linkedCount} rattaché${validation.linkedCount > 1 ? "s" : ""} à un lot principal`}
             </div>
+
+            {validation.clefs.length > 0 && (
+              <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm text-muted-foreground">
+                <span>
+                  Tantièmes par clé de charge : {validation.clefs.map((c) => c.nom).join(", ")}
+                </span>
+                {newClefs(validation).length > 0 && (
+                  <span className="font-medium text-amber-700">
+                    Clé{newClefs(validation).length > 1 ? "s" : ""} créée{newClefs(validation).length > 1 ? "s" : ""}{" "}
+                    à l'import : {newClefs(validation).map((c) => c.nom).join(", ")}
+                  </span>
+                )}
+              </div>
+            )}
 
             {validation.duplicatesExisting.length > 0 && (
               <details className="rounded-lg border p-3 text-sm">

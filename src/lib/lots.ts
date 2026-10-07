@@ -14,7 +14,7 @@ import {
 } from "firebase/firestore"
 import { db } from "@/firebase"
 import type { Lot } from "@/types/lot"
-import type { LotImportInput } from "@/lib/lotImportExport"
+import type { LotImportValidation } from "@/lib/lotImportExport"
 
 function lotsCollection(residenceId: string) {
   return collection(db, "residences", residenceId, "lots")
@@ -158,27 +158,80 @@ export async function deleteLot(residenceId: string, id: string) {
 // Import en masse (LotImportDialog) - les lignes ont déjà été validées et
 // dédupliquées contre l'existant côté client (validateLotImportRows,
 // lib/lotImportExport.ts) avant d'arriver ici : aucune vérification
-// supplémentaire, uniquement des créations (jamais d'update, donc jamais
-// d'écrasement d'un lot déjà en base). `startOrder` = nombre de lots déjà
-// affichés au moment de la confirmation, pour ajouter les nouveaux à la
+// supplémentaire, uniquement des créations (jamais d'update d'un lot, donc
+// jamais d'écrasement d'un lot déjà en base). `startOrder` = nombre de lots
+// déjà affichés au moment de la confirmation, pour ajouter les nouveaux à la
 // suite plutôt que de réécraser l'ordre existant. Chunké à 400 (limite
 // Firestore : 500 opérations par batch).
+//
+// Rattachement (colonne "Rattaché à") écrit dès la création
+// (parentLotId + groupedWithParent, comme linkLot) : sync_lot_tenants est un
+// on_document_written, il réagit aussi à une création. Les ids sont générés
+// avant écriture pour qu'un lot rattaché puisse viser un lot principal du
+// même fichier, et les lots principaux sont écrits en premier : le
+// déclencheur du lot rattaché doit trouver son parent déjà en base (sinon
+// il ignore le lien, sans nouvelle tentative).
+//
+// Tantièmes par clé : écrits après les lots, dans tantiemesParLot par
+// chemin à points sur une clé existante (même principe que
+// setLotTantiemeForClef, jamais la map entière), ou à la création d'une clé
+// absente de la résidence.
 export async function importLots(
   residenceId: string,
-  inputs: LotImportInput[],
+  validation: Pick<LotImportValidation, "toCreate" | "clefs">,
   startOrder: number
 ): Promise<void> {
-  for (let i = 0; i < inputs.length; i += 400) {
-    const chunk = inputs.slice(i, i + 400)
+  const inputs = validation.toCreate
+  const idByRef = new Map(inputs.map((input) => [input.refLot, doc(lotsCollection(residenceId)).id]))
+  const ordered = inputs
+    .map((input, index) => ({ input, order: startOrder + index }))
+    .sort((a, b) => Number(a.input.parent !== null) - Number(b.input.parent !== null))
+
+  const operations: ((batch: ReturnType<typeof writeBatch>) => void)[] = ordered.map(
+    ({ input, order }) =>
+      (batch) => {
+        const { parent, clefTantiemes: _clefTantiemes, ...lotInput } = input
+        const id = idByRef.get(input.refLot)!
+        const parentLotId =
+          parent === null ? null : parent.kind === "existing" ? parent.id : idByRef.get(parent.refLot)
+        batch.set(doc(db, "residences", residenceId, "lots", id), {
+          ...toFirestoreLotData({ ...lotInput, order }),
+          id,
+          idProprietaire: [],
+          ...(parentLotId ? { parentLotId, groupedWithParent: true } : {}),
+        })
+      }
+  )
+
+  for (const { nom, existingId } of validation.clefs) {
+    const values: Record<string, number> = {}
+    for (const input of inputs) {
+      const value = input.clefTantiemes[nom]
+      if (value) values[idByRef.get(input.refLot)!] = value
+    }
+    if (existingId) {
+      if (Object.keys(values).length === 0) continue
+      const fields = Object.fromEntries(
+        Object.entries(values).map(([lotId, value]) => [`tantiemesParLot.${lotId}`, value])
+      )
+      operations.push((batch) =>
+        batch.update(doc(db, "residences", residenceId, "clesCharge", existingId), fields)
+      )
+    } else {
+      // Mêmes champs que createClefCharge (lib/clesCharge.ts).
+      operations.push((batch) =>
+        batch.set(doc(collection(db, "residences", residenceId, "clesCharge")), {
+          residenceId,
+          nom,
+          tantiemesParLot: values,
+        })
+      )
+    }
+  }
+
+  for (let i = 0; i < operations.length; i += 400) {
     const batch = writeBatch(db)
-    chunk.forEach((input, j) => {
-      const ref = doc(lotsCollection(residenceId))
-      batch.set(ref, {
-        ...toFirestoreLotData({ ...input, order: startOrder + i + j }),
-        id: ref.id,
-        idProprietaire: [],
-      })
-    })
+    operations.slice(i, i + 400).forEach((operation) => operation(batch))
     await batch.commit()
   }
 }
