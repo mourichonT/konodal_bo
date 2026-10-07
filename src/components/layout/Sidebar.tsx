@@ -16,12 +16,14 @@ import {
   ChevronDown,
   UserCircle,
   CreditCard,
+  Inbox,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { usePendingUsersCount } from "@/hooks/usePendingUsersCount"
 import { usePendingContactsCount } from "@/hooks/usePendingContactsCount"
+import { usePendingResidenceRequestsCount } from "@/hooks/usePendingResidenceRequestsCount"
 import { subscribeToUser } from "@/lib/users"
 import { cn } from "@/lib/utils"
 import { EnvBadge } from "./EnvBadge"
@@ -71,6 +73,7 @@ const navItems: NavItem[] = [
 ]
 
 const superAdminNavItems: NavItem[] = [
+  { to: "/demandes-residences", label: "Demandes", icon: Inbox, end: true },
   { to: "/publicites", label: "Publicités", icon: Megaphone, end: true },
 ]
 
@@ -135,6 +138,7 @@ export function Sidebar() {
   const { isAgence, isAgent } = useAccountRole()
   const pendingUsersCount = usePendingUsersCount()
   const pendingContactsCount = usePendingContactsCount()
+  const pendingResidenceRequestsCount = usePendingResidenceRequestsCount(isSuperAdmin)
   const location = useLocation()
   // profil.profilPic n'est pas porté par Firebase Auth (displayName/photoURL
   // ne sont jamais renseignés côté résident) - souscription dédiée à sa
@@ -270,6 +274,9 @@ export function Sidebar() {
               {label}
               {to === "/residents" && pendingUsersCount > 0 && <NavBadge count={pendingUsersCount} />}
               {to === "/contacts" && pendingContactsCount > 0 && <NavBadge count={pendingContactsCount} />}
+              {to === "/demandes-residences" && pendingResidenceRequestsCount > 0 && (
+                <NavBadge count={pendingResidenceRequestsCount} />
+              )}
             </NavLink>
           )
         })}

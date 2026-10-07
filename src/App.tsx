@@ -32,6 +32,7 @@ import SharedInterventionPage from "@/pages/SharedInterventionPage"
 import OfferPage from "@/pages/OfferPage"
 import PublicitesPage from "@/pages/PublicitesPage"
 import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
+import ResidenceRequestsPage from "@/pages/ResidenceRequestsPage"
 
 function App() {
   return (
@@ -80,6 +81,14 @@ function App() {
           element={
             <RequireSuperAdmin>
               <PublicitesPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="demandes-residences"
+          element={
+            <RequireSuperAdmin>
+              <ResidenceRequestsPage />
             </RequireSuperAdmin>
           }
         />

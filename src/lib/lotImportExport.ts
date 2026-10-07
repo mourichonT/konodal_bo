@@ -326,7 +326,7 @@ function structureLabelKey(label: string): string {
 // pas par un type ou n'a pas de nom ("A", "Extérieur" seuls) : ligne en
 // erreur plutôt qu'un type deviné - un mot comme "Extérieur" est un nom
 // ("Parking Extérieur"), jamais un type à lui seul.
-function parseStructureLabel(label: string): { type: string; name: string } | null {
+export function parseStructureLabel(label: string): { type: string; name: string } | null {
   const key = structureLabelKey(label)
   const types = [...structureTypeOptions].sort((a, b) => b.length - a.length)
   for (const type of types) {
