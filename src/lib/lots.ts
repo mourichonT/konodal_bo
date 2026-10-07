@@ -172,14 +172,20 @@ export async function deleteLot(residenceId: string, id: string) {
 // déclencheur du lot rattaché doit trouver son parent déjà en base (sinon
 // il ignore le lien, sans nouvelle tentative).
 //
+// Bâtiments absents de la résidence (validation.structuresToCreate) : créés
+// dans le même lot d'écritures, mêmes champs que createStructure
+// (lib/structures.ts), à la suite des structures existantes
+// (`startStructureOrder`). Les lots référencent déjà leur libellé.
+//
 // Tantièmes par clé : écrits après les lots, dans tantiemesParLot par
 // chemin à points sur une clé existante (même principe que
 // setLotTantiemeForClef, jamais la map entière), ou à la création d'une clé
 // absente de la résidence.
 export async function importLots(
   residenceId: string,
-  validation: Pick<LotImportValidation, "toCreate" | "clefs">,
-  startOrder: number
+  validation: Pick<LotImportValidation, "toCreate" | "clefs" | "structuresToCreate">,
+  startOrder: number,
+  startStructureOrder = 0
 ): Promise<void> {
   const inputs = validation.toCreate
   const idByRef = new Map(inputs.map((input) => [input.refLot, doc(lotsCollection(residenceId)).id]))
@@ -187,7 +193,23 @@ export async function importLots(
     .map((input, index) => ({ input, order: startOrder + index }))
     .sort((a, b) => Number(a.input.parent !== null) - Number(b.input.parent !== null))
 
-  const operations: ((batch: ReturnType<typeof writeBatch>) => void)[] = ordered.map(
+  type BatchOperation = (batch: ReturnType<typeof writeBatch>) => void
+  const structureOperations: BatchOperation[] = validation.structuresToCreate.map(
+    ({ type, name }, index) =>
+      (batch) =>
+        batch.set(doc(collection(db, "residences", residenceId, "structures")), {
+          name,
+          type,
+          etage: [],
+          hasUnderground: false,
+          elements: [],
+          order: startStructureOrder + index,
+          hasDifferentSyndic: false,
+          syndicAgency: null,
+          geranceRef: null,
+        })
+  )
+  const lotOperations: BatchOperation[] = ordered.map(
     ({ input, order }) =>
       (batch) => {
         const { parent, clefTantiemes: _clefTantiemes, ...lotInput } = input
@@ -202,6 +224,7 @@ export async function importLots(
         })
       }
   )
+  const operations: BatchOperation[] = [...structureOperations, ...lotOperations]
 
   for (const { nom, existingId } of validation.clefs) {
     const values: Record<string, number> = {}

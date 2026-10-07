@@ -25,12 +25,22 @@ type LotImportDialogProps = {
   // Clés de charge de la résidence : une colonne chacune dans le modèle, et
   // rapprochement des colonnes "Clé : <nom>" du fichier.
   clesCharge: { id: string; nom: string }[]
+  // Bâtiments de la résidence : rapprochement de la colonne Bâtiment, ceux
+  // qui manquent sont créés à l'import.
+  structures: { type: string; name: string }[]
   onImport: (validation: LotImportValidation) => Promise<void>
 }
 
 // Même patron que les autres modales de formulaire : contenu monté
 // seulement quand ouverte, pour repartir d'un état vierge à chaque fois.
-export function LotImportDialog({ open, onOpenChange, existingLots, clesCharge, onImport }: LotImportDialogProps) {
+export function LotImportDialog({
+  open,
+  onOpenChange,
+  existingLots,
+  clesCharge,
+  structures,
+  onImport,
+}: LotImportDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -38,6 +48,7 @@ export function LotImportDialog({ open, onOpenChange, existingLots, clesCharge, 
           <LotImportDialogContent
             existingLots={existingLots}
             clesCharge={clesCharge}
+            structures={structures}
             onImport={onImport}
             onDone={() => onOpenChange(false)}
           />
@@ -50,11 +61,13 @@ export function LotImportDialog({ open, onOpenChange, existingLots, clesCharge, 
 function LotImportDialogContent({
   existingLots,
   clesCharge,
+  structures,
   onImport,
   onDone,
 }: {
   existingLots: ExistingLotForImport[]
   clesCharge: { id: string; nom: string }[]
+  structures: { type: string; name: string }[]
   onImport: (validation: LotImportValidation) => Promise<void>
   onDone: () => void
 }) {
@@ -81,7 +94,7 @@ function LotImportDialogContent({
         setHeaderErrors(mapErrors)
         return
       }
-      setValidation(validateLotImportRows(mappedRows, existingLots, fileClefNames, clesCharge))
+      setValidation(validateLotImportRows(mappedRows, existingLots, fileClefNames, clesCharge, structures))
     } catch (err) {
       toast.error("Impossible de lire le fichier : " + (err as Error).message)
     } finally {
@@ -125,7 +138,9 @@ function LotImportDialogContent({
           </div>
           <p className="text-xs text-muted-foreground">
             Colonnes : Bâtiment, N°, Référence (obligatoires), Type, Rattachable (Oui/Non), Tantièmes (nombre
-            entier, 0 si vide), Rattaché à (référence du lot principal, pour un lot rattachable).
+            entier, 0 si vide), Rattaché à (référence du lot principal, pour un lot rattachable). Bâtiment au
+            format « type nom » (ex. Bâtiment A, Parking Extérieur) : s'il n'existe pas sur la résidence, il est
+            créé à l'import.
           </p>
           <p className="text-xs text-muted-foreground">
             Puis une colonne « {CLEF_HEADER_PREFIX}nom » par clé de charge, avec les tantièmes du lot pour cette
@@ -184,6 +199,14 @@ function LotImportDialogContent({
                 {validation.exampleRowsIgnored} ligne{validation.exampleRowsIgnored > 1 ? "s" : ""} d'exemple
                 ignorée{validation.exampleRowsIgnored > 1 ? "s" : ""} (référence commençant par « {EXAMPLE_REF_PREFIX} »).
               </p>
+            )}
+
+            {validation.structuresToCreate.length > 0 && (
+              <div className="rounded-lg border p-3 text-sm font-medium text-amber-700">
+                Bâtiment{validation.structuresToCreate.length > 1 ? "s" : ""} créé
+                {validation.structuresToCreate.length > 1 ? "s" : ""} à l'import :{" "}
+                {validation.structuresToCreate.map((s) => s.label).join(", ")}
+              </div>
             )}
 
             {validation.clefs.length > 0 && (

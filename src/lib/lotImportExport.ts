@@ -1,4 +1,5 @@
 import { typeLotOptions, defaultIsLinkableForType } from "@/types/lot"
+import { structureTypeOptions } from "@/types/structure"
 import type { LotInput } from "@/lib/lots"
 
 // Généré ici plutôt qu'importé de lots.ts : LotInput y est défini sans
@@ -62,7 +63,7 @@ function lotImportExampleRows(clefNames: string[]): (string | number)[][] {
     ["Bâtiment A", "2", `${EXAMPLE_REF_PREFIX}002`, "Appartement", "Non", 180, "", ...clefValues([200, 180])],
     ["Bâtiment A", "C1", `${EXAMPLE_REF_PREFIX}C01`, "Cave", "Oui", 10, `${EXAMPLE_REF_PREFIX}001`, ...clefValues([0, 0])],
     [
-      "Bâtiment A",
+      "Parking Extérieur",
       "P1",
       `${EXAMPLE_REF_PREFIX}P01`,
       "Place de parking",
@@ -136,6 +137,8 @@ export async function downloadLotImportTemplateXlsx(existingClefNames: string[])
   valuesSheet.getRow(1).font = { bold: true }
   const help = [
     "Bâtiment, N° et Référence sont obligatoires.",
+    `Bâtiment : "<type> <nom>", type parmi ${structureTypeOptions.join(", ")} -`,
+    'ex. "Bâtiment A", "Parking Extérieur". Un bâtiment absent de la résidence est créé à l\'import.',
     "Rattaché à : référence du lot principal (appartement...) pour une cave, un",
     "parking... marqué Rattachable = Oui - lot du fichier ou déjà existant.",
     `Une colonne "${CLEF_HEADER_PREFIX}<nom>" par clé de charge : tantièmes du lot pour`,
@@ -281,6 +284,44 @@ export function clefNameKey(nom: string): string {
   return nom.trim().toLowerCase().replace(/\s+/g, " ")
 }
 
+// Libellé d'un bâtiment tel que le tableau des lots le référence
+// (Lot.batiment = "<type> <nom>" d'une structure, cf. buildingOptions dans
+// LotsSection).
+export function structureLabel(s: { type: string; name: string }): string {
+  return `${s.type} ${s.name}`.trim()
+}
+
+// Rapprochement libellé du fichier <-> structure : accents, casse et
+// espaces ignorés ("Extérieur" = "Exterieur", "bâtiment a" = "Bâtiment A").
+function structureLabelKey(label: string): string {
+  return label
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ")
+}
+
+// Bâtiment absent de la résidence, à créer à l'import (comme une clé de
+// charge inconnue). Le libellé est toujours "<type> <nom>" : le type en tête
+// parmi structureTypeOptions, le nom ensuite ("Bâtiment A" -> Bâtiment / A,
+// "Parking Extérieur" -> Parking / Extérieur). null si le libellé ne commence
+// pas par un type ou n'a pas de nom ("A", "Extérieur" seuls) : ligne en
+// erreur plutôt qu'un type deviné - un mot comme "Extérieur" est un nom
+// ("Parking Extérieur"), jamais un type à lui seul.
+function parseStructureLabel(label: string): { type: string; name: string } | null {
+  const key = structureLabelKey(label)
+  const types = [...structureTypeOptions].sort((a, b) => b.length - a.length)
+  for (const type of types) {
+    const typeKey = structureLabelKey(type)
+    if (key.startsWith(typeKey + " ")) {
+      const name = label.trim().slice(type.length).trim()
+      if (name) return { type, name }
+    }
+  }
+  return null
+}
+
 // Tolère les variations d'en-tête (accents, casse, "N°" avec son symbole
 // degré non couvert par la normalisation NFD des diacritiques classiques).
 function normalizeHeader(h: string): string {
@@ -395,6 +436,9 @@ export type LotImportValidation = {
   // Clés de charge du fichier : id de la clé existante correspondante, ou
   // null si elle sera créée à l'import.
   clefs: { nom: string; existingId: string | null }[]
+  // Bâtiments cités par le fichier et absents de la résidence, créés à
+  // l'import (structures/{id}) ; les lots portent déjà leur libellé final.
+  structuresToCreate: { type: string; name: string; label: string }[]
   linkedCount: number
   exampleRowsIgnored: number
 }
@@ -416,8 +460,33 @@ export function validateLotImportRows(
   rawRows: RawLotImportRow[],
   existingLots: ExistingLotForImport[],
   clefNames: string[] = [],
-  existingClefs: { id: string; nom: string }[] = []
+  existingClefs: { id: string; nom: string }[] = [],
+  existingStructures: { type: string; name: string }[] = []
 ): LotImportValidation {
+  // Libellé final du bâtiment de chaque ligne : celui de la structure
+  // existante correspondante, sinon celui de la structure qui sera créée.
+  const labelByKey = new Map(existingStructures.map((s) => [structureLabelKey(structureLabel(s)), structureLabel(s)]))
+  const structuresToCreate: LotImportValidation["structuresToCreate"] = []
+  function resolveBatiment(raw: string): string | null {
+    const key = structureLabelKey(raw)
+    const known = labelByKey.get(key)
+    if (known) return known
+    const parsed = parseStructureLabel(raw)
+    if (!parsed) return null
+    const label = structureLabel(parsed)
+    // Deux graphies du fichier pour un même bâtiment ("Bâtiment A" /
+    // "batiment a") ne créent qu'une structure.
+    const parsedKnown = labelByKey.get(structureLabelKey(label))
+    if (parsedKnown) {
+      labelByKey.set(key, parsedKnown)
+      return parsedKnown
+    }
+    structuresToCreate.push({ ...parsed, label })
+    labelByKey.set(key, label)
+    labelByKey.set(structureLabelKey(label), label)
+    return label
+  }
+
   const existingRefs = new Set(existingLots.map((l) => l.refLot.trim()).filter(Boolean))
   const existingCombos = new Set(
     existingLots
@@ -443,6 +512,14 @@ export function validateLotImportRows(
       errors.push(`${label} : bâtiment, n° et référence sont obligatoires.`)
       continue
     }
+    const batiment = resolveBatiment(row.batiment)
+    if (!batiment) {
+      errors.push(
+        `${label} : bâtiment "${row.batiment}" non reconnu - indiquer "<type> <nom>", le type parmi ${structureTypeOptions.join(", ")} (ex. "Bâtiment A", "Parking Extérieur").`
+      )
+      continue
+    }
+    row.batiment = batiment
     if (row.typeLot && !(typeLotOptions as readonly string[]).includes(row.typeLot)) {
       errors.push(`${label} : type "${row.typeLot}" inconnu.`)
       continue
@@ -552,5 +629,17 @@ export function validateLotImportRows(
   const lineOf = (e: string) => Number(/^Ligne (\d+)/.exec(e)?.[1] ?? 0)
   errors.sort((x, y) => lineOf(x) - lineOf(y))
 
-  return { toCreate: resolved, duplicatesExisting, duplicatesInFile, errors, clefs, linkedCount, exampleRowsIgnored }
+  // Bâtiment créé uniquement si une ligne retenue l'utilise (pas pour une
+  // ligne en erreur ou en doublon).
+  const usedLabels = new Set(resolved.map((l) => l.batiment))
+  return {
+    toCreate: resolved,
+    duplicatesExisting,
+    duplicatesInFile,
+    errors,
+    clefs,
+    structuresToCreate: structuresToCreate.filter((s) => usedLabels.has(s.label)),
+    linkedCount,
+    exampleRowsIgnored,
+  }
 }
