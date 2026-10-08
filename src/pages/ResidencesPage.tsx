@@ -142,7 +142,6 @@ export default function ResidencesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Résidences</h1>
 
       <div className="flex flex-col gap-4 lg:flex-row">
         <div className="flex w-full flex-col gap-4 lg:w-72 lg:shrink-0">

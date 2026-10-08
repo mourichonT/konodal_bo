@@ -33,6 +33,8 @@ import OfferPage from "@/pages/OfferPage"
 import PublicitesPage from "@/pages/PublicitesPage"
 import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
 import ResidenceRequestsPage from "@/pages/ResidenceRequestsPage"
+import ResidencesLayout from "@/pages/ResidencesLayout"
+import ResidenceRequestDetailPage from "@/pages/ResidenceRequestDetailPage"
 
 function App() {
   return (
@@ -64,7 +66,25 @@ function App() {
         <Route path="evenements/:residenceId/:postId" element={<EvenementDetailPage />} />
         <Route path="communications" element={<CommunicationsPage />} />
         <Route path="communications/:residenceId/:postId" element={<CommunicationDetailPage />} />
-        <Route path="residences" element={<ResidencesPage />} />
+        <Route path="residences" element={<ResidencesLayout />}>
+          <Route index element={<ResidencesPage />} />
+          <Route
+            path="demandes"
+            element={
+              <RequireSuperAdmin>
+                <ResidenceRequestsPage />
+              </RequireSuperAdmin>
+            }
+          />
+        </Route>
+        <Route
+          path="residences/demandes/:id"
+          element={
+            <RequireSuperAdmin>
+              <ResidenceRequestDetailPage />
+            </RequireSuperAdmin>
+          }
+        />
         <Route path="residences/:id" element={<ResidenceDetailPage />} />
         <Route path="residences/:id/lots/:lotId" element={<LotDetailPage />} />
         <Route path="residences/:id/votes/:voteId" element={<VoteDetailPage />} />
@@ -84,14 +104,7 @@ function App() {
             </RequireSuperAdmin>
           }
         />
-        <Route
-          path="demandes-residences"
-          element={
-            <RequireSuperAdmin>
-              <ResidenceRequestsPage />
-            </RequireSuperAdmin>
-          }
-        />
+        <Route path="demandes-residences" element={<Navigate to="/residences/demandes" replace />} />
         <Route
           path="publicites/:id"
           element={

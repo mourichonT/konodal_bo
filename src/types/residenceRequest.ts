@@ -15,6 +15,32 @@ export type ResidenceRequestLot = {
   batiment: string
   lot: string
   typeLot: string
+  // Lot principal auquel ce lot dépendant (parking, cave...) est rattaché,
+  // désigné par bâtiment + numéro (aucun id avant création) - devient
+  // Lot.parentLotId à la validation.
+  parent?: { batiment: string; lot: string } | null
+}
+
+// Pièce jointe de contexte (règlement, tantièmes, plan de masse...) - fichier
+// Storage : residenceRequestUploads/{uid}/... (envoyé par le demandeur depuis
+// le formulaire) ou residenceRequestFiles/{requestId}/... (ajouté depuis le BO).
+export type ResidenceRequestAttachment = {
+  path: string
+  name: string
+  size: number
+  contentType: string
+  addedBy: "requester" | "backoffice"
+  addedAt?: Timestamp
+}
+
+// Email envoyé au demandeur depuis la page d'examen (send_email_callable,
+// depuis support@konodal.com - les réponses arrivent dans cette boîte).
+export type ResidenceRequestMessage = {
+  subject: string
+  body: string
+  sentAt: Timestamp
+  sentBy: string
+  emailSent: boolean
 }
 
 export type ResidenceRequest = {
@@ -24,6 +50,10 @@ export type ResidenceRequest = {
   source: "web"
   createdAt: Timestamp | null
   requester: {
+    // Compte Konodal connecté qui a envoyé la demande (vérifié côté serveur,
+    // submit_residence_request) - absent des toutes premières demandes,
+    // envoyées sans connexion.
+    uid?: string
     firstName: string
     lastName: string
     email: string
@@ -45,6 +75,8 @@ export type ResidenceRequest = {
   // Absent des toutes premières demandes : déduit des lots.
   buildings?: ResidenceRequestBuilding[]
   lots: ResidenceRequestLot[]
+  attachments?: ResidenceRequestAttachment[]
+  messages?: ResidenceRequestMessage[]
   // Renseignés au traitement (BO, lib/residenceRequests.ts).
   residenceId?: string
   csMemberUid?: string | null

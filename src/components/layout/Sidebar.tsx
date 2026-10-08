@@ -16,7 +16,6 @@ import {
   ChevronDown,
   UserCircle,
   CreditCard,
-  Inbox,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
@@ -41,7 +40,7 @@ type NavItem = {
   label: string
   icon: typeof LayoutDashboard
   end?: boolean
-  children?: { to: string; label: string }[]
+  children?: { to: string; label: string; end?: boolean }[]
 }
 
 const navItems: NavItem[] = [
@@ -73,7 +72,6 @@ const navItems: NavItem[] = [
 ]
 
 const superAdminNavItems: NavItem[] = [
-  { to: "/demandes-residences", label: "Demandes", icon: Inbox, end: true },
   { to: "/publicites", label: "Publicités", icon: Megaphone, end: true },
 ]
 
@@ -165,7 +163,22 @@ export function Sidebar() {
     : isAgence
       ? navItems.map((item) => (item.to === "/agences" ? { ...item, label: "Agence" } : item))
       : navItems
-  const allNavItems: NavItem[] = isSuperAdmin ? [...baseNavItems, ...superAdminNavItems] : baseNavItems
+  // Résidences : sous-menu Actives / Demandes (inscriptions konodal.com) pour
+  // le superAdmin, seul à traiter les demandes - lien simple pour les autres.
+  const withResidenceChildren: NavItem[] = isSuperAdmin
+    ? baseNavItems.map((item) =>
+        item.to === "/residences"
+          ? {
+              ...item,
+              children: [
+                { to: "/residences", label: "Actives", end: true },
+                { to: "/residences/demandes", label: "Demandes" },
+              ],
+            }
+          : item
+      )
+    : baseNavItems
+  const allNavItems: NavItem[] = isSuperAdmin ? [...withResidenceChildren, ...superAdminNavItems] : baseNavItems
   const [openSections, toggleSection] = useOpenSections(allNavItems)
 
   return (
@@ -197,7 +210,9 @@ export function Sidebar() {
         {allNavItems.map((item) => {
           if (item.children) {
             const isParentActive = location.pathname.startsWith(item.to)
-            const isOpen = openSections[item.to] ?? false
+            // Section ajoutée après le premier rendu (sous-menu Résidences, dépendant
+            // du rôle chargé ensuite) : ouverte si son chemin est actif.
+            const isOpen = openSections[item.to] ?? location.pathname.startsWith(item.to)
             return (
               <div key={item.to} className="flex flex-col">
                 <div
@@ -211,6 +226,9 @@ export function Sidebar() {
                   <NavLink to={item.to} className="flex flex-1 items-center gap-3">
                     <item.icon className="size-4.5" />
                     {item.label}
+                    {item.to === "/residences" && !isOpen && pendingResidenceRequestsCount > 0 && (
+                      <NavBadge count={pendingResidenceRequestsCount} />
+                    )}
                   </NavLink>
                   <button
                     type="button"
@@ -227,6 +245,7 @@ export function Sidebar() {
                       <NavLink
                         key={child.to}
                         to={child.to}
+                        end={child.end}
                         title={child.label}
                         className={({ isActive }) =>
                           cn(
@@ -247,6 +266,9 @@ export function Sidebar() {
                               )}
                             />
                             <span className="truncate">{child.label}</span>
+                            {child.to === "/residences/demandes" && pendingResidenceRequestsCount > 0 && (
+                              <NavBadge count={pendingResidenceRequestsCount} />
+                            )}
                           </>
                         )}
                       </NavLink>
@@ -274,9 +296,6 @@ export function Sidebar() {
               {label}
               {to === "/residents" && pendingUsersCount > 0 && <NavBadge count={pendingUsersCount} />}
               {to === "/contacts" && pendingContactsCount > 0 && <NavBadge count={pendingContactsCount} />}
-              {to === "/demandes-residences" && pendingResidenceRequestsCount > 0 && (
-                <NavBadge count={pendingResidenceRequestsCount} />
-              )}
             </NavLink>
           )
         })}
