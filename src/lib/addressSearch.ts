@@ -14,8 +14,14 @@ type RawFeature = {
     name?: string
     postcode?: string
     city?: string
+    type?: string
   }
 }
+
+// Numéro saisi en tête ("99", "12 bis", "4B") : quand la BAN ne connaît pas
+// ce numéro dans la voie, elle ne renvoie que la voie (type "street", sans
+// numéro) - on le recolle pour ne pas le perdre à la sélection.
+const LEADING_NUMBER = /^(\d+(?:\s*(?:bis|ter|quater|[a-z])\b)?)[\s,]+\S/i
 
 // API Adresse (Base Adresse Nationale, data.gouv.fr/IGN) - publique et
 // gratuite, sans clé. `name` renvoie la voie AVEC numéro ("10 Rue de la
@@ -31,13 +37,17 @@ export async function searchAddresses(query: string): Promise<AddressSearchResul
     throw new Error("Recherche d'adresse impossible pour le moment")
   }
   const data = (await response.json()) as { features?: RawFeature[] }
-  return (data.features ?? []).map((f) => ({
-    id: f.properties.id || f.properties.banId || f.properties.label || "",
-    label: f.properties.label ?? "",
-    street: f.properties.name ?? "",
-    zipCode: f.properties.postcode ?? "",
-    city: f.properties.city ?? "",
-  }))
+  const typedNumber = LEADING_NUMBER.exec(trimmed)?.[1].replace(/\s+/g, " ")
+  return (data.features ?? []).map((f) => {
+    const prefix = typedNumber && f.properties.type === "street" ? `${typedNumber} ` : ""
+    return {
+      id: f.properties.id || f.properties.banId || f.properties.label || "",
+      label: prefix + (f.properties.label ?? ""),
+      street: prefix + (f.properties.name ?? ""),
+      zipCode: f.properties.postcode ?? "",
+      city: f.properties.city ?? "",
+    }
+  })
 }
 
 type RawCommune = { nom: string; code: string }
