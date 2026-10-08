@@ -6,7 +6,6 @@ import { Timestamp } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { subscribeToClesCharge } from "@/lib/clesCharge"
 import { subscribeToLots } from "@/lib/lots"
 import {
   deleteVote,
@@ -20,9 +19,8 @@ import {
 } from "@/lib/votes"
 import {
   evaluateMajority,
-  resolveClefCharge,
   tallyForQuestion,
-  totalTantiemesForCleCharge,
+  totalTantiemesResidence,
   weightedTallyForQuestion,
   type MajorityOutcome,
   type WeightedTally,
@@ -42,7 +40,6 @@ import {
   type Vote,
   type VoteQuestion,
 } from "@/types/vote"
-import type { ClefCharge } from "@/types/clefCharge"
 import type { Lot } from "@/types/lot"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 
@@ -62,7 +59,6 @@ export default function VoteDetailPage() {
   const [ballots, setBallots] = useState<Ballot[]>([])
   const [presences, setPresences] = useState<Presence[]>([])
   const [lots, setLots] = useState<Lot[]>([])
-  const [clesCharge, setClesCharge] = useState<ClefCharge[]>([])
   const [loading, setLoading] = useState(true)
   // Force un rebuild chaque seconde pour le chronomètre / le recalcul de
   // isSessionFinished - vote.isSessionFinished/activeQuestionIndex sont des
@@ -106,13 +102,6 @@ export default function VoteDetailPage() {
     if (!residenceId) return
     return subscribeToLots(residenceId, setLots, (error) =>
       toast.error("Impossible de charger les lots : " + error.message)
-    )
-  }, [residenceId])
-
-  useEffect(() => {
-    if (!residenceId) return
-    return subscribeToClesCharge(residenceId, setClesCharge, (error) =>
-      toast.error("Impossible de charger les clés de charges : " + error.message)
     )
   }, [residenceId])
 
@@ -177,7 +166,6 @@ export default function VoteDetailPage() {
           ballots={ballots}
           presences={presences}
           lots={lots}
-          clesCharge={clesCharge}
         />
       )}
     </div>
@@ -200,19 +188,17 @@ function VoteBody({
   ballots,
   presences,
   lots,
-  clesCharge,
 }: {
   residenceId: string
   vote: Vote
   ballots: Ballot[]
   presences: Presence[]
   lots: Lot[]
-  clesCharge: ClefCharge[]
 }) {
   const isAG = vote.type === VoteType.assembleeGenerale
 
   if (isAG && !isVoteStarted(vote)) {
-    return <PrelaunchView residenceId={residenceId} vote={vote} lots={lots} clesCharge={clesCharge} presences={presences} />
+    return <PrelaunchView residenceId={residenceId} vote={vote} lots={lots} presences={presences} />
   }
 
   if (isAG && isVoteStarted(vote) && !isSessionFinished(vote)) {
@@ -225,27 +211,24 @@ function VoteBody({
           activeIndex={idx}
           ballots={ballots}
           lots={lots}
-          clesCharge={clesCharge}
         />
       )
     }
-    return <QuestionListView residenceId={residenceId} vote={vote} ballots={ballots} lots={lots} clesCharge={clesCharge} />
+    return <QuestionListView residenceId={residenceId} vote={vote} ballots={ballots} lots={lots} />
   }
 
-  return <ResultsView vote={vote} ballots={ballots} lots={lots} clesCharge={clesCharge} />
+  return <ResultsView vote={vote} ballots={ballots} lots={lots} />
 }
 
 function PrelaunchView({
   residenceId,
   vote,
   lots,
-  clesCharge,
   presences,
 }: {
   residenceId: string
   vote: Vote
   lots: Lot[]
-  clesCharge: ClefCharge[]
   presences: Presence[]
 }) {
   const [launching, setLaunching] = useState(false)
@@ -256,14 +239,12 @@ function PrelaunchView({
   // Re-vérifié ici (en plus de VoteFormDialog à la création) : les tantièmes
   // peuvent avoir été complétés/modifiés entre-temps.
   const blockReason = useMemo(() => {
-    for (const q of vote.questions) {
-      if (q.majoriteRequise == null) continue
-      if (totalTantiemesForCleCharge(q.cleChargeId, lots, clesCharge) <= 0) {
-        return "Lancement bloqué : une question référence une clé de charge sans aucun tantième."
-      }
+    const hasAgQuestion = vote.questions.some((q) => q.majoriteRequise != null)
+    if (hasAgQuestion && totalTantiemesResidence(lots) <= 0) {
+      return "Lancement bloqué : aucun tantième n'est renseigné sur les lots."
     }
     return null
-  }, [vote.questions, lots, clesCharge])
+  }, [vote.questions, lots])
 
   async function handleLaunch() {
     if (launching || blockReason) return
@@ -326,13 +307,11 @@ function QuestionListView({
   vote,
   ballots,
   lots,
-  clesCharge,
 }: {
   residenceId: string
   vote: Vote
   ballots: Ballot[]
   lots: Lot[]
-  clesCharge: ClefCharge[]
 }) {
   const [launching, setLaunching] = useState(false)
   const nextIndex = vote.questions.findIndex((q) => q.startedAt == null)
@@ -362,7 +341,7 @@ function QuestionListView({
       {vote.description && <p className="text-sm whitespace-pre-wrap text-foreground">{vote.description}</p>}
       {vote.questions.map((q, i) => {
         if (q.startedAt != null) {
-          return <QuestionResultCard key={q.id} vote={vote} question={q} ballots={ballots} lots={lots} clesCharge={clesCharge} />
+          return <QuestionResultCard key={q.id} vote={vote} question={q} ballots={ballots} lots={lots} />
         }
         const isNext = i === nextIndex
         return (
@@ -408,14 +387,12 @@ function ActiveQuestionView({
   activeIndex,
   ballots,
   lots,
-  clesCharge,
 }: {
   residenceId: string
   vote: Vote
   activeIndex: number
   ballots: Ballot[]
   lots: Lot[]
-  clesCharge: ClefCharge[]
 }) {
   const [pausing, setPausing] = useState(false)
   const [skipping, setSkipping] = useState(false)
@@ -496,7 +473,6 @@ function ActiveQuestionView({
       ? weightedTallyForQuestion({
           ballots,
           lots,
-          clefCharge: resolveClefCharge(clesCharge, question.cleChargeId),
           question,
           nonResponseLotIds: vote.nonResponseLots[question.id] ?? [],
         })
@@ -526,7 +502,7 @@ function ActiveQuestionView({
                     key={o.id}
                     label={o.label}
                     value={weightedTally.tantiemesParOption[o.id] ?? 0}
-                    total={weightedTally.totalTantiemesClef}
+                    total={weightedTally.totalTantiemes}
                     suffix=" tantièmes"
                   />
                 ))
@@ -556,18 +532,16 @@ function ResultsView({
   vote,
   ballots,
   lots,
-  clesCharge,
 }: {
   vote: Vote
   ballots: Ballot[]
   lots: Lot[]
-  clesCharge: ClefCharge[]
 }) {
   return (
     <div className="flex flex-col gap-4">
       {vote.description && <p className="text-sm whitespace-pre-wrap text-foreground">{vote.description}</p>}
       {vote.questions.map((q) => (
-        <QuestionResultCard key={q.id} vote={vote} question={q} ballots={ballots} lots={lots} clesCharge={clesCharge} />
+        <QuestionResultCard key={q.id} vote={vote} question={q} ballots={ballots} lots={lots} />
       ))}
     </div>
   )
@@ -578,13 +552,11 @@ function QuestionResultCard({
   question,
   ballots,
   lots,
-  clesCharge,
 }: {
   vote: Vote
   question: VoteQuestion
   ballots: Ballot[]
   lots: Lot[]
-  clesCharge: ClefCharge[]
 }) {
   let weightedTally: WeightedTally | null = null
   let majorityOutcome: MajorityOutcome | null = null
@@ -592,7 +564,6 @@ function QuestionResultCard({
     weightedTally = weightedTallyForQuestion({
       ballots,
       lots,
-      clefCharge: resolveClefCharge(clesCharge, question.cleChargeId),
       question,
       nonResponseLotIds: vote.nonResponseLots[question.id] ?? [],
     })
@@ -619,7 +590,7 @@ function QuestionResultCard({
                 key={o.id}
                 label={o.label}
                 value={weightedTally!.tantiemesParOption[o.id] ?? 0}
-                total={weightedTally!.totalTantiemesClef}
+                total={weightedTally!.totalTantiemes}
                 suffix=" tantièmes"
               />
             ))}

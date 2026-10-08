@@ -176,14 +176,9 @@ export async function deleteLot(residenceId: string, id: string) {
 // dans le même lot d'écritures, mêmes champs que createStructure
 // (lib/structures.ts), à la suite des structures existantes
 // (`startStructureOrder`). Les lots référencent déjà leur libellé.
-//
-// Tantièmes par clé : écrits après les lots, dans tantiemesParLot par
-// chemin à points sur une clé existante (même principe que
-// setLotTantiemeForClef, jamais la map entière), ou à la création d'une clé
-// absente de la résidence.
 export async function importLots(
   residenceId: string,
-  validation: Pick<LotImportValidation, "toCreate" | "clefs" | "structuresToCreate">,
+  validation: Pick<LotImportValidation, "toCreate" | "structuresToCreate">,
   startOrder: number,
   startStructureOrder = 0
 ): Promise<void> {
@@ -212,7 +207,7 @@ export async function importLots(
   const lotOperations: BatchOperation[] = ordered.map(
     ({ input, order }) =>
       (batch) => {
-        const { parent, clefTantiemes: _clefTantiemes, ...lotInput } = input
+        const { parent, ...lotInput } = input
         const id = idByRef.get(input.refLot)!
         const parentLotId =
           parent === null ? null : parent.kind === "existing" ? parent.id : idByRef.get(parent.refLot)
@@ -225,32 +220,6 @@ export async function importLots(
       }
   )
   const operations: BatchOperation[] = [...structureOperations, ...lotOperations]
-
-  for (const { nom, existingId } of validation.clefs) {
-    const values: Record<string, number> = {}
-    for (const input of inputs) {
-      const value = input.clefTantiemes[nom]
-      if (value) values[idByRef.get(input.refLot)!] = value
-    }
-    if (existingId) {
-      if (Object.keys(values).length === 0) continue
-      const fields = Object.fromEntries(
-        Object.entries(values).map(([lotId, value]) => [`tantiemesParLot.${lotId}`, value])
-      )
-      operations.push((batch) =>
-        batch.update(doc(db, "residences", residenceId, "clesCharge", existingId), fields)
-      )
-    } else {
-      // Mêmes champs que createClefCharge (lib/clesCharge.ts).
-      operations.push((batch) =>
-        batch.set(doc(collection(db, "residences", residenceId, "clesCharge")), {
-          residenceId,
-          nom,
-          tantiemesParLot: values,
-        })
-      )
-    }
-  }
 
   for (let i = 0; i < operations.length; i += 400) {
     const batch = writeBatch(db)

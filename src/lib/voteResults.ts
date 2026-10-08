@@ -1,5 +1,3 @@
-import type { ClefCharge } from "@/types/clefCharge"
-import { GENERAL_CLEF_CHARGE_ID } from "@/types/clefCharge"
 import type { Lot } from "@/types/lot"
 import { MajoriteLegale, type Ballot, type VoteQuestion } from "@/types/vote"
 
@@ -56,14 +54,14 @@ export function tallyForQuestion(ballots: Ballot[], questionId: string): Record<
 // Décompte pondéré par tantièmes d'une question d'assemblée générale.
 // tantiemesParOption couvre TOUTES les options ; tantiemesPour/Contre/
 // Abstention/NonRepondu sont les 4 catégories utilisées par
-// evaluateMajority et se somment exactement à totalTantiemesClef.
+// evaluateMajority et se somment exactement à totalTantiemes.
 export type WeightedTally = {
   tantiemesParOption: Record<string, number>
   tantiemesPour: number
   tantiemesContre: number
   tantiemesAbstention: number
   tantiemesNonRepondu: number
-  totalTantiemesClef: number
+  totalTantiemes: number
   coproprietairesDistinctsPour: number
   coproprietairesDistinctsTotal: number
 }
@@ -71,14 +69,11 @@ export type WeightedTally = {
 export function weightedTallyForQuestion({
   ballots,
   lots,
-  clefCharge,
   question,
   nonResponseLotIds,
 }: {
   ballots: Ballot[]
   lots: Lot[]
-  // null = clé "Générale" (résolue depuis Lot.tantiemes de tous les lots).
-  clefCharge: ClefCharge | null
   question: VoteQuestion
   nonResponseLotIds: string[]
 }): WeightedTally {
@@ -86,22 +81,13 @@ export function weightedTallyForQuestion({
   const pourOptionId = question.options.length > 0 ? question.options[0].id : undefined
   const contreOptionId = question.options.length > 1 ? question.options[1].id : undefined
 
-  // Lots dans le périmètre de la clé de charge, avec leur tantième PROPRE à
-  // cette clé.
+  // Tous les lots, pondérés par leurs tantièmes globaux (Lot.tantiemes) -
+  // plus de clés de charge dédiées.
   const scopedLots = new Map<string, number>() // lotId -> tantièmes
   const coproprietairesTotal = new Set<string>()
-  if (clefCharge == null) {
-    for (const lot of lots) {
-      scopedLots.set(lot.id, lot.tantiemes)
-      for (const uid of lot.idProprietaire) coproprietairesTotal.add(uid)
-    }
-  } else {
-    const lotById = new Map(lots.map((l) => [l.id, l]))
-    for (const [lotId, tantiemes] of Object.entries(clefCharge.tantiemesParLot)) {
-      scopedLots.set(lotId, tantiemes)
-      const lot = lotById.get(lotId)
-      if (lot) for (const uid of lot.idProprietaire) coproprietairesTotal.add(uid)
-    }
+  for (const lot of lots) {
+    scopedLots.set(lot.id, lot.tantiemes)
+    for (const uid of lot.idProprietaire) coproprietairesTotal.add(uid)
   }
 
   const resultByLot = new Map(resultsForQuestion(ballots, questionId).map((r) => [r.lotId, r]))
@@ -138,7 +124,7 @@ export function weightedTallyForQuestion({
     }
   }
 
-  const totalTantiemesClef = [...scopedLots.values()].reduce((a, b) => a + b, 0)
+  const totalTantiemes = [...scopedLots.values()].reduce((a, b) => a + b, 0)
 
   return {
     tantiemesParOption,
@@ -146,7 +132,7 @@ export function weightedTallyForQuestion({
     tantiemesContre: contreOptionId != null ? (tantiemesParOption[contreOptionId] ?? 0) : 0,
     tantiemesAbstention,
     tantiemesNonRepondu,
-    totalTantiemesClef,
+    totalTantiemes,
     coproprietairesDistinctsPour: coproprietairesPour.size,
     coproprietairesDistinctsTotal: coproprietairesTotal.size,
   }
@@ -167,8 +153,8 @@ export function evaluateMajority(question: VoteQuestion, tally: WeightedTally): 
     case MajoriteLegale.art25: {
       // Adoptée : Pour > 50% du total. Sinon, passerelle 25-1 si autorisée
       // et Pour atteint au moins 33,33% (quorum de représentativité).
-      if (tally.tantiemesPour * 2 > tally.totalTantiemesClef) return { status: "adoptee" }
-      if (question.passerelleActivee && tally.tantiemesPour * 3 >= tally.totalTantiemesClef) {
+      if (tally.tantiemesPour * 2 > tally.totalTantiemes) return { status: "adoptee" }
+      if (question.passerelleActivee && tally.tantiemesPour * 3 >= tally.totalTantiemes) {
         return { status: "passerelle25_1" }
       }
       return { status: "rejetee" }
@@ -181,11 +167,11 @@ export function evaluateMajority(question: VoteQuestion, tally: WeightedTally): 
       // 50% du total.
       const majoriteEnNombre =
         tally.coproprietairesDistinctsPour * 2 > tally.coproprietairesDistinctsTotal
-      const majoriteEnTantiemes = tally.tantiemesPour * 3 >= tally.totalTantiemesClef * 2
+      const majoriteEnTantiemes = tally.tantiemesPour * 3 >= tally.totalTantiemes * 2
       if (majoriteEnNombre && majoriteEnTantiemes) return { status: "adoptee" }
       const tantiemesRepresentes =
         tally.tantiemesPour + tally.tantiemesContre + tally.tantiemesAbstention
-      if (question.passerelleActivee && tantiemesRepresentes * 2 >= tally.totalTantiemesClef) {
+      if (question.passerelleActivee && tantiemesRepresentes * 2 >= tally.totalTantiemes) {
         return { status: "passerelle26_1" }
       }
       return { status: "rejetee" }
@@ -193,7 +179,7 @@ export function evaluateMajority(question: VoteQuestion, tally: WeightedTally): 
 
     case MajoriteLegale.unanimite: {
       // Adoptée uniquement si 100% des tantièmes de la clé ont voté Pour.
-      if (tally.totalTantiemesClef > 0 && tally.tantiemesPour === tally.totalTantiemesClef) {
+      if (tally.totalTantiemes > 0 && tally.tantiemesPour === tally.totalTantiemes) {
         return { status: "adoptee" }
       }
       return { status: "rejetee" }
@@ -207,22 +193,7 @@ export function evaluateMajority(question: VoteQuestion, tally: WeightedTally): 
   }
 }
 
-// Tantièmes totaux d'une clé de charge référencée par une question (résolue
-// depuis clefChargeId) - GENERAL_CLEF_CHARGE_ID -> somme des tantièmes
-// généraux des lots ; sinon -> ClefCharge.totalTantiemes.
-export function totalTantiemesForCleCharge(
-  cleChargeId: string,
-  lots: Lot[],
-  clesCharge: ClefCharge[]
-): number {
-  if (cleChargeId === GENERAL_CLEF_CHARGE_ID) {
-    return lots.reduce((total, lot) => total + lot.tantiemes, 0)
-  }
-  const clef = clesCharge.find((c) => c.id === cleChargeId)
-  return clef ? Object.values(clef.tantiemesParLot).reduce((a, b) => a + b, 0) : 0
-}
-
-export function resolveClefCharge(clesCharge: ClefCharge[], cleChargeId: string): ClefCharge | null {
-  if (cleChargeId === GENERAL_CLEF_CHARGE_ID) return null
-  return clesCharge.find((c) => c.id === cleChargeId) ?? { id: cleChargeId, residenceId: "", nom: "", tantiemesParLot: {} }
+// Somme des tantièmes globaux de tous les lots de la résidence.
+export function totalTantiemesResidence(lots: Lot[]): number {
+  return lots.reduce((total, lot) => total + lot.tantiemes, 0)
 }

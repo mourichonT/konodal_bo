@@ -9,8 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { DescriptionTextarea } from "@/components/DescriptionTextarea"
 import { SearchableSelect } from "@/components/SearchableSelect"
 import { createVote } from "@/lib/votes"
-import { totalTantiemesForCleCharge } from "@/lib/voteResults"
-import { GENERAL_CLEF_CHARGE_ID, type ClefCharge } from "@/types/clefCharge"
+import { totalTantiemesResidence } from "@/lib/voteResults"
 import type { Lot } from "@/types/lot"
 import { MajoriteLegale, VoteType, majoriteLegaleLabels, type MajoriteLegaleValue, type Vote, type VoteQuestion } from "@/types/vote"
 import { PRIMARY_CTA_CLASS, cn } from "@/lib/utils"
@@ -21,7 +20,6 @@ type VoteFormDialogProps = {
   residenceId: string
   uid: string
   lots: Lot[]
-  clesCharge: ClefCharge[]
 }
 
 // Création d'un sondage ou d'une assemblée générale, réservée à la section
@@ -32,7 +30,7 @@ type VoteFormDialogProps = {
 // un sondage) plutôt qu'un sélecteur d'unité - et pas de "Votes" simple
 // (toujours la variante légale complète pour une assemblée générale, seul
 // périmètre demandé côté backoffice).
-export function VoteFormDialog({ open, onOpenChange, residenceId, uid, lots, clesCharge }: VoteFormDialogProps) {
+export function VoteFormDialog({ open, onOpenChange, residenceId, uid, lots }: VoteFormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
@@ -41,7 +39,6 @@ export function VoteFormDialog({ open, onOpenChange, residenceId, uid, lots, cle
             residenceId={residenceId}
             uid={uid}
             lots={lots}
-            clesCharge={clesCharge}
             onDone={() => onOpenChange(false)}
           />
         )}
@@ -58,7 +55,6 @@ type QuestionDraft = {
   options: OptionDraft[]
   durationSeconds: number
   majoriteRequise: MajoriteLegaleValue
-  cleChargeId: string
   passerelleActivee: boolean
 }
 
@@ -75,7 +71,6 @@ function newQuestion(isSondage: boolean): QuestionDraft {
         ],
     durationSeconds: isSondage ? 60 : 30,
     majoriteRequise: MajoriteLegale.art25,
-    cleChargeId: GENERAL_CLEF_CHARGE_ID,
     passerelleActivee: true,
   }
 }
@@ -84,13 +79,11 @@ function VoteFormDialogContent({
   residenceId,
   uid,
   lots,
-  clesCharge,
   onDone,
 }: {
   residenceId: string
   uid: string
   lots: Lot[]
-  clesCharge: ClefCharge[]
   onDone: () => void
 }) {
   const [type, setType] = useState<Vote["type"]>(VoteType.assembleeGenerale)
@@ -140,14 +133,12 @@ function VoteFormDialogContent({
   }
 
   // Garde-fou : une assemblée générale ne doit jamais pouvoir être créée
-  // tant que les tantièmes d'une clé de charge référencée par une question
-  // sont à 0 - le calcul de majorité pondérée serait sinon dénué de sens.
+  // tant que les tantièmes des lots sont à 0 - le calcul de majorité
+  // pondérée serait sinon dénué de sens.
   function tantiemesBlockReason(): string | null {
     if (isSondage) return null
-    for (const q of questions) {
-      if (totalTantiemesForCleCharge(q.cleChargeId, lots, clesCharge) <= 0) {
-        return "Une question référence une clé de charge sans aucun tantième - renseignez les tantièmes des lots concernés avant de créer cette assemblée générale."
-      }
+    if (totalTantiemesResidence(lots) <= 0) {
+      return "Aucun tantième n'est renseigné sur les lots - renseignez les tantièmes des lots avant de créer cette assemblée générale."
     }
     return null
   }
@@ -173,7 +164,6 @@ function VoteFormDialogContent({
         options: q.options.filter((o) => o.label.trim()).map((o) => ({ id: o.id, label: o.label.trim() })),
         durationSeconds: isSondage ? 60 : Math.max(30, q.durationSeconds || 30),
         majoriteRequise: isSondage ? null : q.majoriteRequise,
-        cleChargeId: isSondage ? GENERAL_CLEF_CHARGE_ID : q.cleChargeId,
         sourceQuestionId: null,
         passerelleActivee: q.passerelleActivee,
         startedAt: null,
@@ -305,21 +295,6 @@ function VoteFormDialogContent({
                       groups={[
                         {
                           options: Object.entries(majoriteLegaleLabels).map(([value, label]) => ({ value, label })),
-                        },
-                      ]}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Clé de charge concernée</Label>
-                    <SearchableSelect
-                      value={q.cleChargeId}
-                      onChange={(v) => updateQuestion(i, { cleChargeId: v })}
-                      groups={[
-                        {
-                          options: [
-                            { value: GENERAL_CLEF_CHARGE_ID, label: "Générale (tous les lots)" },
-                            ...clesCharge.map((c) => ({ value: c.id, label: c.nom || c.id })),
-                          ],
                         },
                       ]}
                     />

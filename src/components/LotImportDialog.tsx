@@ -10,7 +10,6 @@ import {
   mapLotImportHeaders,
   parseLotImportFile,
   validateLotImportRows,
-  CLEF_HEADER_PREFIX,
   EXAMPLE_REF_PREFIX,
   type ExistingLotForImport,
   type LotImportValidation,
@@ -22,9 +21,6 @@ type LotImportDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   existingLots: ExistingLotForImport[]
-  // Clés de charge de la résidence : une colonne chacune dans le modèle, et
-  // rapprochement des colonnes "Clé : <nom>" du fichier.
-  clesCharge: { id: string; nom: string }[]
   // Bâtiments de la résidence : rapprochement de la colonne Bâtiment, ceux
   // qui manquent sont créés à l'import.
   structures: { type: string; name: string }[]
@@ -37,7 +33,6 @@ export function LotImportDialog({
   open,
   onOpenChange,
   existingLots,
-  clesCharge,
   structures,
   onImport,
 }: LotImportDialogProps) {
@@ -47,7 +42,6 @@ export function LotImportDialog({
         {open && (
           <LotImportDialogContent
             existingLots={existingLots}
-            clesCharge={clesCharge}
             structures={structures}
             onImport={onImport}
             onDone={() => onOpenChange(false)}
@@ -60,19 +54,15 @@ export function LotImportDialog({
 
 function LotImportDialogContent({
   existingLots,
-  clesCharge,
   structures,
   onImport,
   onDone,
 }: {
   existingLots: ExistingLotForImport[]
-  clesCharge: { id: string; nom: string }[]
   structures: { type: string; name: string }[]
   onImport: (validation: LotImportValidation) => Promise<void>
   onDone: () => void
 }) {
-  const clefNames = clesCharge.map((c) => c.nom).filter((nom) => nom.trim())
-  const newClefs = (validation: LotImportValidation) => validation.clefs.filter((c) => !c.existingId)
   const [fileName, setFileName] = useState<string | null>(null)
   const [parsing, setParsing] = useState(false)
   const [headerErrors, setHeaderErrors] = useState<string[]>([])
@@ -86,15 +76,12 @@ function LotImportDialogContent({
     setParsing(true)
     try {
       const { headers, rows } = await parseLotImportFile(file)
-      const { rows: mappedRows, clefNames: fileClefNames, headerErrors: mapErrors } = mapLotImportHeaders(
-        headers,
-        rows
-      )
+      const { rows: mappedRows, headerErrors: mapErrors } = mapLotImportHeaders(headers, rows)
       if (mapErrors.length > 0) {
         setHeaderErrors(mapErrors)
         return
       }
-      setValidation(validateLotImportRows(mappedRows, existingLots, fileClefNames, clesCharge, structures))
+      setValidation(validateLotImportRows(mappedRows, existingLots, structures))
     } catch (err) {
       toast.error("Impossible de lire le fichier : " + (err as Error).message)
     } finally {
@@ -127,11 +114,11 @@ function LotImportDialogContent({
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium">1. Téléchargez le modèle à remplir</p>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => downloadLotImportTemplateXlsx(clefNames)}>
+            <Button type="button" variant="outline" size="sm" onClick={() => downloadLotImportTemplateXlsx()}>
               <Download />
               Modèle .xlsx
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => downloadLotImportTemplateCsv(clefNames)}>
+            <Button type="button" variant="outline" size="sm" onClick={() => downloadLotImportTemplateCsv()}>
               <Download />
               Modèle .csv
             </Button>
@@ -144,9 +131,7 @@ function LotImportDialogContent({
             créé à l'import.
           </p>
           <p className="text-xs text-muted-foreground">
-            Puis une colonne « {CLEF_HEADER_PREFIX}nom » par clé de charge, avec les tantièmes du lot pour cette
-            clé{clefNames.length > 0 ? " (le modèle reprend les clés déjà définies)" : ""}. Une clé qui n'existe pas
-            encore est créée à l'import. Les lignes d'exemple (référence « {EXAMPLE_REF_PREFIX}… ») sont ignorées.
+            Les lignes d'exemple (référence « {EXAMPLE_REF_PREFIX}… ») sont ignorées.
           </p>
         </div>
 
@@ -216,20 +201,6 @@ function LotImportDialogContent({
                     return `${s.label} (${detail.join(", ")})`
                   })
                   .join(", ")}
-              </div>
-            )}
-
-            {validation.clefs.length > 0 && (
-              <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm text-muted-foreground">
-                <span>
-                  Tantièmes par clé de charge : {validation.clefs.map((c) => c.nom).join(", ")}
-                </span>
-                {newClefs(validation).length > 0 && (
-                  <span className="font-medium text-amber-700">
-                    Clé{newClefs(validation).length > 1 ? "s" : ""} créée{newClefs(validation).length > 1 ? "s" : ""}{" "}
-                    à l'import : {newClefs(validation).map((c) => c.nom).join(", ")}
-                  </span>
-                )}
               </div>
             )}
 

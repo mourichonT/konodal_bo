@@ -10,9 +10,6 @@ export type LotImportInput = Omit<LotInput, "order"> & {
   // déjà en base (son id) ou un autre lot du même fichier (sa référence,
   // l'id n'existant pas encore avant l'import).
   parent: { kind: "existing"; id: string } | { kind: "new"; refLot: string } | null
-  // Tantièmes par clé de charge (colonnes "Clé : <nom>"), par nom de clé -
-  // les valeurs à 0 sont omises (un lot absent de tantiemesParLot vaut 0).
-  clefTantiemes: Record<string, number>
 }
 
 export const LOT_IMPORT_HEADERS = [
@@ -29,15 +26,10 @@ export const LOT_IMPORT_HEADERS = [
   "Étage",
 ] as const
 
-// Une colonne par clé de charge, nommée "Clé : <nom de la clé>" - le
-// préfixe distingue ces colonnes de toute autre colonne libre ajoutée par
-// l'utilisateur (ignorée), et permet de créer à l'import une clé qui
-// n'existe pas encore (nouvelle résidence).
-export const CLEF_HEADER_PREFIX = "Clé : "
-const CLEF_HEADER_RE = /^cl[eé]\s*:\s*(.+)$/i
-
-export function lotImportTemplateHeaders(clefNames: string[]): string[] {
-  return [...LOT_IMPORT_HEADERS, ...clefNames.map((nom) => CLEF_HEADER_PREFIX + nom)]
+// Toute autre colonne du fichier (dont les anciennes colonnes "Clé : <nom>"
+// des clés de charge, supprimées) est ignorée à l'import.
+export function lotImportTemplateHeaders(): string[] {
+  return [...LOT_IMPORT_HEADERS]
 }
 
 // Lignes d'exemple des modèles : toute ligne dont la référence commence par
@@ -49,22 +41,12 @@ export function isExampleRef(refLot: string): boolean {
   return refLot.trim().toUpperCase().startsWith(EXAMPLE_REF_PREFIX)
 }
 
-// Clé d'exemple proposée dans le modèle d'une résidence qui n'en a encore
-// aucune - créée seulement si des tantièmes réels y sont saisis (une clé
-// inconnue sans aucune valeur n'est jamais créée, cf. validateLotImportRows).
-const EXAMPLE_CLEF_NAME = "Ascenseur"
-
-export function lotImportTemplateClefNames(existingClefNames: string[]): string[] {
-  return existingClefNames.length > 0 ? existingClefNames : [EXAMPLE_CLEF_NAME]
-}
-
 // Deux logements, une cave rattachée au premier, un parking au second -
 // couvre chaque colonne, dont "Rattaché à" vers un lot du même fichier.
-function lotImportExampleRows(clefNames: string[]): (string | number)[][] {
-  const clefValues = (values: number[]) => clefNames.map((_, i) => (i === 0 ? values[0] : values[1] ?? ""))
+function lotImportExampleRows(): (string | number)[][] {
   return [
-    ["Bâtiment A", "1", `${EXAMPLE_REF_PREFIX}001`, "Appartement", "Non", 250, "", "R+1", ...clefValues([300, 250])],
-    ["Bâtiment A", "2", `${EXAMPLE_REF_PREFIX}002`, "Appartement", "Non", 180, "", "R+2", ...clefValues([200, 180])],
+    ["Bâtiment A", "1", `${EXAMPLE_REF_PREFIX}001`, "Appartement", "Non", 250, "", "R+1"],
+    ["Bâtiment A", "2", `${EXAMPLE_REF_PREFIX}002`, "Appartement", "Non", 180, "", "R+2"],
     [
       "Bâtiment A",
       "C1",
@@ -74,7 +56,6 @@ function lotImportExampleRows(clefNames: string[]): (string | number)[][] {
       10,
       `${EXAMPLE_REF_PREFIX}001`,
       "Sous-sol -1",
-      ...clefValues([0, 0]),
     ],
     [
       "Parking Extérieur",
@@ -85,7 +66,6 @@ function lotImportExampleRows(clefNames: string[]): (string | number)[][] {
       15,
       `${EXAMPLE_REF_PREFIX}002`,
       "",
-      ...clefValues([0, 0]),
     ],
   ]
 }
@@ -105,12 +85,9 @@ function downloadBlob(blob: Blob, filename: string) {
 
 const UTF8_BOM = String.fromCharCode(0xfeff)
 
-// clefNames : clés de charge déjà définies sur la résidence, une colonne
-// chacune dans le modèle.
-export function downloadLotImportTemplateCsv(existingClefNames: string[]) {
-  const clefNames = lotImportTemplateClefNames(existingClefNames)
+export function downloadLotImportTemplateCsv() {
   const csv =
-    [lotImportTemplateHeaders(clefNames), ...lotImportExampleRows(clefNames)]
+    [lotImportTemplateHeaders(), ...lotImportExampleRows()]
       .map((row) => row.join(";"))
       .join("\r\n") + "\r\n"
   // BOM UTF-8 : Excel ouvre sinon les accents (Bâtiment, Référence) mal
@@ -121,14 +98,13 @@ export function downloadLotImportTemplateCsv(existingClefNames: string[]) {
 // exceljs chargé à la demande (uniquement quand ce fichier sert vraiment) -
 // même raison que ResidencesMap/maplibre-gl : évite d'alourdir le bundle
 // principal pour une fonctionnalité utilisée occasionnellement.
-export async function downloadLotImportTemplateXlsx(existingClefNames: string[]) {
-  const clefNames = lotImportTemplateClefNames(existingClefNames)
+export async function downloadLotImportTemplateXlsx() {
   const ExcelJS = await import("exceljs")
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet("Lots")
-  sheet.addRow(lotImportTemplateHeaders(clefNames))
+  sheet.addRow(lotImportTemplateHeaders())
   sheet.getRow(1).font = { bold: true }
-  for (const example of lotImportExampleRows(clefNames)) {
+  for (const example of lotImportExampleRows()) {
     sheet.addRow(example).font = { italic: true, color: { argb: "FF808080" } }
   }
   sheet.columns = [
@@ -140,7 +116,6 @@ export async function downloadLotImportTemplateXlsx(existingClefNames: string[])
     { width: 12 },
     { width: 24 },
     { width: 12 },
-    ...clefNames.map((nom) => ({ width: Math.max(14, CLEF_HEADER_PREFIX.length + nom.length + 2) })),
   ]
   sheet.views = [{ state: "frozen", ySplit: 1 }]
 
@@ -158,8 +133,7 @@ export async function downloadLotImportTemplateXlsx(existingClefNames: string[])
     'Étage (facultatif) : "RdC", "R+2", "2", "Sous-sol -1"... - donne les étages des bâtiments créés.',
     "Rattaché à : référence du lot principal (appartement...) pour une cave, un",
     "parking... marqué Rattachable = Oui - lot du fichier ou déjà existant.",
-    `Une colonne "${CLEF_HEADER_PREFIX}<nom>" par clé de charge : tantièmes du lot pour`,
-    "cette clé. Une clé qui n'existe pas encore est créée à l'import.",
+    "Tantièmes : tantièmes généraux du lot (entier positif ou nul).",
     `Les lignes dont la référence commence par "${EXAMPLE_REF_PREFIX}" sont des exemples,`,
     "ignorés à l'import : remplacez-les ou laissez-les.",
   ]
@@ -185,18 +159,15 @@ export async function downloadLotImportTemplateXlsx(existingClefNames: string[])
       errorTitle: "Valeur non reconnue",
       error: "Oui ou Non.",
     }
-    // Tantièmes généraux (colonne F) puis une colonne par clé de charge.
-    const tantiemesColumns = [6, ...clefNames.map((_, i) => LOT_IMPORT_HEADERS.length + 1 + i)]
-    for (const column of tantiemesColumns) {
-      sheet.getCell(row, column).dataValidation = {
-        type: "whole",
-        operator: "greaterThanOrEqual",
-        allowBlank: true,
-        formulae: [0],
-        showErrorMessage: true,
-        errorTitle: "Tantièmes invalides",
-        error: "Nombre entier positif ou nul attendu.",
-      }
+    // Tantièmes généraux (colonne F).
+    sheet.getCell(row, 6).dataValidation = {
+      type: "whole",
+      operator: "greaterThanOrEqual",
+      allowBlank: true,
+      formulae: [0],
+      showErrorMessage: true,
+      errorTitle: "Tantièmes invalides",
+      error: "Nombre entier positif ou nul attendu.",
     }
   }
   const buffer = await workbook.xlsx.writeBuffer()
@@ -295,12 +266,6 @@ export async function parseLotImportFile(file: File): Promise<{ headers: string[
   return parseXlsxFile(file)
 }
 
-// Rapprochement nom de colonne <-> clé de charge existante : casse et
-// espaces ignorés ("Ascenseur" = "ascenseur ").
-export function clefNameKey(nom: string): string {
-  return nom.trim().toLowerCase().replace(/\s+/g, " ")
-}
-
 // Libellé d'un bâtiment tel que le tableau des lots le référence
 // (Lot.batiment = "<type> <nom>" d'une structure, cf. buildingOptions dans
 // LotsSection).
@@ -319,8 +284,7 @@ function structureLabelKey(label: string): string {
     .replace(/\s+/g, " ")
 }
 
-// Bâtiment absent de la résidence, à créer à l'import (comme une clé de
-// charge inconnue). Le libellé est toujours "<type> <nom>" : le type en tête
+// Bâtiment absent de la résidence, à créer à l'import. Le libellé est toujours "<type> <nom>" : le type en tête
 // parmi structureTypeOptions, le nom ensuite ("Bâtiment A" -> Bâtiment / A,
 // "Parking Extérieur" -> Parking / Extérieur). null si le libellé ne commence
 // pas par un type ou n'a pas de nom ("A", "Extérieur" seuls) : ligne en
@@ -394,8 +358,6 @@ export type RawLotImportRow = {
   tantiemesRaw: string
   parentRefRaw: string
   etageRaw: string
-  // Valeur brute par nom de clé de charge (colonnes "Clé : <nom>").
-  clefsRaw: Record<string, string>
 }
 
 // Sépare la résolution des colonnes (peut échouer globalement si le modèle
@@ -404,7 +366,7 @@ export type RawLotImportRow = {
 export function mapLotImportHeaders(
   headers: string[],
   rows: string[][]
-): { rows: RawLotImportRow[]; clefNames: string[]; headerErrors: string[] } {
+): { rows: RawLotImportRow[]; headerErrors: string[] } {
   const normalized = headers.map(normalizeHeader)
   const col = {
     batiment: normalized.indexOf("batiment"),
@@ -420,26 +382,14 @@ export function mapLotImportHeaders(
     parentRef: normalized.findIndex((h) => h.startsWith("rattachea")),
     etage: normalized.indexOf("etage"),
   }
-  const clefColumns: { nom: string; index: number }[] = []
-  headers.forEach((h, index) => {
-    const match = CLEF_HEADER_RE.exec(h.trim())
-    if (match) clefColumns.push({ nom: match[1].trim(), index })
-  })
   const headerErrors: string[] = []
   if (col.batiment === -1) headerErrors.push('Colonne "Bâtiment" introuvable.')
   if (col.lot === -1) headerErrors.push('Colonne "N°" introuvable.')
   if (col.refLot === -1) headerErrors.push('Colonne "Référence" introuvable.')
-  const seenClefs = new Set<string>()
-  for (const { nom } of clefColumns) {
-    const key = clefNameKey(nom)
-    if (seenClefs.has(key)) headerErrors.push(`Colonne "${CLEF_HEADER_PREFIX}${nom}" présente deux fois.`)
-    seenClefs.add(key)
-  }
-  if (headerErrors.length > 0) return { rows: [], clefNames: [], headerErrors }
+  if (headerErrors.length > 0) return { rows: [], headerErrors }
 
   return {
     headerErrors: [],
-    clefNames: clefColumns.map((c) => c.nom),
     rows: rows
       .filter((cols) => cols.some((c) => c.trim() !== ""))
       .map((cols, i) => ({
@@ -452,7 +402,6 @@ export function mapLotImportHeaders(
         tantiemesRaw: col.tantiemes >= 0 ? (cols[col.tantiemes] ?? "").trim() : "",
         parentRefRaw: col.parentRef >= 0 ? (cols[col.parentRef] ?? "").trim() : "",
         etageRaw: col.etage >= 0 ? (cols[col.etage] ?? "").trim() : "",
-        clefsRaw: Object.fromEntries(clefColumns.map(({ nom, index }) => [nom, (cols[index] ?? "").trim()])),
       })),
   }
 }
@@ -487,9 +436,6 @@ export type LotImportValidation = {
   duplicatesExisting: string[]
   duplicatesInFile: string[]
   errors: string[]
-  // Clés de charge du fichier : id de la clé existante correspondante, ou
-  // null si elle sera créée à l'import.
-  clefs: { nom: string; existingId: string | null }[]
   // Bâtiments cités par le fichier et absents de la résidence, créés à
   // l'import (structures/{id}) ; les lots portent déjà leur libellé final.
   // `etage`/`hasUnderground` : même format que la saisie manuelle
@@ -516,8 +462,6 @@ export type ExistingLotForImport = {
 export function validateLotImportRows(
   rawRows: RawLotImportRow[],
   existingLots: ExistingLotForImport[],
-  clefNames: string[] = [],
-  existingClefs: { id: string; nom: string }[] = [],
   existingStructures: { type: string; name: string }[] = []
 ): LotImportValidation {
   // Libellé final du bâtiment de chaque ligne : celui de la structure
@@ -608,20 +552,6 @@ export function validateLotImportRows(
       errors.push(`${label} : ${tantiemesError}`)
       continue
     }
-    const clefTantiemes: Record<string, number> = {}
-    let clefError: string | null = null
-    for (const nom of clefNames) {
-      const parsed = parseTantiemes(row.clefsRaw[nom] ?? "")
-      if (parsed.error) {
-        clefError = `clé "${nom}" : ${parsed.error}`
-        break
-      }
-      if (parsed.value > 0) clefTantiemes[nom] = parsed.value
-    }
-    if (clefError) {
-      errors.push(`${label} : ${clefError}`)
-      continue
-    }
     if (row.parentRefRaw && !isLinkable) {
       errors.push(`${label} : "Rattaché à" renseigné mais le lot n'est pas rattachable (Rattachable = Oui attendu).`)
       continue
@@ -641,7 +571,6 @@ export function validateLotImportRows(
       isLinkable,
       tantiemes,
       parent: null,
-      clefTantiemes,
       rowNumber: row.rowNumber,
       parentRefRaw: row.parentRefRaw,
     })
@@ -684,13 +613,6 @@ export function validateLotImportRows(
     linkedCount++
   }
 
-  const existingClefByKey = new Map(existingClefs.map((c) => [clefNameKey(c.nom), c.id]))
-  // Une clé à créer sans aucune valeur saisie (ex: colonne d'exemple du
-  // modèle laissée vide) est écartée plutôt que créée vide.
-  const clefs = clefNames
-    .map((nom) => ({ nom, existingId: existingClefByKey.get(clefNameKey(nom)) ?? null }))
-    .filter((c) => c.existingId || resolved.some((lot) => lot.clefTantiemes[c.nom]))
-
   // Erreurs de rattachement relevées après les autres : retri par ligne.
   const lineOf = (e: string) => Number(/^Ligne (\d+)/.exec(e)?.[1] ?? 0)
   errors.sort((x, y) => lineOf(x) - lineOf(y))
@@ -708,7 +630,6 @@ export function validateLotImportRows(
     duplicatesExisting,
     duplicatesInFile,
     errors,
-    clefs,
     structuresToCreate: structuresToCreate
       .filter((s) => levelsByLabel.has(s.label))
       .map((s) => ({ ...s, ...etagesFromLevels(levelsByLabel.get(s.label)!) })),

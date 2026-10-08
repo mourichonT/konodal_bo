@@ -44,9 +44,6 @@ export type VoteQuestion = {
   // Assemblée générale uniquement (null pour un sondage) - une des
   // constantes MajoriteLegale.
   majoriteRequise: MajoriteLegaleValue | null
-  // Sous-ensemble de lots concernés (cf. ClefCharge) - GENERAL_CLEF_CHARGE_ID
-  // par défaut (tous les lots de la résidence, tantièmes généraux).
-  cleChargeId: string
   // Renseigné uniquement sur une question "passerelle" injectée
   // automatiquement côté serveur (finalize_ag_question_non_responses) suite
   // à l'échec d'une question ART_25/ART_26 ayant atteint le quorum de

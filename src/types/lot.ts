@@ -58,9 +58,8 @@ export type Lot = {
   // défini) - toujours vrai quand le rattachement est fait depuis ce BO
   // (linkLot), pas de granularité exposée ici.
   groupedWithParent?: boolean
-  // Tantième général du lot (loi de 1965) - simple entier, distinct du
-  // tantième par clé de charge dédiée (cf. ClefCharge.tantiemesParLot,
-  // types/clefCharge.ts). Toujours écrit, y compris à 0 (jamais omis) -
+  // Tantième général du lot (loi de 1965) - simple entier, seule base de
+  // pondération (plus de clés de charge). Toujours écrit, y compris à 0 -
   // miroir de Lot.tantiemes/toJsonForDb côté app mobile (connectkasa,
   // lib/models/pages_models/lot.dart).
   tantiemes: number

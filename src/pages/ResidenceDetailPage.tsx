@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, ChevronDown, Eye, GripVertical, Home, Info, MoreVertical, Percent, Plus, Search, Settings2, ShieldOff, Trash2, Upload, UserPlus, Vote as VoteIcon, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Eye, GripVertical, Home, Info, MoreVertical, Plus, Search, Settings2, ShieldOff, Trash2, Upload, UserPlus, Vote as VoteIcon, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -65,14 +65,7 @@ import {
   updateLot,
   type LotInput,
 } from "@/lib/lots"
-import {
-  createClefCharge,
-  deleteClefCharge,
-  subscribeToClesCharge,
-  updateClefChargeNom,
-} from "@/lib/clesCharge"
 import { LotImportDialog } from "@/components/LotImportDialog"
-import { LotClefsChargeDialog } from "@/components/LotClefsChargeDialog"
 import { VoteFormDialog } from "@/components/VoteFormDialog"
 import { saveResidenceAccessPoint, setStructureAccessPoint, subscribeToResidenceAccessPoint } from "@/lib/accessPoints"
 import { AccessPointType, accessPointTypeLabels, type AccessPoint, type AccessPointTypeValue } from "@/types/accessPoint"
@@ -89,7 +82,6 @@ import { useAuth } from "@/lib/auth-context"
 import { emptyAddress, type Residence } from "@/types/residence"
 import { structureElementOptions, structureTypeOptions, type StructureResidence } from "@/types/structure"
 import { defaultIsLinkableForType, typeLotOptions, type Lot } from "@/types/lot"
-import { totalTantiemes, type ClefCharge } from "@/types/clefCharge"
 import { AGENT_UID_FIELD, serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
 import type { KonodalUser } from "@/types/user"
 import { VoteType, isSessionFinished, isVoteClosed, isVoteStarted, isVotePaused, type Vote } from "@/types/vote"
@@ -193,7 +185,6 @@ export default function ResidenceDetailPage() {
             <div className="flex flex-col gap-5">
               <StructuresSection residenceId={id} structures={structures} />
               <SecurityAccessSection residenceId={id} structures={structures} />
-              <ClesChargeSection residenceId={id} />
             </div>
           )}
 
@@ -904,17 +895,6 @@ function StructureCard({
   )
 }
 
-type ClefChargeRow = {
-  key: string
-  id?: string
-  nom: string
-  // Non éditable ici : recalculé à partir de tantiemesParLot (jamais stocké
-  // tel quel, cf. types/clefCharge.ts:totalTantiemes) - affiché en lecture
-  // seule à titre de repère.
-  total: number
-  tantiemesParLot: Record<string, number>
-}
-
 type AccessRowState = {
   key: string
   label: string
@@ -938,7 +918,7 @@ function toAccessRow(key: string, label: string, accessPoint?: AccessPoint | nul
 // déclaré dans la section Structures ci-dessus. Affiché au prestataire sur
 // le lien de partage d'une intervention (cf. get_shared_intervention,
 // functions_python/main.py). Même patron d'édition inline auto-enregistrée
-// (debounce) que ClesChargeSection/LotsSection - la résidence est stockée à
+// (debounce) que LotsSection - la résidence est stockée à
 // part (residences/{id}/access/main, cf. lib/accessPoints.ts), chaque
 // bâtiment sur son propre document (structures/{id}.accessPoint).
 function SecurityAccessSection({
@@ -1062,166 +1042,6 @@ function SecurityAccessSection({
   )
 }
 
-// Gestion des clés de répartition des charges de la résidence (charges
-// générales, ascenseur, chauffage...) - même patron d'édition inline
-// auto-enregistrée que LotsSection, en plus simple (pas de drag, pas de
-// recherche). Le tantième de chaque lot pour chacune de ces clés se règle
-// depuis le tableau des lots ci-dessous (bouton "Répartition" par ligne), pas
-// ici - seul le nom de la clé s'édite dans ce tableau.
-function ClesChargeSection({ residenceId }: { residenceId: string }) {
-  const [rows, setRows] = useState<ClefChargeRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const rowsRef = useRef<ClefChargeRow[]>([])
-  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-
-  useEffect(() => {
-    rowsRef.current = rows
-  }, [rows])
-
-  useEffect(() => {
-    const timers = saveTimers.current
-    return () => {
-      Object.values(timers).forEach(clearTimeout)
-    }
-  }, [])
-
-  useEffect(() => {
-    return subscribeToClesCharge(
-      residenceId,
-      (clesCharge) => {
-        setRows(
-          clesCharge.map((c) => ({
-            key: c.id,
-            id: c.id,
-            nom: c.nom,
-            total: totalTantiemes(c),
-            tantiemesParLot: c.tantiemesParLot,
-          }))
-        )
-        setLoading(false)
-      },
-      (error) => {
-        toast.error("Impossible de charger les clés de charges : " + error.message)
-        setLoading(false)
-      }
-    )
-  }, [residenceId])
-
-  async function persistRow(key: string) {
-    const row = rowsRef.current.find((r) => r.key === key)
-    if (!row?.id) return
-    const nom = row.nom.trim()
-    // Ligne encore incomplète (saisie en cours) : on attend simplement,
-    // aucune erreur tant que l'utilisateur n'a pas donné de nom.
-    if (!nom) return
-    try {
-      await updateClefChargeNom(residenceId, row.id, nom)
-    } catch (err) {
-      toast.error("Échec de l'enregistrement : " + (err as Error).message)
-    }
-  }
-
-  function schedulePersist(key: string) {
-    clearTimeout(saveTimers.current[key])
-    saveTimers.current[key] = setTimeout(() => {
-      void persistRow(key)
-    }, 600)
-  }
-
-  function updateRow(key: string, nom: string) {
-    setRows((prev) => {
-      const next = prev.map((row) => (row.key === key ? { ...row, nom } : row))
-      rowsRef.current = next
-      return next
-    })
-    schedulePersist(key)
-  }
-
-  async function addRow() {
-    try {
-      const id = await createClefCharge(residenceId, "")
-      setRows((prev) =>
-        prev.some((r) => r.id === id)
-          ? prev
-          : [...prev, { key: id, id, nom: "", total: 0, tantiemesParLot: {} }]
-      )
-    } catch (err) {
-      toast.error("Échec de la création : " + (err as Error).message)
-    }
-  }
-
-  async function removeRow(row: ClefChargeRow) {
-    if (!row.id) return
-    clearTimeout(saveTimers.current[row.key])
-    try {
-      await deleteClefCharge(residenceId, row.id)
-      toast.success("Clé de charges supprimée")
-    } catch (err) {
-      toast.error("Échec de la suppression : " + (err as Error).message)
-      return
-    }
-    setRows((prev) => prev.filter((r) => r.key !== row.key))
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Clés de charges</CardTitle>
-        <CardDescription>
-          Chaque clé définit une répartition des charges (charges générales, ascenseur…). Le tantième de
-          chaque lot pour cette clé se règle depuis le tableau des lots ci-dessous (bouton "Répartition").
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Total tantièmes</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.key}>
-                  <TableCell>
-                    <Input
-                      placeholder="Ex : Charges générales"
-                      value={row.nom}
-                      onChange={(e) => updateRow(row.key, e.target.value)}
-                    />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{row.total}</TableCell>
-                  <TableCell className="text-right">
-                    <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeRow(row)}>
-                      <Trash2 />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!loading && rows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
-                    Aucune clé de charges pour l'instant.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="flex justify-end">
-          <Button type="button" variant="outline" onClick={addRow}>
-            <Plus />
-            Ajouter une clé
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 type LotRow = {
   key: string
   id?: string
@@ -1236,8 +1056,7 @@ type LotRow = {
   // SortableLotRow, colonne "Rattaché à").
   parentLotId: string | null
   // Tantième général du lot (loi de 1965) - édité inline comme les autres
-  // champs. Distinct de la répartition par clé de charge dédiée (bouton
-  // "Répartition", cf. LotClefsChargeDialog).
+  // champs.
   tantiemes: number
 }
 
@@ -1259,7 +1078,6 @@ function LotsSection({
   const [loading, setLoading] = useState(true)
   const [importing, setImporting] = useState(false)
   const [search, setSearch] = useState("")
-  const [clesCharge, setClesCharge] = useState<ClefCharge[]>([])
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   // Miroir synchrone de `rows`, lu depuis les callbacks différés
   // (setTimeout de schedulePersist) ou depuis handleDragEnd juste après un
@@ -1325,14 +1143,6 @@ function LotsSection({
         toast.error("Impossible de charger les lots : " + error.message)
         setLoading(false)
       }
-    )
-  }, [residenceId])
-
-  useEffect(() => {
-    return subscribeToClesCharge(
-      residenceId,
-      setClesCharge,
-      (error) => toast.error("Impossible de charger les clés de charges : " + error.message)
     )
   }, [residenceId])
 
@@ -1535,7 +1345,6 @@ function LotsSection({
                       row={row}
                       allRows={rows}
                       buildingOptions={buildingOptions}
-                      clesCharge={clesCharge}
                       updateRow={updateRow}
                       removeRow={removeRow}
                       onLink={handleLinkLot}
@@ -1573,7 +1382,6 @@ function LotsSection({
         open={importing}
         onOpenChange={setImporting}
         existingLots={rows}
-        clesCharge={clesCharge}
         structures={structures}
         onImport={async (validation) => {
           await importLots(residenceId, validation, rowsRef.current.length, structures.length)
@@ -1588,7 +1396,6 @@ function SortableLotRow({
   row,
   allRows,
   buildingOptions,
-  clesCharge,
   updateRow,
   removeRow,
   onLink,
@@ -1597,12 +1404,10 @@ function SortableLotRow({
   row: LotRow
   allRows: LotRow[]
   buildingOptions: string[]
-  clesCharge: ClefCharge[]
   updateRow: (key: string, patch: Partial<LotRow>, options?: { immediate?: boolean }) => void
   removeRow: (row: LotRow) => void
   onLink: (row: LotRow, parentLotId: string | null) => void
 }) {
-  const [repartitionOpen, setRepartitionOpen] = useState(false)
   // Lots "principaux" (isLinkable non coché) pouvant servir de parent -
   // jamais la ligne elle-même.
   const parentOptions = allRows.filter(
@@ -1701,25 +1506,11 @@ function SortableLotRow({
         )}
       </TableCell>
       <TableCell className="text-right">
-        {row.id && (
-          <LotClefsChargeDialog
-            open={repartitionOpen}
-            onOpenChange={setRepartitionOpen}
-            residenceId={residenceId}
-            lotId={row.id}
-            lotLabel={`${row.batiment} - Lot ${row.lot}`.trim()}
-            clesCharge={clesCharge}
-          />
-        )}
         <DropdownMenu>
           <DropdownMenuTrigger className="ml-auto inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
             <MoreVertical className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled={!row.id} onClick={() => setRepartitionOpen(true)}>
-              <Percent />
-              Répartition
-            </DropdownMenuItem>
             <DropdownMenuItem disabled={!row.id} render={<Link to={`/residences/${residenceId}/lots/${row.id}`} />}>
               <Eye />
               Voir le lot
@@ -1758,7 +1549,6 @@ function VotesSection({ residenceId }: { residenceId: string }) {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [lots, setLots] = useState<Lot[]>([])
-  const [clesCharge, setClesCharge] = useState<ClefCharge[]>([])
   // Rafraîchit périodiquement le statut affiché (isSessionFinished/
   // isVoteClosed sont des calculs purs basés sur l'heure courante, jamais
   // stockés côté Firestore - rien d'autre ne les recalculerait ici).
@@ -1786,10 +1576,6 @@ function VotesSection({ residenceId }: { residenceId: string }) {
 
   useEffect(() => {
     return subscribeToLots(residenceId, setLots, () => {})
-  }, [residenceId])
-
-  useEffect(() => {
-    return subscribeToClesCharge(residenceId, setClesCharge, () => {})
   }, [residenceId])
 
   async function handleDelete(vote: Vote) {
@@ -1886,7 +1672,6 @@ function VotesSection({ residenceId }: { residenceId: string }) {
         residenceId={residenceId}
         uid={user?.uid ?? ""}
         lots={lots}
-        clesCharge={clesCharge}
       />
     </Card>
   )

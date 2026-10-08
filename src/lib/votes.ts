@@ -12,7 +12,6 @@ import {
 } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
-import { GENERAL_CLEF_CHARGE_ID } from "@/types/clefCharge"
 import type { Ballot, Presence, Vote, VoteOption, VoteQuestion } from "@/types/vote"
 import { VoteType } from "@/types/vote"
 
@@ -47,7 +46,6 @@ function questionFromMap(m: Record<string, unknown>): VoteQuestion {
       : [],
     durationSeconds: typeof m.durationSeconds === "number" ? m.durationSeconds : 60,
     majoriteRequise: (m.majoriteRequise as VoteQuestion["majoriteRequise"]) ?? null,
-    cleChargeId: (m.cleChargeId as string) ?? GENERAL_CLEF_CHARGE_ID,
     sourceQuestionId: (m.sourceQuestionId as string) ?? null,
     passerelleActivee: m.passerelleActivee !== false,
     startedAt: (m.startedAt as Timestamp) ?? null,
@@ -61,7 +59,6 @@ function questionToMap(q: VoteQuestion): Record<string, unknown> {
     options: q.options.map((o) => ({ id: o.id, label: o.label })),
     durationSeconds: q.durationSeconds,
     ...(q.majoriteRequise != null ? { majoriteRequise: q.majoriteRequise } : {}),
-    cleChargeId: q.cleChargeId,
     ...(q.sourceQuestionId != null ? { sourceQuestionId: q.sourceQuestionId } : {}),
     passerelleActivee: q.passerelleActivee,
     ...(q.startedAt != null ? { startedAt: q.startedAt } : {}),
