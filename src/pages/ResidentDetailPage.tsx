@@ -28,6 +28,7 @@ import { DocumentThumbnail } from "@/components/DocumentThumbnail"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
+import { residenceNameOf, unblockResident } from "@/lib/residentRemovals"
 import { subscribeToResidences } from "@/lib/residences"
 import { subscribeToLots, grantLotRole, revokeLotRole, type LotRole } from "@/lib/lots"
 import {
@@ -421,6 +422,10 @@ export default function ResidentDetailPage() {
                 pièce fait désormais partie de la demande. */}
             {isSuperAdmin && <CertificationRequestCard uid={user.uid} isCertified={user.isCertified} />}
           </div>
+
+          {isSuperAdmin && user.blockedResidencesIds.length > 0 && (
+            <BlockedResidencesCard uid={user.uid} residenceIds={user.blockedResidencesIds} />
+          )}
 
           <div id="lots" className="flex scroll-mt-6 flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1132,5 +1137,63 @@ function LotRow({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// Accès suspendu par un superAdmin (demande de retrait du CS acceptée, cf.
+// RemovalRequestsPage) : rien n'a été supprimé, lever le blocage rend
+// l'accès à l'identique (le rôle CS retiré n'est pas rendu).
+function BlockedResidencesCard({ uid, residenceIds }: { uid: string; residenceIds: string[] }) {
+  const [names, setNames] = useState<Record<string, string>>({})
+  const [unblocking, setUnblocking] = useState<string | null>(null)
+
+  useEffect(() => {
+    Promise.all(residenceIds.map(async (id) => [id, await residenceNameOf(id)] as const)).then((entries) =>
+      setNames(Object.fromEntries(entries))
+    )
+  }, [residenceIds])
+
+  async function handleUnblock(residenceId: string) {
+    if (!confirm("Lever le blocage et rendre l'accès à cette résidence ?")) return
+    setUnblocking(residenceId)
+    try {
+      await unblockResident(residenceId, uid)
+      toast.success("Accès rétabli")
+    } catch (err) {
+      toast.error("Échec : " + (err as Error).message)
+    } finally {
+      setUnblocking(null)
+    }
+  }
+
+  return (
+    <Card className="border-rose-200">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-rose-700">
+          <Ban className="size-4" />
+          Accès bloqué
+        </CardTitle>
+        <CardDescription>
+          Ses lots, publications et messages sont conservés ; il voit une page « Accès suspendu » dans l'app.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {residenceIds.map((residenceId) => (
+          <div key={residenceId} className="flex items-center justify-between gap-3">
+            <Link className="font-medium underline" to={`/residences/${residenceId}`}>
+              {names[residenceId] ?? residenceId}
+            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={unblocking !== null}
+              onClick={() => handleUnblock(residenceId)}
+            >
+              Lever le blocage
+            </Button>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }

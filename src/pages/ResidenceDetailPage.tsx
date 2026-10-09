@@ -18,6 +18,8 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Badge } from "@/components/ui/badge"
+import { collection, doc, onSnapshot } from "firebase/firestore"
+import { db } from "@/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -178,6 +180,7 @@ export default function ResidenceDetailPage() {
             <div className="flex flex-col gap-5">
               <InfoSection residence={residence} />
               <CsMembersSection residenceId={id} residence={residence} />
+              <CharterStatusSection residenceId={id} />
             </div>
           )}
 
@@ -1673,6 +1676,68 @@ function VotesSection({ residenceId }: { residenceId: string }) {
         uid={user?.uid ?? ""}
         lots={lots}
       />
+    </Card>
+  )
+}
+
+// État de la charte de la résidence (facultative, rédigée et publiée par le
+// CS depuis l'app) : version en vigueur, nombre de signatures et PDF des
+// signataires (documents_copro/charte_regles_de_vie, régénéré par le
+// serveur). Lecture réservée au superAdmin (cf. firestore.rules).
+function CharterStatusSection({ residenceId }: { residenceId: string }) {
+  const { isSuperAdmin } = useIsSuperAdmin()
+  const [charter, setCharter] = useState<{ version: number; active: boolean } | null>(null)
+  const [signatures, setSignatures] = useState<{ version: number }[]>([])
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    const unsubCharter = onSnapshot(doc(db, "residences", residenceId, "charter", "main"), (snap) => {
+      const data = snap.data()
+      setCharter(data ? { version: (data.publishedVersion as number) ?? 0, active: data.active === true } : null)
+    })
+    const unsubSignatures = onSnapshot(collection(db, "residences", residenceId, "charterSignatures"), (snap) =>
+      setSignatures(snap.docs.map((d) => ({ version: (d.data().version as number) ?? 0 })))
+    )
+    const unsubPdf = onSnapshot(doc(db, "residences", residenceId, "documents_copro", "charte_regles_de_vie"), (snap) =>
+      setPdfUrl((snap.data()?.documentPathRecto as string) ?? null)
+    )
+    return () => {
+      unsubCharter()
+      unsubSignatures()
+      unsubPdf()
+    }
+  }, [residenceId, isSuperAdmin])
+
+  if (!isSuperAdmin) return null
+  const published = charter !== null && charter.active && charter.version > 0
+  const signedCount = published ? signatures.filter((s) => s.version === charter.version).length : 0
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Charte & règles de vie</CardTitle>
+        <CardDescription>
+          Facultative, rédigée et publiée par le conseil syndical depuis l'application.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-center gap-4 text-sm">
+        {published ? (
+          <>
+            <Badge variant="outline">Version {charter.version} en vigueur</Badge>
+            <span className="text-muted-foreground">{signedCount} signature{signedCount > 1 ? "s" : ""}</span>
+            {pdfUrl && (
+              <a className="font-medium underline" href={pdfUrl} target="_blank" rel="noreferrer">
+                PDF des signataires
+              </a>
+            )}
+          </>
+        ) : (
+          <span className="text-muted-foreground">
+            {charter && charter.version > 0 ? "Charte retirée par le conseil syndical" : "Aucune charte publiée"}
+          </span>
+        )}
+      </CardContent>
     </Card>
   )
 }

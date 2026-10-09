@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { BadgeCheck, CheckCircle2, Eye, Home, Search, ShieldQuestion, User as UserIcon, Users } from "lucide-react"
+import { BadgeCheck, CheckCircle2, Eye, Home, Search, ShieldQuestion, User as UserIcon, UserX, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -25,6 +25,7 @@ import {
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { DateInput } from "@/components/DateInput"
 import { subscribeToUsersInScope } from "@/lib/users"
+import { subscribeToRemovalRequests } from "@/lib/residentRemovals"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useAllLots } from "@/hooks/useAllLots"
@@ -62,6 +63,14 @@ export default function ResidentsPage() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const { isSuperAdmin } = useAccountRole()
+  const [pendingRemovalCount, setPendingRemovalCount] = useState(0)
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    return subscribeToRemovalRequests(
+      (requests) => setPendingRemovalCount(requests.filter((r) => r.status === "pending").length),
+      () => {}
+    )
+  }, [isSuperAdmin])
   const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   // Les utilisateurs ne portent pas de residenceId direct - le périmètre
   // RBAC se déduit des lots qu'ils possèdent/louent dans le périmètre
@@ -156,7 +165,20 @@ export default function ResidentsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Utilisateurs</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Utilisateurs</h1>
+        {isSuperAdmin && (
+          <Button variant="outline" render={<Link to="/residents/retraits" />}>
+            <UserX />
+            Demandes de retrait
+            {pendingRemovalCount > 0 && (
+              <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-[oklch(78%_0.15_75)] px-1 text-[10px] font-bold text-[oklch(25%_0.02_75)]">
+                {pendingRemovalCount}
+              </span>
+            )}
+          </Button>
+        )}
+      </div>
 
       {/* Total/Comptes approuvés réservés Superadmin (approbation d'identité
           hors de portée agence/agent) - Demande en attente (lot) visible à

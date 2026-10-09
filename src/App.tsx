@@ -11,6 +11,7 @@ import ResidenceDetailPage from "@/pages/ResidenceDetailPage"
 import LotDetailPage from "@/pages/LotDetailPage"
 import VoteDetailPage from "@/pages/VoteDetailPage"
 import ResidentsPage from "@/pages/ResidentsPage"
+import RemovalRequestsPage from "@/pages/RemovalRequestsPage"
 import ResidentDetailPage from "@/pages/ResidentDetailPage"
 import SinistresPage from "@/pages/SinistresPage"
 import SinistresKanbanPage from "@/pages/SinistresKanbanPage"
@@ -89,6 +90,14 @@ function App() {
         <Route path="residences/:id/lots/:lotId" element={<LotDetailPage />} />
         <Route path="residences/:id/votes/:voteId" element={<VoteDetailPage />} />
         <Route path="residents" element={<ResidentsPage />} />
+        <Route
+          path="residents/retraits"
+          element={
+            <RequireSuperAdmin>
+              <RemovalRequestsPage />
+            </RequireSuperAdmin>
+          }
+        />
         <Route path="residents/:uid" element={<ResidentDetailPage />} />
         <Route path="agences" element={<AgencesPage />} />
         <Route path="contacts" element={<ContactsPage />} />

@@ -56,6 +56,7 @@ function toKonodalUser(snapshot: DocumentSnapshot<DocumentData>): KonodalUser {
       data.certificationStatus === "pending" || data.certificationStatus === "rejected"
         ? data.certificationStatus
         : null,
+    blockedResidencesIds: (data.blockedResidencesIds as string[] | undefined) ?? [],
   }
 }
 

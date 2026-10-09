@@ -54,4 +54,7 @@ export type KonodalUser = {
   // certifiée). Posé par submit_certification_request côté serveur,
   // effacé/mis à jour par la décision BO.
   certificationStatus: "pending" | "rejected" | null
+  // Résidences dont l'accès est suspendu (decide_resident_removal) - écrit
+  // par le serveur, levé par unblock_resident.
+  blockedResidencesIds: string[]
 }
