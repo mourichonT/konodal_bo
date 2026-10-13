@@ -429,6 +429,13 @@ export type UserLot = {
   // fiche. Cf. functions/index.js côté konodal_app.
   approvedByOwner: boolean
   invitedBy: string | null
+  // Demande de copropriétaire/colocataire encore en attente de la réponse
+  // de l'occupant en place côté app (respondToCoOccupantRequest).
+  pendingPeerApproval: boolean
+  // Colocation sur un lot sans propriétaire refusée par le locataire en
+  // place : la demande est transmise à Konodal, qui tranche ici (motif du
+  // refus). Cf. respondToCoOccupantRequest côté konodal_app.
+  peerRefusal: { reason: string } | null
 }
 
 // users/{uid}/lots : jamais créé depuis le backoffice (toujours en
@@ -484,6 +491,10 @@ export function subscribeToUserLots(
             approvedByOwner:
               data.isApprovedLot === true && (!!data.invitedBy || data.pendingPeerApproval === false),
             invitedBy: (data.invitedBy as string | undefined) ?? null,
+            pendingPeerApproval: data.pendingPeerApproval === true,
+            peerRefusal: data.peerRefusal
+              ? { reason: ((data.peerRefusal as { reason?: string }).reason as string | undefined) ?? "" }
+              : null,
           }
         })
       )

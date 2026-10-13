@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Ban, BadgeCheck, Check, Home, PlusCircle, Save, Trash2, Unlink } from "lucide-react"
+import { ArrowLeft, Ban, BadgeCheck, Check, Home, PlusCircle, Save, Trash2, TriangleAlert, Unlink } from "lucide-react"
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -1029,7 +1029,7 @@ function LotRow({
           </div>
           <div className="flex items-center gap-3">
             <Badge variant={lot.isApprovedLot ? "default" : "destructive"} className="rounded-full">
-              {lot.isApprovedLot ? "Approuvé" : "En attente"}
+              {lot.isApprovedLot ? "Approuvé" : lot.pendingPeerApproval ? "En attente de l'occupant" : "En attente"}
             </Badge>
             {canApprove && !lot.isApprovedLot && (
               <Button
@@ -1096,6 +1096,18 @@ function LotRow({
               propriétaire en place côté app, cf. UserLot.approvedByOwner) :
               l'absence de document est normale, on le dit plutôt que de
               laisser croire à un oubli. */}
+          {/* Colocation refusée par le locataire en place (lot sans
+              propriétaire) : la décision revient à Konodal. */}
+          {!lot.isApprovedLot && lot.peerRefusal && (
+            <div className="flex items-start gap-2 rounded-[12px] bg-amber-50 p-[10px_12px] text-sm text-amber-900">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+              <span>
+                <span className="font-semibold">Colocation refusée par le locataire en place</span>
+                {lot.peerRefusal.reason ? ` (motif : ${lot.peerRefusal.reason})` : ""}
+                {" "}- demande transmise à Konodal : approuver ou révoquer ce lot.
+              </span>
+            </div>
+          )}
           {lot.approvedByOwner && (
             <div className="flex items-start gap-2 rounded-[12px] bg-emerald-50 p-[10px_12px] text-sm text-emerald-800">
               <BadgeCheck className="mt-0.5 size-4 shrink-0" />
