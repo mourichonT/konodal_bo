@@ -46,7 +46,7 @@ export function DocumentThumbnail({ path, label }: { path: string; label: string
             {state.status === "ready" && state.isVideo && <Play className="size-5 text-muted-foreground" />}
           </div>
         )}
-        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground">{path ? label : `${label} (fichier manquant)`}</span>
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>

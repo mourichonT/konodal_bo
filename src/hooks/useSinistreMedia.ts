@@ -39,5 +39,8 @@ export function useSinistreMedia(pathImage: string): SinistreMediaState {
     }
   }, [pathImage])
 
-  return state
+  // Chemin vide (fiche document écrite sans lien vers le fichier, ex :
+  // inscription soumise avant la fin de l'upload) : erreur immédiate plutôt
+  // qu'un chargement sans fin.
+  return pathImage ? state : { status: "error" }
 }
