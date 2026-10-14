@@ -38,6 +38,7 @@ import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useAuth } from "@/lib/auth-context"
+import { residenceBadgeColors } from "@/lib/residenceColors"
 
 // maplibre-gl pèse ~600 Ko gzippé : chargé à la demande, seulement par les
 // visiteurs de cette page, plutôt que gonfler le bundle principal partagé
@@ -262,7 +263,15 @@ export default function ResidencesPage() {
                 <TableRow key={residence.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                      {/* Même couleur que les badges résidence de la liste
+                          Utilisateurs (residenceBadgeColors). */}
+                      <div
+                        className="flex size-8 shrink-0 items-center justify-center rounded-full"
+                        style={{
+                          backgroundColor: residenceBadgeColors(residence.id).background,
+                          color: residenceBadgeColors(residence.id).color,
+                        }}
+                      >
                         <Building2 className="size-4" />
                       </div>
                       {residence.name}
