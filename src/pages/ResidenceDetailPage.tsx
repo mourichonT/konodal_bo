@@ -1029,13 +1029,14 @@ function SecurityAccessSection({
                   onChange={(e) => updateRow(row.key, { code: e.target.value })}
                 />
               ) : (
-                <div />
+                // Colonne du code laissée vide (clé/badge) : "Précisions" reste
+                // alignée sur la même colonne qu'un digicode, sur une seule ligne.
+                <div className="hidden sm:block" />
               )}
               <Input
                 placeholder="Précisions (ex : badge à retirer à la loge)"
                 value={row.details}
                 onChange={(e) => updateRow(row.key, { details: e.target.value })}
-                className={row.type === AccessPointType.code ? undefined : "sm:col-span-2"}
               />
             </div>
           </div>
