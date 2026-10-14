@@ -1,3 +1,5 @@
+import type { CommunicationAudience } from "@/types/communication"
+
 // Reflète Post (type "events") côté app mobile - seul le sous-type
 // "prestation" (appelé "intervention" côté BO) est géré par le backoffice
 // (cf. mémoire scope-vision), les events "interne" (participatifs, gérés par
@@ -5,6 +7,11 @@
 // La VALEUR Firestore reste "prestation" (EventType.prestation côté app
 // Dart) - seul le libellé et le nom de la constante changent côté BO.
 export const EVENT_TYPE_INTERVENTION = "prestation"
+
+// Même champ que les communications (Post.audience côté app) : "proprietaires"
+// masque l'intervention aux locataires dans l'app et ne notifie que les
+// propriétaires (notifyNewPost, functions/index.js).
+export type EventAudience = CommunicationAudience
 
 export type ResidenceEvent = {
   id: string
@@ -52,4 +59,5 @@ export type ResidenceEvent = {
   // get_shared_intervention, functions_python/main.py, qui lit ce champ
   // depuis LE POST plutôt que depuis la résidence).
   contactCsMemberIds?: string[]
+  audience: EventAudience
 }

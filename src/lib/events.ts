@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -15,7 +16,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore"
 import { db } from "@/firebase"
-import { EVENT_TYPE_INTERVENTION, type ResidenceEvent } from "@/types/event"
+import { EVENT_TYPE_INTERVENTION, type EventAudience, type ResidenceEvent } from "@/types/event"
 // ?url force une vraie URL même si Vite déciderait d'inliner ce fichier en
 // base64 (assets < 4 Ko) - cette URL doit rester joignable en dehors du
 // bundle (email d'intervention), pas juste utilisable dans un <img> de la
@@ -57,6 +58,7 @@ function toResidenceEvent(residenceId: string, d: DocumentSnapshot<DocumentData>
     reporte: (data.reporte as boolean) || false,
     annule: (data.annule as boolean) || false,
     contactCsMemberIds: (data.contactCsMemberIds as string[] | undefined) || undefined,
+    audience: data.audience === "proprietaires" ? "proprietaires" : "all",
   }
 }
 
@@ -158,6 +160,9 @@ export type EventInput = {
   // choisis dans le formulaire au moment de sa planification - backoffice
   // uniquement, comme linkedSinistreId/locationElement.
   contactCsMemberIds?: string[]
+  // "proprietaires" : intervention réservée aux propriétaires (cf.
+  // EventAudience). Omis/"all" : tous les résidents.
+  audience?: EventAudience
 }
 
 // Réservé isSuperAdmin() côté firestore.rules (posts/{id}.create) - la règle
@@ -184,6 +189,8 @@ export async function createEvent(residenceId: string, uid: string, input: Event
     },
     ...(input.linkedSinistreId ? { linkedSinistreId: input.linkedSinistreId } : {}),
     ...(input.contactCsMemberIds?.length ? { contactCsMemberIds: input.contactCsMemberIds } : {}),
+    // Champ absent = tous les résidents, comme Post.toMap() côté app.
+    ...(input.audience === "proprietaires" ? { audience: "proprietaires" } : {}),
   })
 }
 
@@ -197,6 +204,7 @@ export async function updateEvent(residenceId: string, postId: string, input: Ev
     "location.locationElements": input.locationElement ?? "",
     "location.locationFloor": input.locationFloor ?? "",
     contactCsMemberIds: input.contactCsMemberIds ?? [],
+    audience: input.audience === "proprietaires" ? "proprietaires" : deleteField(),
   })
 }
 

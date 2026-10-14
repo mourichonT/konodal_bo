@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { communicationAudienceLabels } from "@/types/communication"
 import { Link, useLocation, useParams } from "react-router-dom"
 import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
 import { toast } from "sonner"
@@ -319,6 +320,10 @@ export default function EvenementDetailPage() {
                   )}
                 </div>
                 <div>
+                  <span className="text-muted-foreground">Destinataires : </span>
+                  {communicationAudienceLabels[event.audience]}
+                </div>
+                <div>
                   <span className="text-muted-foreground">Date : </span>
                   {event.eventDate ? event.eventDate.toLocaleDateString("fr-FR") : "—"}
                 </div>
@@ -404,6 +409,7 @@ export default function EvenementDetailPage() {
                 prestaName: event.prestaName,
                 pathImage: event.pathImage,
                 contactCsMemberIds: event.contactCsMemberIds,
+                audience: event.audience,
               }
             : undefined
         }

@@ -25,6 +25,8 @@ import { CONTACT_SERVICE_ICONS, type Contact } from "@/types/contact"
 import type { KonodalUser } from "@/types/user"
 import type { GeranceRef } from "@/types/residence"
 import type { StructureResidence } from "@/types/structure"
+import type { EventAudience } from "@/types/event"
+import { COMMUNICATION_AUDIENCES, communicationAudienceLabels } from "@/types/communication"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 
 // Seuls id/name/contactRefs/geranceRef sont utilisés ici (sélecteur de
@@ -177,6 +179,7 @@ function EventFormDialogContent({
     initial?.contactCsMemberIds ?? []
   )
   const [csMembers, setCsMembers] = useState<KonodalUser[]>([])
+  const [audience, setAudience] = useState<EventAudience>(initial?.audience ?? "all")
 
   useEffect(() => {
     return subscribeToContacts(setContacts, () => {
@@ -314,6 +317,7 @@ function EventFormDialogContent({
         locationElement,
         locationFloor,
         contactCsMemberIds,
+        audience,
         ...(linkedSinistreId ? { linkedSinistreId } : {}),
       })
     } catch (err) {
@@ -516,6 +520,24 @@ function EventFormDialogContent({
               </div>
             </div>
           )}
+          <div className="flex flex-col gap-2">
+            <Label>Destinataires</Label>
+            <div className={cn("flex flex-col gap-2", restDisabled && "pointer-events-none opacity-50")}>
+              {COMMUNICATION_AUDIENCES.map((value) => (
+                <label key={value} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="event-audience"
+                    value={value}
+                    checked={audience === value}
+                    onChange={() => setAudience(value)}
+                    className="size-4 border-input accent-primary"
+                  />
+                  {communicationAudienceLabels[value]}
+                </label>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="event-desc">Description</Label>
             <DescriptionTextarea
