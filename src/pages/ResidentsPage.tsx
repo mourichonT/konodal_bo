@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { BadgeCheck, Building2, CheckCircle2, Eye, Home, Search, ShieldQuestion, User as UserIcon, UserX, Users } from "lucide-react"
+import { BadgeCheck, Building2, CheckCircle2, Clock, Eye, Home, Search, ShieldQuestion, User as UserIcon, UserX, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -30,6 +30,7 @@ import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useAllLots } from "@/hooks/useAllLots"
 import { cn } from "@/lib/utils"
+import { residenceBadgeColors } from "@/lib/residenceColors"
 import type { KonodalUser } from "@/types/user"
 
 // Statut d'un compte dans la liste, combinant identité (validée à
@@ -170,7 +171,7 @@ export default function ResidentsPage() {
   }, [allResidents, scopedResidenceIds, residenceIdsByUid])
 
   // Résidences affichées/filtrables pour un compte : lots approuvés et
-  // demandes en cours (badge ambre).
+  // demandes en cours (badge pointillé).
   const residenceIdsOf = (user: KonodalUser): string[] => [
     ...new Set([...(residenceIdsByUid.get(user.uid) ?? []), ...pendingResidenceIdsOf(user)]),
   ]
@@ -397,23 +398,26 @@ export default function ResidentsPage() {
                     ) : (
                       <div className="flex flex-wrap gap-1.5">
                         {residenceIdsOf(user).map((id) => {
-                          // Résidence d'une demande encore en attente : ton
-                          // ambre, comme le statut.
+                          // Couleur propre à la résidence ; une demande encore
+                          // en attente se distingue par un contour pointillé et
+                          // une horloge.
                           const pending = !residenceIdsByUid.get(user.uid)?.has(id)
                           return (
                             <button
                               key={id}
                               type="button"
-                              title="Filtrer sur cette résidence"
+                              title={pending ? "Demande en cours - filtrer sur cette résidence" : "Filtrer sur cette résidence"}
                               onClick={() => setResidenceFilter(id)}
+                              style={{
+                                backgroundColor: residenceBadgeColors(id).background,
+                                color: residenceBadgeColors(id).color,
+                              }}
                               className={cn(
-                                "inline-flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-colors",
-                                pending
-                                  ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
-                                  : "bg-[oklch(93%_0.05_150)] text-[oklch(32%_0.09_155)] hover:bg-[oklch(89%_0.06_150)]"
+                                "inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[filter] hover:brightness-95",
+                                pending ? "border-dashed border-current/50" : "border-transparent"
                               )}
                             >
-                              <Building2 className="size-3" />
+                              {pending ? <Clock className="size-3" /> : <Building2 className="size-3" />}
                               {residenceNameById.get(id) ?? id}
                             </button>
                           )
