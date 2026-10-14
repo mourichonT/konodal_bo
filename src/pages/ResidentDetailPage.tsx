@@ -59,7 +59,7 @@ function initialsFor(nameOrEmail: string): string {
 export default function ResidentDetailPage() {
   const { uid } = useParams<{ uid: string }>()
   const navigate = useNavigate()
-  const { isSuperAdmin, isAgence } = useAccountRole()
+  const { isSuperAdmin } = useAccountRole()
   const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   const [user, setUser] = useState<KonodalUser | null>(null)
   const [loading, setLoading] = useState(true)
@@ -140,10 +140,14 @@ export default function ResidentDetailPage() {
 
   if (!uid) return null
 
-  const canApproveLots = isSuperAdmin || isAgence
-  const pendingLots = lots.filter((lot) => !lot.isApprovedLot)
+  // Valider un lot revient à Konodal (superAdmin) : une agence/agent ne fait
+  // que consulter les lots approuvés de son portefeuille, jamais les
+  // demandes en attente.
+  const canApproveLots = isSuperAdmin
+  const visibleLots = isSuperAdmin ? lots : lots.filter((lot) => lot.isApprovedLot)
+  const pendingLots = visibleLots.filter((lot) => !lot.isApprovedLot)
   // Lots en attente en tête : c'est l'action à mener sur la fiche.
-  const sortedLots = [...pendingLots, ...lots.filter((lot) => lot.isApprovedLot)]
+  const sortedLots = [...pendingLots, ...visibleLots.filter((lot) => lot.isApprovedLot)]
 
   // Un compte refusé est gelé : plus aucune modification (identité,
   // téléphone, statut) tant qu'une nouvelle soumission n'est pas faite
@@ -436,7 +440,9 @@ export default function ResidentDetailPage() {
               <div className="flex flex-col gap-1">
                 <h2 className="text-lg font-semibold">Lots</h2>
                 <p className="text-sm text-muted-foreground">
-                  {user.isApproved
+                  {!isSuperAdmin
+                    ? "Lots de ce compte dans les résidences de votre portefeuille."
+                    : user.isApproved
                     ? "Rattachement propriétaire/locataire à valider par lot."
                     : "Approuve d'abord l'identité ci-dessus pour pouvoir valider les lots."}
                 </p>
@@ -459,7 +465,7 @@ export default function ResidentDetailPage() {
                 !user.isApproved && "pointer-events-none opacity-50"
               )}
             >
-              {lots.length === 0 && (
+              {visibleLots.length === 0 && (
                 <p className="text-sm text-muted-foreground">Aucun lot rattaché à ce compte.</p>
               )}
               {sortedLots.map((lot) => (

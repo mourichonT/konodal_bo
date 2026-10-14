@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { subscribeToUsersInScope } from "@/lib/users"
-import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
+import { subscribeToUsers } from "@/lib/users"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import type { KonodalUser } from "@/types/user"
 
@@ -16,29 +15,26 @@ import type { KonodalUser } from "@/types/user"
 // Pas de suivi "vu/non vu" : la pastille reflète simplement le nombre de
 // comptes en attente à l'instant T, elle disparaît d'elle-même une fois les
 // lots traités (approuvés).
-// Superadmin uniquement : s'y ajoutent les demandes de certification en
-// attente (certificationStatus "pending") - décision réservée superAdmin,
-// cf. CertificationRequestCard. Un compte est compté une seule fois même
-// s'il a les deux.
+// Superadmin uniquement : valider un lot ou une certification revient à
+// Konodal, jamais à une agence/agent (pas de pastille pour eux). S'y
+// ajoutent les demandes de certification en attente (certificationStatus
+// "pending", cf. CertificationRequestCard). Un compte est compté une seule
+// fois même s'il a les deux.
 export function usePendingUsersCount(): number {
   const [users, setUsers] = useState<KonodalUser[]>([])
-  const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   const { isSuperAdmin } = useAccountRole()
 
-  // Périmètre de l'agence/agent seulement (cf. subscribeToUsersInScope),
-  // une fois connu.
   useEffect(() => {
-    if (scopeLoading) return
-    return subscribeToUsersInScope(scopedResidenceIds, setUsers, () => {})
-  }, [scopeLoading, scopedResidenceIds])
+    if (!isSuperAdmin) {
+      setUsers([])
+      return
+    }
+    return subscribeToUsers(setUsers, () => {})
+  }, [isSuperAdmin])
 
   return useMemo(() => {
     const residents = users.filter((u) => (u.accountType || "utilisateur") === "utilisateur" && u.signupCompleted)
-    const isPendingLot = (u: KonodalUser) =>
-      scopedResidenceIds
-        ? u.pendingLotResidenceIds.some((residenceId) => scopedResidenceIds.has(residenceId))
-        : u.pendingLotResidenceIds.length > 0
-    const isPendingCertification = (u: KonodalUser) => isSuperAdmin && u.certificationStatus === "pending"
-    return residents.filter((u) => isPendingLot(u) || isPendingCertification(u)).length
-  }, [users, scopedResidenceIds, isSuperAdmin])
+    return residents.filter((u) => u.pendingLotResidenceIds.length > 0 || u.certificationStatus === "pending")
+      .length
+  }, [users])
 }

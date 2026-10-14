@@ -58,6 +58,7 @@ export default function ResidentsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [lotFilter, setLotFilter] = useState<LotFilter>("all")
   const [certificationFilter, setCertificationFilter] = useState(false)
+  const [residenceFilter, setResidenceFilter] = useState("all")
   // Sur createdDate ("Date de la demande" dans le tableau) - "YYYY-MM-DD",
   // même format que DateInput/DashboardPage.
   const [dateFrom, setDateFrom] = useState("")
@@ -108,32 +109,46 @@ export default function ResidentsPage() {
     [users]
   )
 
-  // allowedUids (post-approbation, idProprietaire/idLocataire côté lot
-  // maître) ne suffit pas seul : un compte dont le lot est encore en attente
-  // (isApprovedLot: false) n'y figure pas encore (cf. domain model - ce
-  // tableau n'est peuplé qu'après approbation), et disparaîtrait donc
-  // entièrement de l'annuaire d'une agence/agent tant que personne ne
-  // l'approuve - impossible dans ce cas de savoir qui a besoin d'être
-  // validé. pendingLotResidenceIds (dénormalisé côté serveur, cf.
-  // types/user.ts) comble ce trou : présent dès la demande, avant toute
-  // approbation.
+  // Résidences où chaque compte a un lot approuvé (propriétaire ou
+  // locataire, idProprietaire/idLocataire côté lot) - lots déjà limités au
+  // périmètre (useAllLots).
+  const residenceIdsByUid = useMemo(() => {
+    const map = new Map<string, Set<string>>()
+    for (const lot of scopedLots) {
+      for (const uid of [...lot.idProprietaire, ...lot.idLocataire]) {
+        if (!map.has(uid)) map.set(uid, new Set())
+        map.get(uid)!.add(lot.residenceId)
+      }
+    }
+    return map
+  }, [scopedLots])
+
+  // Agence/agent : uniquement les comptes ayant un lot approuvé dans le
+  // portefeuille. Les demandes de rattachement en attente
+  // (pendingLotResidenceIds) restent l'affaire de Konodal (superAdmin), qui
+  // voit tous les comptes.
   const residents = useMemo(() => {
     if (!scopedResidenceIds) return allResidents
-    const allowedUids = new Set(scopedLots.flatMap((l) => [...l.idProprietaire, ...l.idLocataire]))
-    return allResidents.filter(
-      (u) =>
-        allowedUids.has(u.uid) ||
-        u.pendingLotResidenceIds.some((residenceId) => scopedResidenceIds.has(residenceId))
-    )
-  }, [allResidents, scopedResidenceIds, scopedLots])
+    return allResidents.filter((u) => residenceIdsByUid.has(u.uid))
+  }, [allResidents, scopedResidenceIds, residenceIdsByUid])
 
-  // Même filtre résidence que pendingUsersCount/usePendingUsersCount - une
-  // agence/agent ne doit voir que les demandes concernant SES résidences,
-  // jamais celles d'une autre gérance.
-  const isPendingLot = (user: KonodalUser) =>
-    scopedResidenceIds
-      ? user.pendingLotResidenceIds.some((residenceId) => scopedResidenceIds.has(residenceId))
-      : user.pendingLotResidenceIds.length > 0
+  // Résidences affichées/filtrables pour un compte : lots approuvés, plus
+  // (superAdmin seulement) les résidences de ses demandes en attente.
+  const residenceIdsOf = (user: KonodalUser): string[] => [
+    ...new Set([
+      ...(residenceIdsByUid.get(user.uid) ?? []),
+      ...(isSuperAdmin ? user.pendingLotResidenceIds : []),
+    ]),
+  ]
+
+  const residenceOptions = useMemo(
+    () => [...residences].sort((a, b) => a.name.localeCompare(b.name)).map((r) => [r.id, r.name] as const),
+    [residences]
+  )
+
+  // Validation des demandes de lot réservée superAdmin (comme la pastille,
+  // cf. usePendingUsersCount).
+  const isPendingLot = (user: KonodalUser) => isSuperAdmin && user.pendingLotResidenceIds.length > 0
 
   // Comptés sur `residents` (périmètre RBAC), pas `filteredResidents` : les
   // KPI reflètent le total du périmètre, indépendamment des filtres actifs
@@ -156,6 +171,7 @@ export default function ResidentsPage() {
       if (statusFilter === "unapproved" && (user.isApproved || user.rejectionReason)) return false
       if (statusFilter === "rejected" && (user.isApproved || !user.rejectionReason)) return false
       if (lotFilter === "pending" && !isPendingLot(user)) return false
+      if (residenceFilter !== "all" && !residenceIdsOf(user).includes(residenceFilter)) return false
       if (certificationFilter && !isPendingCertification(user)) return false
       if (fromDate && (!user.createdDate || user.createdDate < fromDate)) return false
       if (toDate && (!user.createdDate || user.createdDate > toDate)) return false
@@ -165,7 +181,7 @@ export default function ResidentsPage() {
     // isApproved est automatique, c'est la seule action en attente de la
     // liste - sans ce tri, elle se noyait parmi les comptes "Validé".
     return [...filtered.filter(needsAction), ...filtered.filter((u) => !needsAction(u))]
-  }, [residents, search, statusFilter, lotFilter, certificationFilter, dateFrom, dateTo, scopedResidenceIds, isSuperAdmin])
+  }, [residents, search, statusFilter, lotFilter, certificationFilter, residenceFilter, dateFrom, dateTo, residenceIdsByUid, isSuperAdmin])
 
   return (
     <div className="flex flex-col gap-6">
@@ -185,21 +201,21 @@ export default function ResidentsPage() {
       </div>
 
       {/* Total/Comptes approuvés réservés Superadmin (approbation d'identité
-          hors de portée agence/agent) - Demande en attente (lot) visible à
-          tous les rôles, cf. canApprove dans ResidentDetailPage. Cliquer sur
+          hors de portée agence/agent), comme Demande en attente (validation
+          des lots par Konodal, cf. canApproveLots dans ResidentDetailPage). Cliquer sur
           une carte pilote le même état que les dropdowns "Statut"/"Lot"
           ci-dessous (deux affordances pour le même filtre). */}
       <div className={cn("grid grid-cols-1 gap-4", isSuperAdmin ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3")}>
+        <FilterKpiCard
+          label="Total utilisateurs"
+          value={residents.length}
+          icon={Users}
+          colorClass="bg-slate-100 text-slate-600"
+          active={statusFilter === "all"}
+          onClick={() => setStatusFilter("all")}
+        />
         {isSuperAdmin && (
           <>
-            <FilterKpiCard
-              label="Total utilisateurs"
-              value={residents.length}
-              icon={Users}
-              colorClass="bg-slate-100 text-slate-600"
-              active={statusFilter === "all"}
-              onClick={() => setStatusFilter("all")}
-            />
             <FilterKpiCard
               label="Comptes approuvés"
               value={approvedCount}
@@ -208,16 +224,16 @@ export default function ResidentsPage() {
               active={statusFilter === "approved"}
               onClick={() => setStatusFilter((prev) => (prev === "approved" ? "all" : "approved"))}
             />
+            <FilterKpiCard
+              label="Demande en attente"
+              value={pendingLotCount}
+              icon={Home}
+              colorClass="bg-amber-100 text-amber-600"
+              active={lotFilter === "pending"}
+              onClick={() => setLotFilter((prev) => (prev === "pending" ? "all" : "pending"))}
+            />
           </>
         )}
-        <FilterKpiCard
-          label="Demande en attente"
-          value={pendingLotCount}
-          icon={Home}
-          colorClass="bg-amber-100 text-amber-600"
-          active={lotFilter === "pending"}
-          onClick={() => setLotFilter((prev) => (prev === "pending" ? "all" : "pending"))}
-        />
         {isSuperAdmin && (
           <FilterKpiCard
             label="Certification à vérifier"
@@ -256,19 +272,39 @@ export default function ResidentsPage() {
 
           <DropdownMenu>
             <DropdownMenuTrigger className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
-              Lot : {lotFilterLabels[lotFilter]}
+              Résidence :{" "}
+              {residenceFilter === "all" ? "Toutes" : (residenceNameById.get(residenceFilter) ?? residenceFilter)}
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuRadioGroup value={lotFilter} onValueChange={(v) => setLotFilter(v as LotFilter)}>
-                <DropdownMenuLabel>Demande de lot</DropdownMenuLabel>
-                {(Object.keys(lotFilterLabels) as LotFilter[]).map((value) => (
-                  <DropdownMenuRadioItem key={value} value={value}>
-                    {lotFilterLabels[value]}
+            <DropdownMenuContent align="start" className="max-h-80 w-64 overflow-y-auto">
+              <DropdownMenuRadioGroup value={residenceFilter} onValueChange={setResidenceFilter}>
+                <DropdownMenuLabel>Résidence</DropdownMenuLabel>
+                <DropdownMenuRadioItem value="all">Toutes</DropdownMenuRadioItem>
+                {residenceOptions.map(([id, name]) => (
+                  <DropdownMenuRadioItem key={id} value={id}>
+                    {name}
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {isSuperAdmin && (
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                Lot : {lotFilterLabels[lotFilter]}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuRadioGroup value={lotFilter} onValueChange={(v) => setLotFilter(v as LotFilter)}>
+                  <DropdownMenuLabel>Demande de lot</DropdownMenuLabel>
+                  {(Object.keys(lotFilterLabels) as LotFilter[]).map((value) => (
+                    <DropdownMenuRadioItem key={value} value={value}>
+                      {lotFilterLabels[value]}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {/* Statut d'identité réservé superAdmin (cf. matrice de droits) -
               agence/agent ne peuvent de toute façon pas approuver l'identité. */}
@@ -309,9 +345,10 @@ export default function ResidentsPage() {
               <TableRow>
                 <TableHead>Nom</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Résidence(s)</TableHead>
                 <TableHead>Date de la demande</TableHead>
                 <TableHead>Statut</TableHead>
-                <TableHead>Lot</TableHead>
+                {isSuperAdmin && <TableHead>Lot</TableHead>}
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -339,6 +376,11 @@ export default function ResidentsPage() {
                     </div>
                   </TableCell>
                   <TableCell>{user.email || "—"}</TableCell>
+                  <TableCell>
+                    {residenceIdsOf(user)
+                      .map((id) => residenceNameById.get(id) ?? id)
+                      .join(", ") || <span className="text-muted-foreground">—</span>}
+                  </TableCell>
                   <TableCell>{user.createdDate ? user.createdDate.toLocaleDateString("fr-FR") : "—"}</TableCell>
                   <TableCell>
                     <Badge
@@ -354,23 +396,20 @@ export default function ResidentsPage() {
                       {user.isApproved ? "Validé" : user.rejectionReason ? "Bloqué" : "Non certifié"}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    {isPendingLot(user) ? (
-                      <Badge className="border-transparent bg-amber-100 text-amber-800">
-                        En attente —{" "}
-                        {user.pendingLotResidenceIds
-                          // Filtré au périmètre agence/agent : une demande sur
-                          // une résidence hors scope n'a rien à faire ici (et
-                          // residenceNameById, lui aussi scopé via useAllLots,
-                          // ne la résoudrait pas de toute façon).
-                          .filter((id) => !scopedResidenceIds || scopedResidenceIds.has(id))
-                          .map((id) => residenceNameById.get(id) ?? id)
-                          .join(", ")}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
+                  {isSuperAdmin && (
+                    <TableCell>
+                      {isPendingLot(user) ? (
+                        <Badge className="border-transparent bg-amber-100 text-amber-800">
+                          En attente —{" "}
+                          {user.pendingLotResidenceIds
+                            .map((id) => residenceNameById.get(id) ?? id)
+                            .join(", ")}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="text-right">
                     <Button variant="outline" size="sm" render={<Link to={`/residents/${user.uid}`} />}>
                       <Eye />
@@ -381,7 +420,7 @@ export default function ResidentsPage() {
               ))}
               {!loading && filteredResidents.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={isSuperAdmin ? 7 : 6} className="py-8 text-center text-muted-foreground">
                     {residents.length === 0
                       ? "Aucun utilisateur pour l'instant."
                       : "Aucun résultat pour cette recherche."}
