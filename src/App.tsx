@@ -32,6 +32,7 @@ import BillingPage from "@/pages/BillingPage"
 import SharedInterventionPage from "@/pages/SharedInterventionPage"
 import OfferPage from "@/pages/OfferPage"
 import PublicitesPage from "@/pages/PublicitesPage"
+import AccesPage from "@/pages/AccesPage"
 import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
 import ResidenceRequestsPage from "@/pages/ResidenceRequestsPage"
 import ResidencesLayout from "@/pages/ResidencesLayout"
@@ -110,6 +111,14 @@ function App() {
           element={
             <RequireSuperAdmin>
               <PublicitesPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="acces"
+          element={
+            <RequireSuperAdmin>
+              <AccesPage />
             </RequireSuperAdmin>
           }
         />
