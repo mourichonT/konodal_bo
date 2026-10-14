@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { BadgeCheck, CheckCircle2, Eye, Home, Search, ShieldQuestion, User as UserIcon, UserX, Users } from "lucide-react"
+import { BadgeCheck, Building2, CheckCircle2, Eye, Home, Search, ShieldQuestion, User as UserIcon, UserX, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -377,9 +377,34 @@ export default function ResidentsPage() {
                   </TableCell>
                   <TableCell>{user.email || "—"}</TableCell>
                   <TableCell>
-                    {residenceIdsOf(user)
-                      .map((id) => residenceNameById.get(id) ?? id)
-                      .join(", ") || <span className="text-muted-foreground">—</span>}
+                    {residenceIdsOf(user).length === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {residenceIdsOf(user).map((id) => {
+                          // Résidence d'une demande encore en attente (superAdmin
+                          // seulement) : ton ambre, comme la colonne Lot.
+                          const pending = !residenceIdsByUid.get(user.uid)?.has(id)
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              title="Filtrer sur cette résidence"
+                              onClick={() => setResidenceFilter(id)}
+                              className={cn(
+                                "inline-flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-colors",
+                                pending
+                                  ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                  : "bg-[oklch(93%_0.05_150)] text-[oklch(32%_0.09_155)] hover:bg-[oklch(89%_0.06_150)]"
+                              )}
+                            >
+                              <Building2 className="size-3" />
+                              {residenceNameById.get(id) ?? id}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>{user.createdDate ? user.createdDate.toLocaleDateString("fr-FR") : "—"}</TableCell>
                   <TableCell>
