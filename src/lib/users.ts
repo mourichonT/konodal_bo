@@ -127,10 +127,10 @@ export function subscribeToUsers(
 
 // Comptes d'un périmètre de résidences (agence/agent, cf.
 // useScopedResidenceIds) : résidents ayant un lot approuvé dans le
-// portefeuille uniquement (memberResidencesIds, calculé côté serveur par
-// sync_lot_tenants). Les demandes de rattachement en attente
-// (pendingLotResidenceIds) n'en font pas partie : leur validation revient à
-// Konodal (superAdmin), pas au syndic. Avant, toute la collection users était chargée
+// portefeuille (memberResidencesIds, calculé côté serveur par
+// sync_lot_tenants) + demandes de rattachement en cours
+// (pendingLotResidenceIds) - affichées au syndic pour suivi, leur
+// validation restant à Konodal (superAdmin). Avant, toute la collection users était chargée
 // puis filtrée dans le navigateur : une agence pouvait donc lire tous les
 // comptes Konodal. `scope` null = pas de restriction (superAdmin).
 // array-contains-any accepte au plus 30 valeurs : une requête par tranche.
@@ -147,9 +147,10 @@ export function subscribeToUsersInScope(
   }
   const chunks: string[][] = []
   for (let i = 0; i < residenceIds.length; i += 30) chunks.push(residenceIds.slice(i, i + 30))
-  const queries = chunks.map((chunk) =>
-    query(usersCollection, where("memberResidencesIds", "array-contains-any", chunk))
-  )
+  const queries = chunks.flatMap((chunk) => [
+    query(usersCollection, where("memberResidencesIds", "array-contains-any", chunk)),
+    query(usersCollection, where("pendingLotResidenceIds", "array-contains-any", chunk)),
+  ])
   const resultsByQuery: Map<string, KonodalUser>[] = queries.map(() => new Map())
   const received = queries.map(() => false)
   const emit = () => {

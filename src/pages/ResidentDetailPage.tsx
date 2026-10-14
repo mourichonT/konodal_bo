@@ -140,14 +140,13 @@ export default function ResidentDetailPage() {
 
   if (!uid) return null
 
-  // Valider un lot revient à Konodal (superAdmin) : une agence/agent ne fait
-  // que consulter les lots approuvés de son portefeuille, jamais les
-  // demandes en attente.
+  // Valider un lot revient à Konodal (superAdmin) : une agence/agent voit
+  // les lots de son portefeuille, demandes en cours comprises (suivi), sans
+  // pouvoir les approuver.
   const canApproveLots = isSuperAdmin
-  const visibleLots = isSuperAdmin ? lots : lots.filter((lot) => lot.isApprovedLot)
-  const pendingLots = visibleLots.filter((lot) => !lot.isApprovedLot)
+  const pendingLots = lots.filter((lot) => !lot.isApprovedLot)
   // Lots en attente en tête : c'est l'action à mener sur la fiche.
-  const sortedLots = [...pendingLots, ...visibleLots.filter((lot) => lot.isApprovedLot)]
+  const sortedLots = [...pendingLots, ...lots.filter((lot) => lot.isApprovedLot)]
 
   // Un compte refusé est gelé : plus aucune modification (identité,
   // téléphone, statut) tant qu'une nouvelle soumission n'est pas faite
@@ -307,7 +306,7 @@ export default function ResidentDetailPage() {
               (cf. types/user.ts), la seule action réellement en attente sur
               une fiche est la validation d'un lot (isApprovedLot) - sans ce
               bandeau, elle n'apparaissait qu'en bas de page. */}
-          {canApproveLots && pendingLots.length > 0 && (
+          {pendingLots.length > 0 && (
             <div className="flex flex-wrap items-center gap-3 rounded-[14px] border border-amber-200 bg-amber-50 p-[12px_16px] text-sm text-amber-900">
               <Home className="size-4 shrink-0" />
               <span className="flex-1">
@@ -316,7 +315,7 @@ export default function ResidentDetailPage() {
                     ? "1 demande de lot en attente de validation"
                     : `${pendingLots.length} demandes de lot en attente de validation`}
                 </span>
-                {isSuperAdmin ? " — vérifier le justificatif puis approuver." : "."}
+                {isSuperAdmin ? " — vérifier le justificatif puis approuver." : " — en cours de validation par Konodal."}
               </span>
               <Button
                 variant="outline"
@@ -465,7 +464,7 @@ export default function ResidentDetailPage() {
                 !user.isApproved && "pointer-events-none opacity-50"
               )}
             >
-              {visibleLots.length === 0 && (
+              {lots.length === 0 && (
                 <p className="text-sm text-muted-foreground">Aucun lot rattaché à ce compte.</p>
               )}
               {sortedLots.map((lot) => (

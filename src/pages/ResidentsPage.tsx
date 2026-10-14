@@ -32,18 +32,48 @@ import { useAllLots } from "@/hooks/useAllLots"
 import { cn } from "@/lib/utils"
 import type { KonodalUser } from "@/types/user"
 
-type StatusFilter = "all" | "approved" | "unapproved" | "rejected"
-const statusFilterLabels: Record<StatusFilter, string> = {
-  all: "Tous",
-  approved: "Validé",
-  unapproved: "Non certifié",
-  rejected: "Bloqué",
+// Statut d'un compte dans la liste, combinant identité (validée à
+// l'inscription, ou certifiée - pièce + selfie vérifiés) et lots :
+// - "pending" : au moins une demande de lot en attente (À traiter pour
+//   Konodal, En cours de validation pour le syndic, qui ne fait que suivre),
+//   prioritaire sur tout le reste sauf un blocage ;
+// - lot approuvé : "certified" (identité certifiée) ou "validated" ;
+// - aucun lot : "idCertified", "idValidated", ou "registered" (identité ni
+//   validée ni certifiée - cas résiduel depuis que isApproved est posé
+//   automatiquement à l'inscription).
+type UserStatus = "pending" | "certified" | "validated" | "idCertified" | "idValidated" | "registered" | "blocked"
+// "lotValidated" : carte KPI "Lot validé" (Certifié + Validé).
+type StatusFilter = "all" | "lotValidated" | UserStatus
+
+const STATUS_ORDER: UserStatus[] = ["pending", "certified", "validated", "idCertified", "idValidated", "registered", "blocked"]
+
+function statusLabel(status: UserStatus, isSuperAdmin: boolean): string {
+  switch (status) {
+    case "pending":
+      return isSuperAdmin ? "À traiter" : "En cours de validation"
+    case "certified":
+      return "Certifié"
+    case "validated":
+      return "Validé"
+    case "idCertified":
+      return "ID certifié"
+    case "idValidated":
+      return "ID validé"
+    case "registered":
+      return "Inscrit"
+    case "blocked":
+      return "Bloqué"
+  }
 }
 
-type LotFilter = "all" | "pending"
-const lotFilterLabels: Record<LotFilter, string> = {
-  all: "Toutes",
-  pending: "En attente",
+const STATUS_BADGE_CLASS: Record<UserStatus, string> = {
+  pending: "border-transparent bg-amber-100 text-amber-800",
+  certified: "border-transparent bg-blue-100 text-blue-800",
+  validated: "border-transparent bg-emerald-100 text-emerald-800",
+  idCertified: "border-transparent bg-sky-50 text-sky-700",
+  idValidated: "border-transparent bg-slate-100 text-slate-700",
+  registered: "border-transparent bg-slate-50 text-slate-500",
+  blocked: "border-transparent bg-red-100 text-red-800",
 }
 
 function matchesSearch(user: KonodalUser, search: string): boolean {
@@ -56,7 +86,6 @@ export default function ResidentsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
-  const [lotFilter, setLotFilter] = useState<LotFilter>("all")
   const [certificationFilter, setCertificationFilter] = useState(false)
   const [residenceFilter, setResidenceFilter] = useState("all")
   // Sur createdDate ("Date de la demande" dans le tableau) - "YYYY-MM-DD",
@@ -123,22 +152,27 @@ export default function ResidentsPage() {
     return map
   }, [scopedLots])
 
-  // Agence/agent : uniquement les comptes ayant un lot approuvé dans le
-  // portefeuille. Les demandes de rattachement en attente
-  // (pendingLotResidenceIds) restent l'affaire de Konodal (superAdmin), qui
-  // voit tous les comptes.
+  // Demandes de lot en attente d'un compte, limitées au portefeuille pour
+  // une agence/agent : visibles de tous (le syndic suit la demande), mais
+  // seul Konodal (superAdmin) les valide.
+  const pendingResidenceIdsOf = (user: KonodalUser): string[] =>
+    scopedResidenceIds
+      ? user.pendingLotResidenceIds.filter((id) => scopedResidenceIds.has(id))
+      : user.pendingLotResidenceIds
+
+  // Agence/agent : uniquement les comptes ayant un lot approuvé ou une
+  // demande en cours dans le portefeuille.
   const residents = useMemo(() => {
     if (!scopedResidenceIds) return allResidents
-    return allResidents.filter((u) => residenceIdsByUid.has(u.uid))
+    return allResidents.filter(
+      (u) => residenceIdsByUid.has(u.uid) || u.pendingLotResidenceIds.some((id) => scopedResidenceIds.has(id))
+    )
   }, [allResidents, scopedResidenceIds, residenceIdsByUid])
 
-  // Résidences affichées/filtrables pour un compte : lots approuvés, plus
-  // (superAdmin seulement) les résidences de ses demandes en attente.
+  // Résidences affichées/filtrables pour un compte : lots approuvés et
+  // demandes en cours (badge ambre).
   const residenceIdsOf = (user: KonodalUser): string[] => [
-    ...new Set([
-      ...(residenceIdsByUid.get(user.uid) ?? []),
-      ...(isSuperAdmin ? user.pendingLotResidenceIds : []),
-    ]),
+    ...new Set([...(residenceIdsByUid.get(user.uid) ?? []), ...pendingResidenceIdsOf(user)]),
   ]
 
   const residenceOptions = useMemo(
@@ -146,15 +180,21 @@ export default function ResidentsPage() {
     [residences]
   )
 
-  // Validation des demandes de lot réservée superAdmin (comme la pastille,
-  // cf. usePendingUsersCount).
-  const isPendingLot = (user: KonodalUser) => isSuperAdmin && user.pendingLotResidenceIds.length > 0
+  const isPendingLot = (user: KonodalUser) => pendingResidenceIdsOf(user).length > 0
+
+  const statusOf = (user: KonodalUser): UserStatus => {
+    if (user.rejectionReason && !user.isApproved) return "blocked"
+    if (isPendingLot(user)) return "pending"
+    if (residenceIdsByUid.has(user.uid)) return user.isCertified ? "certified" : "validated"
+    if (user.isCertified) return "idCertified"
+    return user.isApproved ? "idValidated" : "registered"
+  }
 
   // Comptés sur `residents` (périmètre RBAC), pas `filteredResidents` : les
   // KPI reflètent le total du périmètre, indépendamment des filtres actifs
   // (recherche, dates...) - seul le clic dessus change un filtre, cf.
   // FilterKpiCard ci-dessous.
-  const approvedCount = residents.filter((u) => u.isApproved).length
+  const lotValidatedCount = residents.filter((u) => ["certified", "validated"].includes(statusOf(u))).length
   const pendingLotCount = residents.filter(isPendingLot).length
   // Décision de certification réservée superAdmin (cf.
   // CertificationRequestCard) - jamais signalée à agence/agent.
@@ -167,10 +207,8 @@ export default function ResidentsPage() {
     const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null
     const toDate = dateTo ? new Date(`${dateTo}T23:59:59`) : null
     const filtered = residents.filter((user) => {
-      if (statusFilter === "approved" && !user.isApproved) return false
-      if (statusFilter === "unapproved" && (user.isApproved || user.rejectionReason)) return false
-      if (statusFilter === "rejected" && (user.isApproved || !user.rejectionReason)) return false
-      if (lotFilter === "pending" && !isPendingLot(user)) return false
+      if (statusFilter === "lotValidated" && !["certified", "validated"].includes(statusOf(user))) return false
+      if (statusFilter !== "all" && statusFilter !== "lotValidated" && statusOf(user) !== statusFilter) return false
       if (residenceFilter !== "all" && !residenceIdsOf(user).includes(residenceFilter)) return false
       if (certificationFilter && !isPendingCertification(user)) return false
       if (fromDate && (!user.createdDate || user.createdDate < fromDate)) return false
@@ -181,7 +219,7 @@ export default function ResidentsPage() {
     // isApproved est automatique, c'est la seule action en attente de la
     // liste - sans ce tri, elle se noyait parmi les comptes "Validé".
     return [...filtered.filter(needsAction), ...filtered.filter((u) => !needsAction(u))]
-  }, [residents, search, statusFilter, lotFilter, certificationFilter, residenceFilter, dateFrom, dateTo, residenceIdsByUid, isSuperAdmin])
+  }, [residents, search, statusFilter, certificationFilter, residenceFilter, dateFrom, dateTo, residenceIdsByUid, scopedResidenceIds, isSuperAdmin])
 
   return (
     <div className="flex flex-col gap-6">
@@ -200,40 +238,37 @@ export default function ResidentsPage() {
         )}
       </div>
 
-      {/* Total/Comptes approuvés réservés Superadmin (approbation d'identité
-          hors de portée agence/agent), comme Demande en attente (validation
-          des lots par Konodal, cf. canApproveLots dans ResidentDetailPage). Cliquer sur
-          une carte pilote le même état que les dropdowns "Statut"/"Lot"
-          ci-dessous (deux affordances pour le même filtre). */}
+      {/* Cliquer sur une carte pilote le même état que le filtre "Statut"
+          ci-dessous (deux affordances pour le même filtre). Certification à
+          vérifier réservée superAdmin (cf. CertificationRequestCard). */}
       <div className={cn("grid grid-cols-1 gap-4", isSuperAdmin ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3")}>
         <FilterKpiCard
           label="Total utilisateurs"
           value={residents.length}
           icon={Users}
           colorClass="bg-slate-100 text-slate-600"
-          active={statusFilter === "all"}
-          onClick={() => setStatusFilter("all")}
+          active={statusFilter === "all" && !certificationFilter}
+          onClick={() => {
+            setStatusFilter("all")
+            setCertificationFilter(false)
+          }}
         />
-        {isSuperAdmin && (
-          <>
-            <FilterKpiCard
-              label="Comptes approuvés"
-              value={approvedCount}
-              icon={CheckCircle2}
-              colorClass="bg-emerald-100 text-emerald-600"
-              active={statusFilter === "approved"}
-              onClick={() => setStatusFilter((prev) => (prev === "approved" ? "all" : "approved"))}
-            />
-            <FilterKpiCard
-              label="Demande en attente"
-              value={pendingLotCount}
-              icon={Home}
-              colorClass="bg-amber-100 text-amber-600"
-              active={lotFilter === "pending"}
-              onClick={() => setLotFilter((prev) => (prev === "pending" ? "all" : "pending"))}
-            />
-          </>
-        )}
+        <FilterKpiCard
+          label="Lot validé"
+          value={lotValidatedCount}
+          icon={CheckCircle2}
+          colorClass="bg-emerald-100 text-emerald-600"
+          active={statusFilter === "lotValidated"}
+          onClick={() => setStatusFilter((prev) => (prev === "lotValidated" ? "all" : "lotValidated"))}
+        />
+        <FilterKpiCard
+          label={isSuperAdmin ? "À traiter" : "En cours de validation"}
+          value={pendingLotCount}
+          icon={Home}
+          colorClass="bg-amber-100 text-amber-600"
+          active={statusFilter === "pending"}
+          onClick={() => setStatusFilter((prev) => (prev === "pending" ? "all" : "pending"))}
+        />
         {isSuperAdmin && (
           <FilterKpiCard
             label="Certification à vérifier"
@@ -288,46 +323,27 @@ export default function ResidentsPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {isSuperAdmin && (
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
-                Lot : {lotFilterLabels[lotFilter]}
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuRadioGroup value={lotFilter} onValueChange={(v) => setLotFilter(v as LotFilter)}>
-                  <DropdownMenuLabel>Demande de lot</DropdownMenuLabel>
-                  {(Object.keys(lotFilterLabels) as LotFilter[]).map((value) => (
-                    <DropdownMenuRadioItem key={value} value={value}>
-                      {lotFilterLabels[value]}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-
-          {/* Statut d'identité réservé superAdmin (cf. matrice de droits) -
-              agence/agent ne peuvent de toute façon pas approuver l'identité. */}
-          {isSuperAdmin && (
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
-                Statut : {statusFilterLabels[statusFilter]}
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuRadioGroup
-                  value={statusFilter}
-                  onValueChange={(v) => setStatusFilter(v as StatusFilter)}
-                >
-                  <DropdownMenuLabel>Statut d'identité</DropdownMenuLabel>
-                  {(Object.keys(statusFilterLabels) as StatusFilter[]).map((value) => (
-                    <DropdownMenuRadioItem key={value} value={value}>
-                      {statusFilterLabels[value]}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+              Statut :{" "}
+              {statusFilter === "all"
+                ? "Tous"
+                : statusFilter === "lotValidated"
+                  ? "Lot validé"
+                  : statusLabel(statusFilter, isSuperAdmin)}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuRadioGroup value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                <DropdownMenuLabel>Statut</DropdownMenuLabel>
+                <DropdownMenuRadioItem value="all">Tous</DropdownMenuRadioItem>
+                {STATUS_ORDER.map((value) => (
+                  <DropdownMenuRadioItem key={value} value={value}>
+                    {statusLabel(value, isSuperAdmin)}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <span>Du</span>
@@ -348,7 +364,6 @@ export default function ResidentsPage() {
                 <TableHead>Résidence(s)</TableHead>
                 <TableHead>Date de la demande</TableHead>
                 <TableHead>Statut</TableHead>
-                {isSuperAdmin && <TableHead>Lot</TableHead>}
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -382,8 +397,8 @@ export default function ResidentsPage() {
                     ) : (
                       <div className="flex flex-wrap gap-1.5">
                         {residenceIdsOf(user).map((id) => {
-                          // Résidence d'une demande encore en attente (superAdmin
-                          // seulement) : ton ambre, comme la colonne Lot.
+                          // Résidence d'une demande encore en attente : ton
+                          // ambre, comme le statut.
                           const pending = !residenceIdsByUid.get(user.uid)?.has(id)
                           return (
                             <button
@@ -408,33 +423,11 @@ export default function ResidentsPage() {
                   </TableCell>
                   <TableCell>{user.createdDate ? user.createdDate.toLocaleDateString("fr-FR") : "—"}</TableCell>
                   <TableCell>
-                    <Badge
-                      variant={user.isApproved ? "default" : "outline"}
-                      className={
-                        user.isApproved
-                          ? undefined
-                          : user.rejectionReason
-                            ? "border-transparent bg-red-100 text-red-800"
-                            : "border-transparent bg-amber-100 text-amber-800"
-                      }
-                    >
-                      {user.isApproved ? "Validé" : user.rejectionReason ? "Bloqué" : "Non certifié"}
+                    <Badge className={STATUS_BADGE_CLASS[statusOf(user)]}>
+                      {statusOf(user) === "pending" && <span className="size-[6px] rounded-full bg-current" />}
+                      {statusLabel(statusOf(user), isSuperAdmin)}
                     </Badge>
                   </TableCell>
-                  {isSuperAdmin && (
-                    <TableCell>
-                      {isPendingLot(user) ? (
-                        <Badge className="border-transparent bg-amber-100 text-amber-800">
-                          En attente —{" "}
-                          {user.pendingLotResidenceIds
-                            .map((id) => residenceNameById.get(id) ?? id)
-                            .join(", ")}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                  )}
                   <TableCell className="text-right">
                     <Button variant="outline" size="sm" render={<Link to={`/residents/${user.uid}`} />}>
                       <Eye />
@@ -445,7 +438,7 @@ export default function ResidentsPage() {
               ))}
               {!loading && filteredResidents.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={isSuperAdmin ? 7 : 6} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                     {residents.length === 0
                       ? "Aucun utilisateur pour l'instant."
                       : "Aucun résultat pour cette recherche."}
