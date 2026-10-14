@@ -33,33 +33,29 @@ import { cn } from "@/lib/utils"
 import { residenceBadgeColors } from "@/lib/residenceColors"
 import type { KonodalUser } from "@/types/user"
 
-// Statut d'un compte dans la liste, combinant identité (validée à
-// l'inscription, ou certifiée - pièce + selfie vérifiés) et lots :
+// Statut d'un compte dans la liste, combinant identité et lots (la
+// certification - pièce + selfie vérifiés - n'y figure pas : le badge bleu à
+// côté du nom la signale déjà) :
 // - "pending" : au moins une demande de lot en attente (À traiter pour
 //   Konodal, En cours de validation pour le syndic, qui ne fait que suivre),
 //   prioritaire sur tout le reste sauf un blocage ;
-// - lot approuvé : "certified" (identité certifiée) ou "validated" ;
-// - aucun lot : "idCertified", "idValidated", ou "registered" (identité ni
-//   validée ni certifiée - cas résiduel depuis que isApproved est posé
+// - "validated" : au moins un lot approuvé ;
+// - aucun lot : "idValidated" (identité confirmée), ou "registered"
+//   (identité non confirmée - cas résiduel depuis que isApproved est posé
 //   automatiquement à l'inscription).
-type UserStatus = "pending" | "certified" | "validated" | "idCertified" | "idValidated" | "registered" | "blocked"
-// "lotValidated" : carte KPI "Lot validé" (Certifié + Validé).
-type StatusFilter = "all" | "lotValidated" | UserStatus
+type UserStatus = "pending" | "validated" | "idValidated" | "registered" | "blocked"
+type StatusFilter = "all" | UserStatus
 
-const STATUS_ORDER: UserStatus[] = ["pending", "certified", "validated", "idCertified", "idValidated", "registered", "blocked"]
+const STATUS_ORDER: UserStatus[] = ["pending", "validated", "idValidated", "registered", "blocked"]
 
 function statusLabel(status: UserStatus, isSuperAdmin: boolean): string {
   switch (status) {
     case "pending":
       return isSuperAdmin ? "À traiter" : "En cours de validation"
-    case "certified":
-      return "Certifié"
     case "validated":
       return "Validé"
-    case "idCertified":
-      return "ID certifié"
     case "idValidated":
-      return "ID validé"
+      return "ID confirmée"
     case "registered":
       return "Inscrit"
     case "blocked":
@@ -69,9 +65,7 @@ function statusLabel(status: UserStatus, isSuperAdmin: boolean): string {
 
 const STATUS_BADGE_CLASS: Record<UserStatus, string> = {
   pending: "border-transparent bg-amber-100 text-amber-800",
-  certified: "border-transparent bg-blue-100 text-blue-800",
   validated: "border-transparent bg-emerald-100 text-emerald-800",
-  idCertified: "border-transparent bg-sky-50 text-sky-700",
   idValidated: "border-transparent bg-slate-100 text-slate-700",
   registered: "border-transparent bg-slate-50 text-slate-500",
   blocked: "border-transparent bg-red-100 text-red-800",
@@ -186,16 +180,15 @@ export default function ResidentsPage() {
   const statusOf = (user: KonodalUser): UserStatus => {
     if (user.rejectionReason && !user.isApproved) return "blocked"
     if (isPendingLot(user)) return "pending"
-    if (residenceIdsByUid.has(user.uid)) return user.isCertified ? "certified" : "validated"
-    if (user.isCertified) return "idCertified"
-    return user.isApproved ? "idValidated" : "registered"
+    if (residenceIdsByUid.has(user.uid)) return "validated"
+    return user.isApproved || user.isCertified ? "idValidated" : "registered"
   }
 
   // Comptés sur `residents` (périmètre RBAC), pas `filteredResidents` : les
   // KPI reflètent le total du périmètre, indépendamment des filtres actifs
   // (recherche, dates...) - seul le clic dessus change un filtre, cf.
   // FilterKpiCard ci-dessous.
-  const lotValidatedCount = residents.filter((u) => ["certified", "validated"].includes(statusOf(u))).length
+  const lotValidatedCount = residents.filter((u) => statusOf(u) === "validated").length
   const pendingLotCount = residents.filter(isPendingLot).length
   // Décision de certification réservée superAdmin (cf.
   // CertificationRequestCard) - jamais signalée à agence/agent.
@@ -208,8 +201,7 @@ export default function ResidentsPage() {
     const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null
     const toDate = dateTo ? new Date(`${dateTo}T23:59:59`) : null
     const filtered = residents.filter((user) => {
-      if (statusFilter === "lotValidated" && !["certified", "validated"].includes(statusOf(user))) return false
-      if (statusFilter !== "all" && statusFilter !== "lotValidated" && statusOf(user) !== statusFilter) return false
+      if (statusFilter !== "all" && statusOf(user) !== statusFilter) return false
       if (residenceFilter !== "all" && !residenceIdsOf(user).includes(residenceFilter)) return false
       if (certificationFilter && !isPendingCertification(user)) return false
       if (fromDate && (!user.createdDate || user.createdDate < fromDate)) return false
@@ -259,8 +251,8 @@ export default function ResidentsPage() {
           value={lotValidatedCount}
           icon={CheckCircle2}
           colorClass="bg-emerald-100 text-emerald-600"
-          active={statusFilter === "lotValidated"}
-          onClick={() => setStatusFilter((prev) => (prev === "lotValidated" ? "all" : "lotValidated"))}
+          active={statusFilter === "validated"}
+          onClick={() => setStatusFilter((prev) => (prev === "validated" ? "all" : "validated"))}
         />
         <FilterKpiCard
           label={isSuperAdmin ? "À traiter" : "En cours de validation"}
@@ -327,11 +319,7 @@ export default function ResidentsPage() {
           <DropdownMenu>
             <DropdownMenuTrigger className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
               Statut :{" "}
-              {statusFilter === "all"
-                ? "Tous"
-                : statusFilter === "lotValidated"
-                  ? "Lot validé"
-                  : statusLabel(statusFilter, isSuperAdmin)}
+              {statusFilter === "all" ? "Tous" : statusLabel(statusFilter, isSuperAdmin)}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
               <DropdownMenuRadioGroup value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
