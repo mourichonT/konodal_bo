@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { subscribeToResidences } from "@/lib/residences"
+import { useScopedResidences } from "@/hooks/useScopedResidenceIds"
 import { subscribeToResidenceEvents } from "@/lib/events"
-import type { Residence } from "@/types/residence"
 import type { ResidenceEvent } from "@/types/event"
 
 export type EventWithResidence = ResidenceEvent & { residenceName: string }
@@ -11,29 +10,12 @@ export type EventWithResidence = ResidenceEvent & { residenceName: string }
 // expose aussi `residences` (pas seulement les résidences ayant déjà des
 // events) car le formulaire de création doit pouvoir cibler une résidence
 // qui n'a encore aucun event.
-// scopedResidenceIds : périmètre RBAC (null = pas de restriction, cf.
-// useScopedResidenceIds).
-export function useAllEvents(onError: (message: string) => void, scopedResidenceIds?: Set<string> | null) {
-  const [residences, setResidences] = useState<Residence[]>([])
+// Périmètre RBAC : résidences de useScopedResidences (portefeuille de la
+// gérance pour un compte agence/agent, jamais lues au-delà).
+export function useAllEvents(onError: (message: string) => void) {
   const [byResidence, setByResidence] = useState<Record<string, ResidenceEvent[]>>({})
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    return subscribeToResidences(
-      (data) => {
-        setResidences(data)
-        setLoading(false)
-      },
-      (error) => onError("Impossible de charger les résidences : " + error.message)
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const scopedResidences = useMemo(
-    () => (scopedResidenceIds ? residences.filter((r) => scopedResidenceIds.has(r.id)) : residences),
-    [residences, scopedResidenceIds]
-  )
+  const { residences, loading } = useScopedResidences()
+  const scopedResidences = residences
 
   useEffect(() => {
     const unsubscribes = scopedResidences.map((residence) =>

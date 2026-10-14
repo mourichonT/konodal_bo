@@ -1,40 +1,20 @@
 import { useEffect, useMemo, useState } from "react"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/firebase"
-import { subscribeToResidences } from "@/lib/residences"
+import { useScopedResidences } from "@/hooks/useScopedResidenceIds"
 import { subscribeToResidenceCommunications } from "@/lib/communications"
-import type { Residence } from "@/types/residence"
 import type { Communication } from "@/types/communication"
 
 export type CommunicationWithResidence = Communication & { residenceName: string }
 
 // Même pattern que useAllSinistres : fan-out d'un onSnapshot par résidence
-// (pas de collectionGroup côté connectkasa), filtré par scopedResidenceIds
-// (périmètre RBAC agence/agent, null = pas de restriction).
+// (pas de collectionGroup côté connectkasa), sur les seules résidences du
+// périmètre RBAC (useScopedResidences).
 export function useAllCommunications(
-  onError: (message: string) => void,
-  scopedResidenceIds?: Set<string> | null
-) {
-  const [residences, setResidences] = useState<Residence[]>([])
+  onError: (message: string) => void) {
   const [byResidence, setByResidence] = useState<Record<string, Communication[]>>({})
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    return subscribeToResidences(
-      (data) => {
-        setResidences(data)
-        setLoading(false)
-      },
-      (error) => onError("Impossible de charger les résidences : " + error.message)
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const scopedResidences = useMemo(
-    () => (scopedResidenceIds ? residences.filter((r) => scopedResidenceIds.has(r.id)) : residences),
-    [residences, scopedResidenceIds]
-  )
+  const { residences, loading } = useScopedResidences()
+  const scopedResidences = residences
 
   useEffect(() => {
     const unsubscribes = scopedResidences.map((residence) =>

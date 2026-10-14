@@ -57,6 +57,7 @@ function toKonodalUser(snapshot: DocumentSnapshot<DocumentData>): KonodalUser {
         ? data.certificationStatus
         : null,
     blockedResidencesIds: (data.blockedResidencesIds as string[] | undefined) ?? [],
+    signupCompleted: !!data.refUserApp,
   }
 }
 

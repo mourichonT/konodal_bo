@@ -21,7 +21,6 @@ import { EmergencyContactFormDialog } from "@/components/EmergencyContactFormDia
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { useAllContacts } from "@/hooks/useAllContacts"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
-import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import {
   createContact,
   deleteContact,
@@ -48,8 +47,7 @@ function matchesSearch(contact: Contact, search: string): boolean {
 }
 
 export default function ContactsPage() {
-  const { scopedResidenceIds } = useScopedResidenceIds()
-  const { contacts, residences, loading } = useAllContacts((message) => toast.error(message), scopedResidenceIds)
+  const { contacts, residences, loading } = useAllContacts((message) => toast.error(message))
   const { isSuperAdmin } = useIsSuperAdmin()
   const [search, setSearch] = useState("")
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>(null)

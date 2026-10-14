@@ -103,7 +103,9 @@ export default function ResidentDetailPage() {
     if (!uid || scopeLoading) return
     return subscribeToUserLots(
       uid,
-      (data) => setLots(data),
+      // Double sécurité côté affichage : jamais un lot hors portefeuille,
+      // même si la requête ci-dessous venait à en renvoyer un.
+      (data) => setLots(scopedResidenceIds ? data.filter((l) => scopedResidenceIds.has(l.residenceId)) : data),
       (error) => toast.error("Impossible de charger les lots : " + error.message),
       scopedResidenceIds ? [...scopedResidenceIds] : scopedResidenceIds
     )
@@ -310,7 +312,7 @@ export default function ResidentDetailPage() {
                     ? "1 demande de lot en attente de validation"
                     : `${pendingLots.length} demandes de lot en attente de validation`}
                 </span>
-                {" "}— vérifier le justificatif puis approuver.
+                {isSuperAdmin ? " — vérifier le justificatif puis approuver." : "."}
               </span>
               <Button
                 variant="outline"
@@ -327,9 +329,11 @@ export default function ResidentDetailPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Informations du compte</CardTitle>
-                <CardDescription>
-                  Vérifier la pièce d'identité ci-contre avant d'approuver l'accès à l'application.
-                </CardDescription>
+                {isSuperAdmin && (
+                  <CardDescription>
+                    Vérifier la pièce d'identité ci-contre avant d'approuver l'accès à l'application.
+                  </CardDescription>
+                )}
                 <CardAction className="flex items-center gap-2">
                   {/* Validation d'identité (isApproved) réservée Superadmin -
                       ni Agence ni Agent, cf. matrice de droits BO : c'est une
@@ -467,6 +471,7 @@ export default function ResidentDetailPage() {
                   userApproved={user.isApproved}
                   canApprove={canApproveLots}
                   canRevoke={isSuperAdmin}
+                  showDocuments={isSuperAdmin}
                 />
               ))}
             </div>
@@ -799,6 +804,7 @@ function LotRow({
   userApproved,
   canApprove,
   canRevoke,
+  showDocuments,
 }: {
   uid: string
   lot: UserLot
@@ -815,6 +821,10 @@ function LotRow({
   // revokeLotRole) - réservé isSuperAdmin côté firestore.rules, contrairement
   // à isApprovedLot ci-dessus qui reste ouvert à Agence.
   canRevoke: boolean
+  // Justificatifs (documents personnels du résident) réservés superAdmin :
+  // la vue syndic (agence/agent) n'affiche que les informations du lot,
+  // sans même lire les documents.
+  showDocuments: boolean
 }) {
   const [residenceName, setResidenceName] = useState<string | null>(null)
   const [lotInfo, setLotInfo] = useState<{ refLot: string; batiment: string; lot: string } | null>(
@@ -949,13 +959,14 @@ function LotRow({
   }, [lot.residenceId, lot.id, uid])
 
   useEffect(() => {
+    if (!showDocuments) return
     return subscribeToUserLotDocuments(
       uid,
       lot.id,
       (data) => setDocuments(data),
       (error) => toast.error("Impossible de charger les documents du lot : " + error.message)
     )
-  }, [uid, lot.id])
+  }, [uid, lot.id, showDocuments])
 
   async function handleApprove() {
     setApproving(true)
@@ -994,7 +1005,7 @@ function LotRow({
     // Même découpage que "Informations du compte" / "Pièce d'identité" : le
     // justificatif dans sa propre carte à droite, sur la même ligne que le
     // lot, se vérifie d'un coup d'œil à côté du bouton "Approuver".
-    <div className="grid items-start gap-5 lg:grid-cols-[1.7fr_1fr]">
+    <div className={cn("grid items-start gap-5", showDocuments && "lg:grid-cols-[1.7fr_1fr]")}>
       <div
         className={cn(
           "flex flex-col overflow-hidden rounded-[18px] border bg-white",
@@ -1087,6 +1098,7 @@ function LotRow({
         )}
       </div>
 
+      {showDocuments && (
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Justificatif(s)</CardTitle>
@@ -1148,6 +1160,7 @@ function LotRow({
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }

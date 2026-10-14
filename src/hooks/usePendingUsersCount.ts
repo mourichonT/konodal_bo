@@ -26,14 +26,14 @@ export function usePendingUsersCount(): number {
   const { isSuperAdmin } = useAccountRole()
 
   // Périmètre de l'agence/agent seulement (cf. subscribeToUsersInScope),
-  // une fois connu - null pendant le chargement voudrait dire "tout".
+  // une fois connu.
   useEffect(() => {
     if (scopeLoading) return
     return subscribeToUsersInScope(scopedResidenceIds, setUsers, () => {})
   }, [scopeLoading, scopedResidenceIds])
 
   return useMemo(() => {
-    const residents = users.filter((u) => (u.accountType || "utilisateur") === "utilisateur")
+    const residents = users.filter((u) => (u.accountType || "utilisateur") === "utilisateur" && u.signupCompleted)
     const isPendingLot = (u: KonodalUser) =>
       scopedResidenceIds
         ? u.pendingLotResidenceIds.some((residenceId) => scopedResidenceIds.has(residenceId))

@@ -1,4 +1,3 @@
-import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAllContacts } from "@/hooks/useAllContacts"
 
 // Même principe que usePendingUsersCount (pastille sidebar "Utilisateurs"),
@@ -7,7 +6,6 @@ import { useAllContacts } from "@/hooks/useAllContacts"
 // useAllContacts). Pas de suivi "vu/non vu" : reflète simplement le nombre
 // de contacts en attente à l'instant T.
 export function usePendingContactsCount(): number {
-  const { scopedResidenceIds } = useScopedResidenceIds()
-  const { contacts } = useAllContacts(() => {}, scopedResidenceIds)
+  const { contacts } = useAllContacts(() => {})
   return contacts.filter((c) => !c.isApproved).length
 }

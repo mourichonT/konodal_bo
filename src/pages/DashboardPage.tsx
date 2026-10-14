@@ -218,10 +218,10 @@ export default function DashboardPage() {
       () => setGeranceName(null)
     )
   }, [isAgence, isAgent, geranceId])
-  const { sinistres, loading: sinistresLoading } = useAllSinistres((message) => toast.error(message), scopedResidenceIds)
-  const { events, residences, loading: eventsLoading } = useAllEvents((message) => toast.error(message), scopedResidenceIds)
-  const { contacts, loading: contactsLoading } = useAllContacts((message) => toast.error(message), scopedResidenceIds)
-  const { lots, loading: lotsLoading } = useAllLots((message) => toast.error(message), scopedResidenceIds)
+  const { sinistres, loading: sinistresLoading } = useAllSinistres((message) => toast.error(message))
+  const { events, residences, loading: eventsLoading } = useAllEvents((message) => toast.error(message))
+  const { contacts, loading: contactsLoading } = useAllContacts((message) => toast.error(message))
+  const { lots, loading: lotsLoading } = useAllLots((message) => toast.error(message))
   const [residenceFilter, setResidenceFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -241,7 +241,7 @@ export default function DashboardPage() {
   const loading = sinistresLoading || eventsLoading || contactsLoading || lotsLoading
 
   const residents = useMemo(
-    () => users.filter((u) => (u.accountType || "utilisateur") === "utilisateur"),
+    () => users.filter((u) => (u.accountType || "utilisateur") === "utilisateur" && u.signupCompleted),
     [users]
   )
 

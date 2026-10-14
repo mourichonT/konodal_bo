@@ -57,4 +57,9 @@ export type KonodalUser = {
   // Résidences dont l'accès est suspendu (decide_resident_removal) - écrit
   // par le serveur, levé par unblock_resident.
   blockedResidencesIds: string[]
+  // Inscription menée jusqu'au bout dans l'app : refUserApp n'est écrit
+  // qu'en fin de parcours (setUser, cf. login_transition_page.dart côté
+  // app). Un compte abandonné en cours de route n'est pas remonté dans le
+  // BO (et cleanupAbandonedSignups le supprime après 20 min).
+  signupCompleted: boolean
 }

@@ -19,7 +19,6 @@ import {
 import { useAllCommunications, type CommunicationWithResidence } from "@/hooks/useAllCommunications"
 import { useCommentStats } from "@/hooks/useCommentCount"
 import { useUniqueViewCount } from "@/hooks/useUniqueViewCount"
-import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAuth } from "@/lib/auth-context"
 import { createCommunication } from "@/lib/communications"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
@@ -63,11 +62,7 @@ function groupCommunications(list: CommunicationWithResidence[]): CommunicationG
 
 export default function CommunicationsPage() {
   const { user } = useAuth()
-  const { scopedResidenceIds } = useScopedResidenceIds()
-  const { communications, residences, loading } = useAllCommunications(
-    (message) => toast.error(message),
-    scopedResidenceIds
-  )
+  const { communications, residences, loading } = useAllCommunications((message) => toast.error(message))
   const [search, setSearch] = useState("")
   const [residenceFilter, setResidenceFilter] = useState("all")
   const [communicating, setCommunicating] = useState(false)

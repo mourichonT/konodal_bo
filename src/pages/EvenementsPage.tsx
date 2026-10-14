@@ -18,7 +18,6 @@ import { EventFormDialog } from "@/components/EventFormDialog"
 import { useAuth } from "@/lib/auth-context"
 import { createEvent } from "@/lib/events"
 import { useAllEvents, type EventWithResidence } from "@/hooks/useAllEvents"
-import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 
 export type EvenementsFilters = {
@@ -41,8 +40,7 @@ const tabs = [
 
 export default function EvenementsPage() {
   const { user } = useAuth()
-  const { scopedResidenceIds } = useScopedResidenceIds()
-  const { events, residences, loading } = useAllEvents((message) => toast.error(message), scopedResidenceIds)
+  const { events, residences, loading } = useAllEvents((message) => toast.error(message))
   const [creating, setCreating] = useState(false)
   const [search, setSearch] = useState("")
   const [residenceFilter, setResidenceFilter] = useState("all")

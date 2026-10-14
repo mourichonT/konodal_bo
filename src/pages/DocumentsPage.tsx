@@ -23,7 +23,6 @@ import {
   type ResidenceDocumentWithResidence,
 } from "@/hooks/useAllResidenceDocuments"
 import { useAllLots, type LotWithResidence } from "@/hooks/useAllLots"
-import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { createResidenceDocument, deleteResidenceDocument } from "@/lib/residenceDocuments"
 import { createLotDocument, deleteLotDocument, subscribeToLotDocuments } from "@/lib/lotDocuments"
 import { resolveUserLabels } from "@/lib/users"
@@ -45,11 +44,7 @@ export default function DocumentsPage() {
 }
 
 function ResidenceDocumentsSection() {
-  const { scopedResidenceIds } = useScopedResidenceIds()
-  const { documents, residences, loading } = useAllResidenceDocuments(
-    (message) => toast.error(message),
-    scopedResidenceIds
-  )
+  const { documents, residences, loading } = useAllResidenceDocuments((message) => toast.error(message))
   const [search, setSearch] = useState("")
   const [residenceFilter, setResidenceFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -211,8 +206,7 @@ function ResidenceDocumentsSection() {
 }
 
 function LotDocumentsSection() {
-  const { scopedResidenceIds } = useScopedResidenceIds()
-  const { lots, loading: lotsLoading } = useAllLots((message) => toast.error(message), scopedResidenceIds)
+  const { lots, loading: lotsLoading } = useAllLots((message) => toast.error(message))
   const [residenceFilter, setResidenceFilter] = useState("")
   const [lotId, setLotId] = useState("")
   const [lotDocuments, setLotDocuments] = useState<LotDocument[]>([])

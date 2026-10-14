@@ -75,14 +75,14 @@ export default function ResidentsPage() {
   // Les utilisateurs ne portent pas de residenceId direct - le périmètre
   // RBAC se déduit des lots qu'ils possèdent/louent dans le périmètre
   // agence/agent (cf. useScopedResidenceIds).
-  const { lots: scopedLots, residences } = useAllLots(() => {}, scopedResidenceIds)
+  const { lots: scopedLots, residences } = useAllLots(() => {})
   const residenceNameById = useMemo(
     () => new Map(residences.map((r) => [r.id, r.name])),
     [residences]
   )
 
   // Abonnement ouvert seulement une fois le périmètre connu : pendant son
-  // chargement, scopedResidenceIds vaut null (= pas de restriction).
+  // chargement, scopedResidenceIds est vide (portefeuille pas encore lu).
   useEffect(() => {
     if (scopeLoading) return
     setLoading(true)
@@ -101,8 +101,12 @@ export default function ResidentsPage() {
 
   // Les comptes 'agence'/'agent'/'superAdmin' sont créés hors app
   // (backoffice, gérance) et n'ont pas leur place dans un annuaire
-  // utilisateurs.
-  const allResidents = useMemo(() => users.filter((u) => (u.accountType || "utilisateur") === "utilisateur"), [users])
+  // utilisateurs. Inscriptions abandonnées en cours de route exclues
+  // (cf. KonodalUser.signupCompleted).
+  const allResidents = useMemo(
+    () => users.filter((u) => (u.accountType || "utilisateur") === "utilisateur" && u.signupCompleted),
+    [users]
+  )
 
   // allowedUids (post-approbation, idProprietaire/idLocataire côté lot
   // maître) ne suffit pas seul : un compte dont le lot est encore en attente
