@@ -12,7 +12,7 @@ import {
   removeResidenceAdmin,
   subscribeToResidenceAdmins,
 } from "@/lib/residenceAdmins"
-import { resolveUsersByUids } from "@/lib/users"
+import { findUserByEmail, resolveUsersByUids } from "@/lib/users"
 import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import type { KonodalUser } from "@/types/user"
 
@@ -51,19 +51,22 @@ export default function AccesPage() {
 
   async function handleAdd(event: FormEvent) {
     event.preventDefault()
-    const uid = newUid.trim()
-    if (!uid) return
-    if (uids.includes(uid)) {
-      toast.error("Ce compte a déjà l'accès")
-      return
-    }
+    const query = newUid.trim()
+    if (!query) return
     setAdding(true)
     try {
-      // Un uid inconnu ou non superAdmin ne donnerait aucun accès réel
-      // (règles Firestore) : refusé ici plutôt que listé pour rien.
-      const [user] = await resolveUsersByUids([uid])
+      // UID ou email (contient "@") - un compte inconnu ou non superAdmin ne
+      // donnerait aucun accès réel (règles Firestore) : refusé ici plutôt
+      // que listé pour rien.
+      const isEmail = query.includes("@")
+      const user = isEmail ? await findUserByEmail(query) : (await resolveUsersByUids([query]))[0]
       if (!user) {
-        toast.error("Aucun compte trouvé pour cet UID")
+        toast.error(isEmail ? "Aucun compte trouvé pour cet email" : "Aucun compte trouvé pour cet UID")
+        return
+      }
+      const uid = user.uid
+      if (uids.includes(uid)) {
+        toast.error("Ce compte a déjà l'accès")
         return
       }
       if (user.accountType !== "superAdmin") {
@@ -114,7 +117,7 @@ export default function AccesPage() {
             <Input
               value={newUid}
               onChange={(e) => setNewUid(e.target.value)}
-              placeholder="UID du compte"
+              placeholder="UID ou email du compte"
               className="h-9 sm:w-[300px]"
             />
             <Button type="submit" disabled={adding || !newUid.trim()} className={PRIMARY_CTA_CLASS}>
