@@ -1,5 +1,5 @@
 // Identifiant de session stocké en localStorage (donc par device/navigateur,
-// partagé entre onglets d'une même session) - comparé à users/{uid}.activeSessionId
+// partagé entre onglets d'une même session) - comparé à users/{uid}.activeBoSessionId
 // pour détecter qu'un autre device s'est connecté avec le même compte
 // (cf. auth-context.tsx). try/catch : navigation privée stricte (Safari) peut
 // faire lever localStorage, on dégrade alors silencieusement (pas de garde-fou

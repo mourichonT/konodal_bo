@@ -25,6 +25,12 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+// Champ propre au backoffice, distinct de activeSessionId (app mobile,
+// session_guard.dart) : la règle "une seule session active par compte"
+// s'applique par plateforme - un même compte (admin) peut être ouvert dans
+// l'app sur téléphone ET dans le BO sans que l'un éjecte l'autre.
+const SESSION_FIELD = "activeBoSessionId"
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -47,26 +53,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       await ensureUserDocument(firebaseUser)
 
-      // Une seule session active par compte, tous devices confondus : cf.
-      // src/lib/session.ts pour le détail du stockage local. Le dernier
-      // login (sur n'importe quel device) écrit son id dans
-      // users/{uid}.activeSessionId, ce qui fait échouer la comparaison
-      // ci-dessous sur tout autre device déjà connecté et le déconnecte.
+      // Une seule session BO active par compte, tous navigateurs confondus :
+      // cf. src/lib/session.ts pour le détail du stockage local. Le dernier
+      // login BO écrit son id dans users/{uid}.activeBoSessionId, ce qui
+      // fait échouer la comparaison ci-dessous sur tout autre navigateur
+      // déjà connecté au BO et le déconnecte.
       const forceNewSession = freshLoginRef.current
       freshLoginRef.current = false
       let sessionId = forceNewSession ? null : getLocalSessionId(firebaseUser.uid)
       if (!sessionId) {
         sessionId = crypto.randomUUID()
         setLocalSessionId(firebaseUser.uid, sessionId)
-        await updateDoc(doc(db, "users", firebaseUser.uid), { activeSessionId: sessionId })
+        await updateDoc(doc(db, "users", firebaseUser.uid), { [SESSION_FIELD]: sessionId })
       }
 
       const localSessionId = sessionId
       unsubscribeSession = onSnapshot(doc(db, "users", firebaseUser.uid), (snapshot) => {
-        const remoteSessionId = snapshot.data()?.activeSessionId as string | undefined
+        const remoteSessionId = snapshot.data()?.[SESSION_FIELD] as string | undefined
         if (remoteSessionId && remoteSessionId !== localSessionId) {
           clearLocalSessionId(firebaseUser.uid)
-          toast.error("Session terminée : ce compte vient d'être connecté depuis un autre appareil.")
+          toast.error("Session terminée : ce compte vient d'être connecté au backoffice depuis un autre navigateur.")
           void signOut(auth)
         }
       })
