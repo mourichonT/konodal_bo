@@ -12,7 +12,7 @@ export type CertificationRequest = {
   uid: string
   status: "pending" | "approved" | "rejected"
   idType: string
-  idRectoUrl: string
+  idRectoUrl: string | null
   idVersoUrl: string | null
   selfieUrl: string | null
   selfiePath: string | null
@@ -22,6 +22,8 @@ export type CertificationRequest = {
   submittedAt: Date | null
   decidedAt: Date | null
   rejectionReason: string | null
+  // Pièce supprimée 30 jours après la décision (purge_certification_ids).
+  idPurgedAt: Date | null
 }
 
 function toDate(value: unknown): Date | null {
@@ -47,7 +49,7 @@ export function subscribeToCertificationRequest(
         uid,
         status: data.status ?? "pending",
         idType: data.idType ?? "",
-        idRectoUrl: data.idRectoUrl ?? "",
+        idRectoUrl: data.idRectoUrl ?? null,
         idVersoUrl: data.idVersoUrl ?? null,
         selfieUrl: data.selfieUrl ?? null,
         selfiePath: data.selfiePath ?? null,
@@ -57,6 +59,7 @@ export function subscribeToCertificationRequest(
         submittedAt: toDate(data.submittedAt),
         decidedAt: toDate(data.decidedAt),
         rejectionReason: data.rejectionReason ?? null,
+        idPurgedAt: toDate(data.idPurgedAt),
       })
     },
     onError
@@ -64,8 +67,8 @@ export function subscribeToCertificationRequest(
 }
 
 // Selfie supprimé dès la décision (donnée biométrique, cf. consentement
-// affiché dans l'app) - la pièce d'identité, elle, est conservée comme les
-// autres pièces du dossier.
+// affiché dans l'app) - la pièce d'identité, elle, l'est 30 jours après
+// (purge_certification_ids, functions_python/main.py).
 async function deleteSelfie(request: CertificationRequest) {
   if (!request.selfiePath) return
   try {

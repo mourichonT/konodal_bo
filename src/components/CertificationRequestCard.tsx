@@ -47,13 +47,22 @@ function ScoreBadge({ request }: { request: CertificationRequest }) {
 
 // Même vignette que les justificatifs de lot (DocumentThumbnail : ratio
 // réel, ouverture en grand dans un Dialog) ; le selfie, supprimé dès la
-// décision, laisse un emplacement vide explicite.
-function Photo({ url, label }: { url: string | null; label: string }) {
+// décision, et la pièce, 30 jours après, laissent un emplacement vide
+// explicite.
+function Photo({
+  url,
+  label,
+  emptyText = "Supprimé après décision",
+}: {
+  url: string | null
+  label: string
+  emptyText?: string
+}) {
   if (url) return <DocumentThumbnail path={url} label={label} />
   return (
     <div className="flex flex-col items-center gap-1.5">
       <div className="flex h-40 w-64 items-center justify-center rounded-lg border border-dashed text-sm text-[oklch(52%_0.01_150)]">
-        Supprimé après décision
+        {emptyText}
       </div>
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>
@@ -185,7 +194,15 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
           <span className="text-sm text-[oklch(52%_0.01_150)]">{request.idType}</span>
         </div>
         <div className="flex flex-col items-center gap-3">
-          <Photo url={request.idRectoUrl} label="Recto" />
+          <Photo
+            url={request.idRectoUrl}
+            label="Recto"
+            emptyText={
+              request.idPurgedAt
+                ? `Supprimée le ${request.idPurgedAt.toLocaleDateString("fr-FR")} (conservation 30 jours)`
+                : "Supprimée (conservation 30 jours)"
+            }
+          />
           {request.idVersoUrl && <Photo url={request.idVersoUrl} label="Verso" />}
           <Photo url={request.selfieUrl} label="Selfie" />
         </div>
