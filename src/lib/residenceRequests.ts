@@ -216,8 +216,14 @@ export async function approveResidenceRequest(
     throw new Error("demande sans compte Konodal : la résidence n'aurait aucun membre du CS")
   }
 
-  const residenceRef = doc(collection(db, "residences"))
+  // Jamais de résidence sans au moins un bâtiment et un lot (déjà exigé par
+  // submit_residence_request, revérifié ici avant toute écriture).
   const buildings = requestBuildings(request)
+  if (!buildings.length || !request.lots?.length) {
+    throw new Error("demande sans bâtiment ou sans lot : la résidence ne peut pas être créée")
+  }
+
+  const residenceRef = doc(collection(db, "residences"))
   const refs = lotRefs(request.lots)
   const lotKey = (batiment: string, lot: string) => `${batiment.toLowerCase()}|${lot.toLowerCase()}`
   const lotIds = request.lots.map(() => doc(collection(db, "residences", residenceRef.id, "lots")).id)
