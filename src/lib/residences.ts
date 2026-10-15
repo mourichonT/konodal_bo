@@ -18,7 +18,7 @@ import type { Address, GeranceRef, Residence } from "@/types/residence"
 // ?url&no-inline : cf. commentaire équivalent dans lib/events.ts
 // (GERANCE_PLACEHOLDER_LOGO_URL) - garantit une vraie URL joignable depuis
 // une boîte mail, jamais inlinée en base64 par Vite.
-import logoVertical from "@/assets/logo-vertical.png?url&no-inline"
+import { APP_URL, emailButtonHtml, emailContactHtml, escapeHtml, konodalEmailHtml } from "@/lib/emailTemplate"
 
 const residencesCollection = collection(db, "residences")
 
@@ -118,35 +118,17 @@ export async function updateResidenceGeranceRef(id: string, geranceRef: GeranceR
   })
 }
 
-// Même gabarit d'en-tête que buildInterventionEmailHtml
-// (EvenementDetailPage.tsx) - logo + bandeau vert #48775B (rgba(72,119,91,1)
-// = même couleur), pour uniformiser tous les mails envoyés depuis ce
-// backoffice plutôt qu'un texte "KONODAL" nu.
+// Gabarit commun des mails (lib/emailTemplate.ts).
 function csMemberInviteEmailHtml(residenceName: string): string {
-  const logoUrl = new URL(logoVertical, window.location.origin).href
-  return `
-    <!DOCTYPE html>
-    <html lang="fr">
-    <body style="font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4;">
-    <table align="center" width="600" style="background-color: #ffffff; border-collapse: collapse; margin-top: 20px;">
-        <tr>
-        <td style="background-color: rgba(72, 119, 91, 1); color: #ffffff; text-align: center; padding: 30px 20px">
-            <img src="${logoUrl}" alt="KONODAL-Logo" width="90" style="max-width: 25%">
-            <h2 style="margin: 30px 0 0; font-size: 20px">Invitation au Conseil Syndical</h2>
-        </td>
-        </tr>
-        <tr>
-        <td style="padding: 30px 30px; color: #333333;">
+  return konodalEmailHtml({
+    title: "Invitation au Conseil Syndical",
+    bodyHtml: `
             <p>Bonjour,</p>
-            <p>Vous avez été ajouté(e) au <strong>Conseil Syndical</strong> de la résidence <strong>${residenceName}</strong>.</p>
+            <p>Vous avez été ajouté(e) au <strong>Conseil Syndical</strong> de la résidence <strong>${escapeHtml(residenceName)}</strong>.</p>
             <p>Connectez-vous à l'application KONODAL pour accéder aux fonctionnalités réservées aux membres du CS (documents de copropriété, suivi des sinistres...).</p>
-            <p style="font-size: 12px; color: #666;">En cas de question, contactez votre syndic.</p>
-        </td>
-        </tr>
-    </table>
-    </body>
-    </html>
-  `
+        ${emailButtonHtml(APP_URL, "Ouvrir Konodal")}
+        ${emailContactHtml}`,
+  })
 }
 
 // Envoie une notification à l'adresse mail déjà connue de ce compte (pas une

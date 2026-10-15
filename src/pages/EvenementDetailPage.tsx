@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { EventFormDialog } from "@/components/EventFormDialog"
 import { PostCommentsCard } from "@/components/PostCommentsCard"
 // ?url : cf. commentaire équivalent dans lib/events.ts (GERANCE_PLACEHOLDER_LOGO_URL).
-import logoVertical from "@/assets/logo-vertical.png?url&no-inline"
+import { emailButtonHtml, emailContactHtml, konodalEmailHtml } from "@/lib/emailTemplate"
 import { db } from "@/firebase"
 import { subscribeToEvent, updateEvent, cancelEvent } from "@/lib/events"
 import { subscribeToRapportsForEvent, type Rapport } from "@/lib/rapports"
@@ -41,11 +41,7 @@ async function findPrestataireMail(
   return undefined
 }
 
-// Même gabarit que les notifications de sinistre envoyées côté app mobile
-// (bandeau vert #48775B, logo KONODAL, footer avec réseaux sociaux) - reçu
-// une fois par mail depuis konodal-dev, reproduit ici pour que les mails
-// envoyés depuis le backoffice restent visuellement cohérents avec ceux de
-// l'app.
+// Gabarit commun des mails (lib/emailTemplate.ts).
 function buildInterventionEmailHtml({
   residenceName,
   address,
@@ -60,30 +56,9 @@ function buildInterventionEmailHtml({
   const dateLabel = event.eventDate
     ? `${event.eventDate.toLocaleDateString("fr-FR")} à ${event.eventDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
     : "—"
-  // URL absolue construite à partir de l'asset bundlé (pas un lien
-  // Firebase Storage codé en dur sur konodal-dev, cf. bug du lien de
-  // partage prestataire) - reste correcte quel que soit l'environnement
-  // depuis lequel ce mail est envoyé.
-  const logoUrl = new URL(logoVertical, window.location.origin).href
-
-  return `
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-    <meta charset="UTF-8">
-    <title>KONODAL - Notification</title>
-    </head>
-    <body style="font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4;">
-    <table align="center" width="600" style="background-color: #ffffff; border-collapse: collapse; margin-top: 20px;">
-        <tr>
-        <td style="background-color: rgba(72, 119, 91, 1); color: rgba(255, 255, 255, 1); text-align: center; padding: 30px 20px">
-            <img src="${logoUrl}" alt="KONODAL-Logo" width="90" style="max-width: 25%">
-            <h2 style="margin: 30px 0 0; font-size: 20px">Intervention programmée</h2>
-        </td>
-        </tr>
-
-        <tr>
-        <td style="padding: 20px 20px; color: #333333;">
+  return konodalEmailHtml({
+    title: "Intervention programmée",
+    bodyHtml: `
             <div style="text-align: center;">
                 <p>Une intervention vous a été assignée dans la résidence :</p>
                 <h2>${residenceName}</h2>
@@ -105,36 +80,10 @@ function buildInterventionEmailHtml({
             ${event.description || "Aucune description."}
             </p>
 
-        <div style="margin: 30px 0; text-align: center;">
-            <p style="margin: 5px 0;">Pour plus d'informations</p>
-            <a href="${link}" style="background-color: #48775B; color: white; padding: 8px 16px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                Consulter l'intervention
-            </a>
-        </div>
-        <p style="font-size: 12px; color: #666; text-align: center;">
-            En cas de difficultés, merci de contacter nos services via :
-            <a href="mailto:admin.konodal@gmail.com" style="color: #48775B; font-size: 12px;">
-                admin.konodal@gmail.com
-            </a>
-        </p>
-        </td>
-        </tr>
-
-        <tr>
-        <td style="background-color: #e0e0e0; text-align: center; padding: 20px;">
-            <p style="margin: 10px 0;">KONODAL</p>
-            <div style="margin: 10px 0;">
-            <a href="#"><img src="https://cdn-icons-png.flaticon.com/24/2111/2111463.png" alt="Instagram" style="margin: 0 5px;"></a>
-            <a href="#"><img src="https://cdn-icons-png.flaticon.com/24/2111/2111748.png" alt="YouTube" style="margin: 0 5px;"></a>
-            <a href="#"><img src="https://cdn-icons-png.flaticon.com/24/2111/2111532.png" alt="LinkedIn" style="margin: 0 5px;"></a>
-            </div>
-            <p style="font-size: 12px; color: #777;">Copyright © 2023</p>
-        </td>
-        </tr>
-    </table>
-    </body>
-    </html>
-  `
+        <p style="margin: 30px 0 5px; text-align: center;">Pour plus d'informations</p>
+        ${emailButtonHtml(link, "Consulter l'intervention")}
+        ${emailContactHtml}`,
+  })
 }
 
 export default function EvenementDetailPage() {
