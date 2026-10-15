@@ -157,14 +157,14 @@ export default function ResidenceDetailPage() {
 
       {residence && (
         <>
-          <div className="flex w-full items-center gap-1 rounded-2xl bg-[oklch(93%_0.005_100)] p-1.5">
+          <div className="flex w-full items-center gap-1 overflow-x-auto rounded-2xl bg-[oklch(93%_0.005_100)] p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {residenceTabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-[13.5px] font-semibold transition-colors",
+                  "flex flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-[13.5px] font-semibold transition-colors",
                   activeTab === tab.key
                     ? "bg-[oklch(45%_0.1_155)] font-bold text-white shadow-[0_6px_16px_-6px_oklch(38%_0.08_155/0.5)]"
                     : "text-[oklch(45%_0.01_150)] hover:bg-[oklch(98%_0.003_100)]"
