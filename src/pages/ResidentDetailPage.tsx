@@ -25,6 +25,7 @@ import {
 import { db } from "@/firebase"
 import { CertificationRequestCard } from "@/components/CertificationRequestCard"
 import { DocumentThumbnail } from "@/components/DocumentThumbnail"
+import { UserEmailsCard } from "@/components/UserEmailsCard"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
@@ -481,6 +482,13 @@ export default function ResidentDetailPage() {
               ))}
             </div>
           </div>
+
+          <UserEmailsCard
+            uid={user.uid}
+            userName={`${user.name ?? ""} ${user.surname ?? ""}`.trim() || user.email}
+            residenceIds={[...new Set(lots.map((l) => l.residenceId))]}
+            lotIds={lots.map((l) => l.id)}
+          />
         </>
       )}
 
