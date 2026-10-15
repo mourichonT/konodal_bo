@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { NavLink, Outlet, useLocation } from "react-router-dom"
 import { toast } from "sonner"
-import { ChevronDown, Kanban, List, Search, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ChevronDown, Kanban, List, Search } from "lucide-react"
+import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { DateInput } from "@/components/DateInput"
@@ -170,10 +170,6 @@ export default function SinistresPage() {
               Afficher les tickets archivés
             </label>
           )}
-          <Button variant="outline" size="sm" onClick={handleClearFilters}>
-            <X />
-            Effacer les filtres
-          </Button>
           <label className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
             <input
               type="checkbox"
@@ -183,6 +179,10 @@ export default function SinistresPage() {
             />
             Afficher les tickets non déclarés
           </label>
+          <ClearFiltersButton
+            active={!!search || residenceFilter !== "all" || !!dateFrom || !!dateTo || !showNonDeclares || showArchived}
+            onClick={handleClearFilters}
+          />
         </CardContent>
       </Card>
 

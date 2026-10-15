@@ -7,6 +7,9 @@ export type AdCampaign = {
   // Usage backoffice uniquement (identification dans la liste) - l'app
   // mobile ne lit jamais ce champ.
   name: string
+  // Annonceur (entreprise qui paie la campagne) - usage BO uniquement,
+  // vide pour les campagnes créées avant le 15/10/2026.
+  advertiser: string
   imageUrl: string
   targetUrl: string
   targetResidenceIds: string[]
@@ -33,6 +36,7 @@ export type AdCampaign = {
 
 export type AdCampaignInput = {
   name: string
+  advertiser: string
   imageUrl: string
   targetUrl: string
   targetResidenceIds: string[]

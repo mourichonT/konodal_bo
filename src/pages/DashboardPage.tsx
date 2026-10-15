@@ -25,7 +25,6 @@ import {
   UserCheck,
   KeyRound,
   ChevronDown,
-  X,
   Contact2,
   FileCheck2,
   Copy,
@@ -42,7 +41,6 @@ import { subscribeToGerance } from "@/lib/gerances"
 import { LicenseKpisSection } from "@/components/LicenseKpisSection"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { DateInput } from "@/components/DateInput"
 import {
   Tooltip as InfoTooltip,
@@ -63,6 +61,7 @@ import { useAllEvents } from "@/hooks/useAllEvents"
 import { useAllContacts } from "@/hooks/useAllContacts"
 import { useAllLots } from "@/hooks/useAllLots"
 import { subscribeToUsersInScope } from "@/lib/users"
+import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import type { KonodalUser } from "@/types/user"
 import {
   SINISTRE_STATUSES,
@@ -692,10 +691,10 @@ export default function DashboardPage() {
             <span>au</span>
             <DateInput value={dateTo} onChange={setDateTo} />
           </div>
-          <Button variant="outline" size="sm" className="ml-auto" onClick={handleClearFilters}>
-            <X />
-            Effacer les filtres
-          </Button>
+          <ClearFiltersButton
+            active={residenceFilter !== "all" || !!dateFrom || !!dateTo}
+            onClick={handleClearFilters}
+          />
         </CardContent>
       </Card>
 

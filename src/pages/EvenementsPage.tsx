@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react"
 import { NavLink, Outlet } from "react-router-dom"
 import { toast } from "sonner"
-import { Calendar, ChevronDown, List, Plus, Search, X } from "lucide-react"
+import { Calendar, ChevronDown, List, Plus, Search } from "lucide-react"
+import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -137,10 +138,10 @@ export default function EvenementsPage() {
             <span>au</span>
             <DateInput value={dateTo} onChange={setDateTo} />
           </div>
-          <Button variant="outline" size="sm" onClick={handleClearFilters}>
-            <X />
-            Effacer les filtres
-          </Button>
+          <ClearFiltersButton
+            active={!!search || residenceFilter !== "all" || !!dateFrom || !!dateTo}
+            onClick={handleClearFilters}
+          />
         </CardContent>
       </Card>
 

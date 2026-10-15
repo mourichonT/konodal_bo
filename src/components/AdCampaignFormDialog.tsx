@@ -18,6 +18,7 @@ export function AdCampaignFormDialog({
   title,
   residences,
   initial,
+  advertiserSuggestions = [],
   onSubmit,
 }: {
   open: boolean
@@ -25,9 +26,13 @@ export function AdCampaignFormDialog({
   title: string
   residences: Residence[]
   initial?: AdCampaign
+  // Annonceurs déjà saisis, proposés en autocomplétion (orthographe homogène
+  // pour le filtre par annonceur de PublicitesPage).
+  advertiserSuggestions?: string[]
   onSubmit: (input: AdCampaignInput) => Promise<void>
 }) {
   const [name, setName] = useState("")
+  const [advertiser, setAdvertiser] = useState("")
   const [imageUrl, setImageUrl] = useState("")
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [targetUrl, setTargetUrl] = useState("")
@@ -39,6 +44,7 @@ export function AdCampaignFormDialog({
   useEffect(() => {
     if (open) {
       setName(initial?.name ?? "")
+      setAdvertiser(initial?.advertiser ?? "")
       setImageUrl(initial?.imageUrl ?? "")
       setImageFile(null)
       setTargetUrl(initial?.targetUrl ?? "")
@@ -65,6 +71,10 @@ export function AdCampaignFormDialog({
       toast.error("Le nom de la campagne est requis")
       return
     }
+    if (!advertiser.trim()) {
+      toast.error("L'annonceur est requis")
+      return
+    }
     if (!imageFile && !imageUrl) {
       toast.error("Une image est requise")
       return
@@ -86,6 +96,7 @@ export function AdCampaignFormDialog({
       const finalImageUrl = imageFile ? await uploadAdCampaignImage(imageFile) : imageUrl
       await onSubmit({
         name: name.trim(),
+        advertiser: advertiser.trim(),
         imageUrl: finalImageUrl,
         targetUrl,
         targetResidenceIds,
@@ -109,6 +120,22 @@ export function AdCampaignFormDialog({
           </DialogHeader>
 
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ad-advertiser">Annonceur</Label>
+              <Input
+                id="ad-advertiser"
+                required
+                list="ad-advertiser-suggestions"
+                placeholder="Ex : Boulangerie Martin"
+                value={advertiser}
+                onChange={(e) => setAdvertiser(e.target.value)}
+              />
+              <datalist id="ad-advertiser-suggestions">
+                {advertiserSuggestions.map((a) => (
+                  <option key={a} value={a} />
+                ))}
+              </datalist>
+            </div>
             <div className="grid grid-cols-[1.3fr_1fr] gap-3.5">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ad-name">Nom de la campagne</Label>

@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { DateInput } from "@/components/DateInput"
+import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import { subscribeToUsersInScope } from "@/lib/users"
 import { subscribeToRemovalRequests } from "@/lib/residentRemovals"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
@@ -340,6 +341,18 @@ export default function ResidentsPage() {
             <span>au</span>
             <DateInput value={dateTo} onChange={setDateTo} />
           </div>
+
+          <ClearFiltersButton
+            active={!!search || statusFilter !== "all" || certificationFilter || residenceFilter !== "all" || !!dateFrom || !!dateTo}
+            onClick={() => {
+              setSearch("")
+              setStatusFilter("all")
+              setCertificationFilter(false)
+              setResidenceFilter("all")
+              setDateFrom("")
+              setDateTo("")
+            }}
+          />
         </CardContent>
       </Card>
 

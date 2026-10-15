@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { Eye, Megaphone, MousePointerClick, Plus, Settings, Trash2 } from "lucide-react"
+import { Eye, Megaphone, MousePointerClick, Plus, Search, Settings, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { ClearFiltersButton } from "@/components/ClearFiltersButton"
+import { MultiSelectFilter } from "@/components/MultiSelectFilter"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Table,
@@ -37,6 +40,9 @@ export default function PublicitesPage() {
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<AdCampaign | null>(null)
   const [configuring, setConfiguring] = useState(false)
+  const [search, setSearch] = useState("")
+  const [advertiserFilter, setAdvertiserFilter] = useState<string[]>([])
+  const [statusFilter, setStatusFilter] = useState<string[]>([])
 
   useEffect(() => {
     setLoading(true)
@@ -74,6 +80,18 @@ export default function PublicitesPage() {
   const ctr = totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100).toFixed(1) + " %" : "—"
 
   const residenceById = new Map(residences.map((r) => [r.id, r]))
+
+  const NO_ADVERTISER = "Non renseigné"
+  const advertiserOf = (c: AdCampaign) => c.advertiser.trim() || NO_ADVERTISER
+  const advertiserOptions = [...new Set(campaigns.map(advertiserOf))].sort((a, b) => a.localeCompare(b, "fr"))
+  const advertiserSuggestions = advertiserOptions.filter((a) => a !== NO_ADVERTISER)
+  const normalizedSearch = search.trim().toLowerCase()
+  const filteredCampaigns = campaigns.filter((c) => {
+    if (advertiserFilter.length > 0 && !advertiserFilter.includes(advertiserOf(c))) return false
+    if (statusFilter.length > 0 && !statusFilter.includes(campaignStatus(c, today))) return false
+    if (!normalizedSearch) return true
+    return [c.name, c.advertiser].join(" ").toLowerCase().includes(normalizedSearch)
+  })
 
   // Une résidence par badge devient illisible dès qu'une campagne cible
   // beaucoup de résidences (ex: "France entière") - on résume en un seul
@@ -157,6 +175,44 @@ export default function PublicitesPage() {
           </p>
         </div>
 
+        {campaigns.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3 border-t border-[oklch(95%_0.003_100)] px-7 py-4">
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher une campagne ou un annonceur…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <MultiSelectFilter
+              label="Annonceur"
+              options={advertiserOptions}
+              selected={advertiserFilter}
+              onChange={setAdvertiserFilter}
+              allLabel="Tous"
+              placeholder="Rechercher un annonceur…"
+            />
+            <MultiSelectFilter
+              label="Statut"
+              options={Object.keys(CAMPAIGN_STATUS_BADGE_CLASS)}
+              selected={statusFilter}
+              onChange={setStatusFilter}
+              allLabel="Tous"
+              placeholder="Rechercher un statut…"
+            />
+            <ClearFiltersButton
+              active={!!search || advertiserFilter.length > 0 || statusFilter.length > 0}
+              onClick={() => {
+                setSearch("")
+                setAdvertiserFilter([])
+                setStatusFilter([])
+              }}
+            />
+          </div>
+        )}
+
         {!loading && campaigns.length === 0 ? (
           <div className="flex flex-col items-center gap-4 border-t border-[oklch(95%_0.003_100)] px-10 py-16">
             <div className="flex size-16 items-center justify-center rounded-[18px] bg-[oklch(93%_0.05_150)]">
@@ -182,6 +238,7 @@ export default function PublicitesPage() {
             <TableRow>
               <TableHead>Image</TableHead>
               <TableHead>Nom</TableHead>
+              <TableHead>Annonceur</TableHead>
               <TableHead>Résidences ciblées</TableHead>
               <TableHead>Période</TableHead>
               <TableHead>Statut</TableHead>
@@ -191,7 +248,7 @@ export default function PublicitesPage() {
             </TableRow>
           </TableHeader>
           <TableBody className="bg-white">
-            {campaigns.map((campaign) => (
+            {filteredCampaigns.map((campaign) => (
               <TableRow key={campaign.id}>
                 <TableCell>
                   <img
@@ -201,6 +258,9 @@ export default function PublicitesPage() {
                   />
                 </TableCell>
                 <TableCell className="font-medium">{campaign.name || "Sans nom"}</TableCell>
+                <TableCell className={campaign.advertiser ? "" : "text-muted-foreground"}>
+                  {campaign.advertiser || "—"}
+                </TableCell>
                 <TableCell>
                   {campaign.targetResidenceIds.length === 0 ? (
                     <span className="text-sm text-muted-foreground">—</span>
@@ -241,6 +301,13 @@ export default function PublicitesPage() {
                 </TableCell>
               </TableRow>
             ))}
+            {filteredCampaigns.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                  Aucun résultat pour ces filtres.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
         )}
@@ -258,6 +325,7 @@ export default function PublicitesPage() {
         onOpenChange={setCreating}
         title="Ajouter une campagne"
         residences={residences}
+        advertiserSuggestions={advertiserSuggestions}
         onSubmit={handleCreate}
       />
 

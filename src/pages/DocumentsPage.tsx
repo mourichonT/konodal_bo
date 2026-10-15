@@ -26,7 +26,10 @@ import { useAllLots, type LotWithResidence } from "@/hooks/useAllLots"
 import { createResidenceDocument, deleteResidenceDocument } from "@/lib/residenceDocuments"
 import { createLotDocument, deleteLotDocument, subscribeToLotDocuments } from "@/lib/lotDocuments"
 import { resolveUserLabels } from "@/lib/users"
-import { RESIDENCE_DOCUMENT_CATEGORIES } from "@/types/document"
+import { LOT_DOCUMENT_CATEGORIES, RESIDENCE_DOCUMENT_CATEGORIES } from "@/types/document"
+import { DateInput } from "@/components/DateInput"
+import { ClearFiltersButton } from "@/components/ClearFiltersButton"
+import { inDateRange } from "@/lib/filters"
 import type { LotDocument } from "@/types/document"
 
 function formatDate(date: Date | null): string {
@@ -48,12 +51,15 @@ function ResidenceDocumentsSection() {
   const [search, setSearch] = useState("")
   const [residenceFilter, setResidenceFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<ResidenceDocumentWithResidence | null>(null)
 
   const filteredDocuments = documents.filter((d) => {
     if (residenceFilter !== "all" && d.residenceId !== residenceFilter) return false
     if (categoryFilter !== "all" && d.category !== categoryFilter) return false
+    if (!inDateRange(d.timeStamp, dateFrom, dateTo)) return false
     if (!search.trim()) return true
     return [d.name, d.category, d.residenceName].join(" ").toLowerCase().includes(search.toLowerCase())
   })
@@ -117,6 +123,22 @@ function ResidenceDocumentsSection() {
                 ],
               },
             ]}
+          />
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <span>Du</span>
+            <DateInput value={dateFrom} onChange={setDateFrom} />
+            <span>au</span>
+            <DateInput value={dateTo} onChange={setDateTo} />
+          </div>
+          <ClearFiltersButton
+            active={!!search || residenceFilter !== "all" || categoryFilter !== "all" || !!dateFrom || !!dateTo}
+            onClick={() => {
+              setSearch("")
+              setResidenceFilter("all")
+              setCategoryFilter("all")
+              setDateFrom("")
+              setDateTo("")
+            }}
           />
         </CardContent>
       </Card>
@@ -209,6 +231,10 @@ function LotDocumentsSection() {
   const { lots, loading: lotsLoading } = useAllLots((message) => toast.error(message))
   const [residenceFilter, setResidenceFilter] = useState("")
   const [lotId, setLotId] = useState("")
+  const [lotSearch, setLotSearch] = useState("")
+  const [lotCategoryFilter, setLotCategoryFilter] = useState("all")
+  const [lotDateFrom, setLotDateFrom] = useState("")
+  const [lotDateTo, setLotDateTo] = useState("")
   const [lotDocuments, setLotDocuments] = useState<LotDocument[]>([])
   const [recipientLabels, setRecipientLabels] = useState<Map<string, string>>(new Map())
   const [creating, setCreating] = useState(false)
@@ -260,6 +286,16 @@ function LotDocumentsSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipientUidsKey])
 
+  const filteredLotDocuments = lotDocuments.filter((d) => {
+    if (lotCategoryFilter !== "all" && d.category !== lotCategoryFilter) return false
+    if (!inDateRange(d.timeStamp, lotDateFrom, lotDateTo)) return false
+    if (!lotSearch.trim()) return true
+    return [d.name, d.category, ...d.recipientUids.map((uid) => recipientLabels.get(uid) ?? "")]
+      .join(" ")
+      .toLowerCase()
+      .includes(lotSearch.toLowerCase())
+  })
+
   async function handleDelete() {
     if (!deleting || !selectedLot) return
     try {
@@ -281,31 +317,72 @@ function LotDocumentsSection() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <SearchableSelect
-          className="w-56"
-          value={residenceFilter}
-          onChange={setResidenceFilter}
-          emptyLabel="Résidence : Choisir…"
-          groups={[{ options: residenceOptions.map(([id, name]) => ({ value: id, label: name })) }]}
-        />
-        <SearchableSelect
-          className="w-56"
-          value={lotId}
-          onChange={setLotId}
-          disabled={!residenceFilter}
-          emptyLabel="Lot : Choisir…"
-          noResultsLabel="Aucun lot."
-          groups={[
-            {
-              options: lotsForResidence.map((l) => ({
-                value: l.id,
-                label: `${l.refLot || l.lot}${l.batiment ? ` — ${l.batiment}` : ""}`,
-              })),
-            },
-          ]}
-        />
-      </div>
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher un document…"
+              value={lotSearch}
+              onChange={(e) => setLotSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          <SearchableSelect
+            className="w-56"
+            value={residenceFilter}
+            onChange={setResidenceFilter}
+            emptyLabel="Résidence : Choisir…"
+            groups={[{ options: residenceOptions.map(([id, name]) => ({ value: id, label: name })) }]}
+          />
+          <SearchableSelect
+            className="w-56"
+            value={lotId}
+            onChange={setLotId}
+            disabled={!residenceFilter}
+            emptyLabel="Lot : Choisir…"
+            noResultsLabel="Aucun lot."
+            groups={[
+              {
+                options: lotsForResidence.map((l) => ({
+                  value: l.id,
+                  label: `${l.refLot || l.lot}${l.batiment ? ` — ${l.batiment}` : ""}`,
+                })),
+              },
+            ]}
+          />
+          <SearchableSelect
+            className="w-56"
+            value={lotCategoryFilter}
+            onChange={setLotCategoryFilter}
+            groups={[
+              {
+                options: [
+                  { value: "all", label: "Toutes les catégories" },
+                  ...LOT_DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: c })),
+                ],
+              },
+            ]}
+          />
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <span>Du</span>
+            <DateInput value={lotDateFrom} onChange={setLotDateFrom} />
+            <span>au</span>
+            <DateInput value={lotDateTo} onChange={setLotDateTo} />
+          </div>
+          <ClearFiltersButton
+            active={!!residenceFilter || !!lotSearch || lotCategoryFilter !== "all" || !!lotDateFrom || !!lotDateTo}
+            onClick={() => {
+              setResidenceFilter("")
+              setLotId("")
+              setLotSearch("")
+              setLotCategoryFilter("all")
+              setLotDateFrom("")
+              setLotDateTo("")
+            }}
+          />
+        </CardContent>
+      </Card>
 
       {!selectedLot ? (
         <p className="rounded-xl border border-dashed border-input p-8 text-center text-sm text-muted-foreground">
@@ -324,7 +401,7 @@ function LotDocumentsSection() {
               </TableRow>
             </TableHeader>
             <TableBody className="bg-white">
-              {lotDocuments.map((d) => (
+              {filteredLotDocuments.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell className="font-medium">{d.name || "Sans nom"}</TableCell>
                   <TableCell>
@@ -357,10 +434,10 @@ function LotDocumentsSection() {
                   </TableCell>
                 </TableRow>
               ))}
-              {!lotsLoading && lotDocuments.length === 0 && (
+              {!lotsLoading && filteredLotDocuments.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    Aucun document pour ce lot.
+                    {lotDocuments.length === 0 ? "Aucun document pour ce lot." : "Aucun résultat pour ces filtres."}
                   </TableCell>
                 </TableRow>
               )}

@@ -125,6 +125,7 @@ export default function AdCampaignDetailPage() {
   const [submitting, setSubmitting] = useState(false)
 
   const [name, setName] = useState("")
+  const [advertiser, setAdvertiser] = useState("")
   const [imageUrl, setImageUrl] = useState("")
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [targetUrl, setTargetUrl] = useState("")
@@ -172,6 +173,7 @@ export default function AdCampaignDetailPage() {
   useEffect(() => {
     if (campaign && !initialized) {
       setName(campaign.name)
+      setAdvertiser(campaign.advertiser)
       setImageUrl(campaign.imageUrl)
       setTargetUrl(campaign.targetUrl)
       setTargetResidenceIds(campaign.targetResidenceIds)
@@ -201,6 +203,10 @@ export default function AdCampaignDetailPage() {
       toast.error("Le nom de la campagne est requis")
       return
     }
+    if (!advertiser.trim()) {
+      toast.error("L'annonceur est requis")
+      return
+    }
     if (!imageFile && !imageUrl) {
       toast.error("Une image est requise")
       return
@@ -222,6 +228,7 @@ export default function AdCampaignDetailPage() {
       const finalImageUrl = imageFile ? await uploadAdCampaignImage(imageFile) : imageUrl
       await updateAdCampaign(id, {
         name: name.trim(),
+        advertiser: advertiser.trim(),
         imageUrl: finalImageUrl,
         targetUrl,
         targetResidenceIds,
@@ -319,6 +326,17 @@ export default function AdCampaignDetailPage() {
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="ad-name" className="p-2.5">Nom de la campagne</Label>
                     <Input id="ad-name" required value={name} onChange={(e) => setName(e.target.value)} />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="ad-advertiser" className="p-2.5">Annonceur</Label>
+                    <Input
+                      id="ad-advertiser"
+                      required
+                      placeholder="Ex : Boulangerie Martin"
+                      value={advertiser}
+                      onChange={(e) => setAdvertiser(e.target.value)}
+                    />
                   </div>
 
                   <div className="flex flex-col gap-1.5">

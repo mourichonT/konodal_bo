@@ -23,20 +23,28 @@ function toDateOrNull(value: unknown): Date | null {
 // Mêmes conventions que toSinistre (lib/sinistres.ts) : dates sous une
 // sous-clé `dates` côté app, fallback `timeStamp` conservé pour les
 // documents pas encore repris par migrate_post_dates_rename.py.
+// Post de bienvenue publié à la création de chaque résidence
+// (createResidenceWelcomePost, functions/index.js) : sans titre avant le
+// 15/10/2026, et regroupé en une seule ligne dans la liste des
+// communications plutôt qu'une par résidence.
+export const WELCOME_POST_TITLE = "Bienvenue sur le fil de la résidence"
+const WELCOME_GROUP_ID = "welcome-post"
+
 function toCommunication(residenceId: string, d: DocumentSnapshot<DocumentData>): Communication {
   const data = d.data() ?? {}
   const dates = (data.dates as Record<string, unknown>) ?? data
+  const isWelcomePost = data.isWelcomePost === true
   return {
     id: d.id,
     residenceId,
-    title: (data.title as string) ?? "",
+    title: (data.title as string) || (isWelcomePost ? WELCOME_POST_TITLE : ""),
     description: (data.description as string) ?? "",
     pathImage: (data.pathImage as string) ?? "",
     isVideo: (data.isVideo as boolean) ?? false,
     creationDate: toDateOrNull(dates.creationDate ?? dates.timeStamp),
     user: (data.user as string) ?? "",
     audience: data.audience === "proprietaires" ? "proprietaires" : "all",
-    groupId: (data.communicationGroupId as string) || d.id,
+    groupId: isWelcomePost ? WELCOME_GROUP_ID : (data.communicationGroupId as string) || d.id,
     link: data.link ? (data.link as LinkPreview) : undefined,
   }
 }

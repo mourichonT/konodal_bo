@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { CommunicationFormDialog } from "@/components/CommunicationFormDialog"
 import { SearchableSelect } from "@/components/SearchableSelect"
+import { DateInput } from "@/components/DateInput"
+import { ClearFiltersButton } from "@/components/ClearFiltersButton"
+import { inDateRange } from "@/lib/filters"
 import {
   Table,
   TableBody,
@@ -65,6 +68,8 @@ export default function CommunicationsPage() {
   const { communications, residences, loading } = useAllCommunications((message) => toast.error(message))
   const [search, setSearch] = useState("")
   const [residenceFilter, setResidenceFilter] = useState("all")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
   const [communicating, setCommunicating] = useState(false)
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set())
 
@@ -74,6 +79,7 @@ export default function CommunicationsPage() {
 
   const filteredCommunications = communications.filter((c) => {
     if (residenceFilter !== "all" && c.residenceId !== residenceFilter) return false
+    if (!inDateRange(c.creationDate, dateFrom, dateTo)) return false
     if (!normalizedSearch) return true
     return (
       c.title.toLowerCase().includes(normalizedSearch) || c.description.toLowerCase().includes(normalizedSearch)
@@ -129,6 +135,21 @@ export default function CommunicationsPage() {
               },
             ]}
           />
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <span>Publiée du</span>
+            <DateInput value={dateFrom} onChange={setDateFrom} />
+            <span>au</span>
+            <DateInput value={dateTo} onChange={setDateTo} />
+          </div>
+          <ClearFiltersButton
+            active={!!search || residenceFilter !== "all" || !!dateFrom || !!dateTo}
+            onClick={() => {
+              setSearch("")
+              setResidenceFilter("all")
+              setDateFrom("")
+              setDateTo("")
+            }}
+          />
         </CardContent>
       </Card>
 
@@ -164,7 +185,7 @@ export default function CommunicationsPage() {
             {!loading && groups.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                  Aucune communication pour l'instant.
+                  {communications.length === 0 ? "Aucune communication pour l'instant." : "Aucun résultat pour ces filtres."}
                 </TableCell>
               </TableRow>
             )}

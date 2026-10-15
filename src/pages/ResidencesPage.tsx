@@ -10,6 +10,10 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
 import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
+import { ClearFiltersButton } from "@/components/ClearFiltersButton"
+import { MultiSelectFilter } from "@/components/MultiSelectFilter"
+import { NumberRangeFilter } from "@/components/NumberRangeFilter"
+import { inNumberRange } from "@/lib/filters"
 import {
   Dialog,
   DialogContent,
@@ -65,6 +69,9 @@ export default function ResidencesPage() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [search, setSearch] = useState("")
+  const [lotMin, setLotMin] = useState("")
+  const [lotMax, setLotMax] = useState("")
+  const [cityFilter, setCityFilter] = useState<string[]>([])
   const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   const { isSuperAdmin } = useIsSuperAdmin()
   const { user } = useAuth()
@@ -101,9 +108,23 @@ export default function ResidencesPage() {
     [residences, scopedResidenceIds, scopeLoading]
   )
 
+  const cityOptions = useMemo(
+    () =>
+      [...new Set(scopedResidences.map((r) => r.address.city?.trim()).filter((c): c is string => !!c))].sort((a, b) =>
+        a.localeCompare(b, "fr")
+      ),
+    [scopedResidences]
+  )
+
   const filteredResidences = useMemo(
-    () => scopedResidences.filter((residence) => matchesSearch(residence, search)),
-    [scopedResidences, search]
+    () =>
+      scopedResidences.filter(
+        (residence) =>
+          matchesSearch(residence, search) &&
+          inNumberRange(residence.totalLot ?? 0, lotMin, lotMax) &&
+          (cityFilter.length === 0 || cityFilter.includes(residence.address.city?.trim()))
+      ),
+    [scopedResidences, search, lotMin, lotMax, cityFilter]
   )
 
   // Géocodage paresseux : une résidence sans lat/lng est géocodée une seule
@@ -236,8 +257,25 @@ export default function ResidencesPage() {
               className="pl-8"
             />
           </div>
+          <MultiSelectFilter
+            label="Ville"
+            options={cityOptions}
+            selected={cityFilter}
+            onChange={setCityFilter}
+            placeholder="Rechercher une ville…"
+          />
+          <NumberRangeFilter label="Lots" min={lotMin} max={lotMax} onMinChange={setLotMin} onMaxChange={setLotMax} />
+          <ClearFiltersButton
+            active={!!search || !!lotMin || !!lotMax || cityFilter.length > 0}
+            onClick={() => {
+              setSearch("")
+              setLotMin("")
+              setLotMax("")
+              setCityFilter([])
+            }}
+          />
           {canCreateResidence && (
-            <Button className={`ml-auto ${PRIMARY_CTA_CLASS}`} onClick={() => setCreating(true)}>
+            <Button className={PRIMARY_CTA_CLASS} onClick={() => setCreating(true)}>
               <Plus />
               Ajouter une résidence
             </Button>

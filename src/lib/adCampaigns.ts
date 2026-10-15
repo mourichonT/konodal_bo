@@ -66,6 +66,7 @@ function toAdCampaign(snapshot: DocumentSnapshot<DocumentData>): AdCampaign {
   return {
     id: snapshot.id,
     name: (data.name as string) ?? "",
+    advertiser: (data.advertiser as string) ?? "",
     imageUrl: (data.imageUrl as string) ?? "",
     targetUrl: (data.targetUrl as string) ?? "",
     targetResidenceIds: Array.isArray(data.targetResidenceIds)
