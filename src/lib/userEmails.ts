@@ -22,7 +22,8 @@ import { db, functions } from "@/firebase"
 //   depuis l'app (senderUid) et réponses rapatriées par IMAP (from), même
 //   fil par lot (lotId).
 
-export type UserEmailSource = "konodal" | "toSyndic" | "fromSyndic" | "residence"
+// fromUser : réponse de l'utilisateur à un mail Konodal (_store_user_replies).
+export type UserEmailSource = "konodal" | "fromUser" | "toSyndic" | "fromSyndic" | "residence"
 
 export type UserEmail = {
   id: string
@@ -63,9 +64,10 @@ function toDate(value: unknown): Date | null {
 
 function fromLog(snap: QueryDocumentSnapshot<DocumentData>): UserEmail {
   const d = snap.data()
+  const inbound = d.direction === "inbound"
   return {
     id: `log:${snap.id}`,
-    source: "konodal",
+    source: inbound ? "fromUser" : "konodal",
     subject: d.subject ?? "",
     text: d.text ?? "",
     html: d.html ?? null,
@@ -75,7 +77,7 @@ function fromLog(snap: QueryDocumentSnapshot<DocumentData>): UserEmail {
     kind: d.kind ?? null,
     sentBy: d.sentBy ?? null,
     redacted: d.redacted === true,
-    counterpart: d.to ?? "",
+    counterpart: (inbound ? d.from : d.to) ?? "",
   }
 }
 

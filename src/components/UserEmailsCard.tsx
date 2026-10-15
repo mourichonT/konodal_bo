@@ -19,6 +19,7 @@ import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 
 const SOURCE_LABELS: Record<UserEmail["source"], string> = {
   konodal: "Konodal",
+  fromUser: "Réponse de l'utilisateur",
   toSyndic: "Message au syndic",
   fromSyndic: "Réponse reçue",
   residence: "Résidence",
@@ -118,8 +119,8 @@ export function UserEmailsCard({
           Échanges mails
         </CardTitle>
         <CardDescription>
-          Mails envoyés par Konodal à ce compte (enregistrés depuis le 15/10/2026) et messages échangés avec le
-          syndic depuis l'application.
+          Mails envoyés par Konodal à ce compte et ses réponses (enregistrés depuis le 15/10/2026), et messages
+          échangés avec le syndic depuis l'application. Réponses relevées plusieurs fois par jour.
         </CardDescription>
         <CardAction>
           <Button size="sm" className={PRIMARY_CTA_CLASS} onClick={() => setComposing(true)}>
@@ -137,7 +138,7 @@ export function UserEmailsCard({
           <p className="text-sm text-muted-foreground">Aucun mail pour l'instant.</p>
         )}
         {emails.map((email) => {
-          const incoming = email.source === "toSyndic"
+          const incoming = email.source === "toSyndic" || email.source === "fromUser"
           const author = email.sentBy ? authors.get(email.sentBy) : null
           return (
             <button
