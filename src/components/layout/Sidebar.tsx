@@ -17,6 +17,7 @@ import {
   UserCircle,
   CreditCard,
   ShieldCheck,
+  Library,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
@@ -76,6 +77,7 @@ const navItems: NavItem[] = [
 const superAdminNavItems: NavItem[] = [
   { to: "/publicites", label: "Publicités", icon: Megaphone, end: true },
   { to: "/acces", label: "Accès", icon: ShieldCheck },
+  { to: "/nodo/connaissances", label: "Base Nodo", icon: Library },
 ]
 
 function initialsFor(name?: string | null, email?: string | null): string {

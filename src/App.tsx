@@ -33,6 +33,7 @@ import SharedInterventionPage from "@/pages/SharedInterventionPage"
 import OfferPage from "@/pages/OfferPage"
 import PublicitesPage from "@/pages/PublicitesPage"
 import AccesPage from "@/pages/AccesPage"
+import NodoKnowledgePage from "@/pages/NodoKnowledgePage"
 import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
 import ResidenceRequestsPage from "@/pages/ResidenceRequestsPage"
 import ResidencesLayout from "@/pages/ResidencesLayout"
@@ -119,6 +120,14 @@ function App() {
           element={
             <RequireSuperAdmin>
               <AccesPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="nodo/connaissances"
+          element={
+            <RequireSuperAdmin>
+              <NodoKnowledgePage />
             </RequireSuperAdmin>
           }
         />

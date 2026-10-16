@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Outlet, useLocation } from "react-router-dom"
 import { Menu } from "lucide-react"
 import logoGreen from "@/assets/logo_transparent-green.png"
+import { NodoLauncher } from "@/components/nodo/NodoLauncher"
 import { Sidebar } from "./Sidebar"
 
 export function AppLayout() {
@@ -55,6 +56,8 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      <NodoLauncher />
     </div>
   )
 }

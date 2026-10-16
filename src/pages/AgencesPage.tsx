@@ -38,6 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FilterKpiCard } from "@/components/FilterKpiCard";
+import { NodoQuotaSummary } from "@/components/nodo/NodoQuotaSummary";
 import { PRIMARY_CTA_CLASS } from "@/lib/utils";
 import {
   createGerance,
@@ -575,6 +576,7 @@ function GeranceFormDialog({
 
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
             {gerance && <BillingSummary gerance={gerance} />}
+            {gerance && <NodoQuotaSummary geranceId={gerance.id} />}
 
             <div className="flex flex-col gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-[oklch(78%_0.07_155)] bg-[oklch(98%_0.008_155)] p-[18px_20px]">
               <Label htmlFor="ger-company-search" className="font-bold">
