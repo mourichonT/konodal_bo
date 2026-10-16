@@ -243,7 +243,15 @@ export default function ResidencesPage() {
 
       <div className="flex flex-col gap-1">
         <h2 className="text-lg">Répertoire des résidences</h2>
-        <p className="text-sm text-muted-foreground">Rechercher, filtrer et gérer toutes les résidences.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">Rechercher, filtrer et gérer toutes les résidences.</p>
+          {canCreateResidence && (
+            <Button className={PRIMARY_CTA_CLASS} onClick={() => setCreating(true)}>
+              <Plus />
+              Ajouter une résidence
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>
@@ -274,12 +282,6 @@ export default function ResidencesPage() {
               setCityFilter([])
             }}
           />
-          {canCreateResidence && (
-            <Button className={PRIMARY_CTA_CLASS} onClick={() => setCreating(true)}>
-              <Plus />
-              Ajouter une résidence
-            </Button>
-          )}
         </CardContent>
       </Card>
 

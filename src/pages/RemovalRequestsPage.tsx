@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { Ban, Clock, Eye, Inbox, XCircle } from "lucide-react"
+import { Ban, Clock, Inbox, XCircle } from "lucide-react"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
+import { UsersSectionToggle } from "@/components/UsersSectionToggle"
 import { DocumentThumbnail } from "@/components/DocumentThumbnail"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { resolveUsersByUids } from "@/lib/users"
 import {
   REMOVAL_REASON_LABEL,
@@ -21,6 +21,12 @@ import {
   type RemovalRequestStatus,
 } from "@/lib/residentRemovals"
 import type { KonodalUser } from "@/types/user"
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length >= 2 && parts[0] && parts[1]) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return (name[0] ?? "?").toUpperCase()
+}
 
 function fullName(user: KonodalUser | undefined, uid: string): string {
   if (!user) return uid
@@ -82,10 +88,8 @@ export default function RemovalRequestsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Demandes de retrait</h1>
-        <Button variant="outline" render={<Link to="/residents" />}>
-          Utilisateurs
-        </Button>
+        <h1 className="text-[30px] font-extrabold tracking-tight text-[oklch(20%_0.02_150)]">Demandes de retrait</h1>
+        <UsersSectionToggle current="retraits" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -117,60 +121,82 @@ export default function RemovalRequestsPage() {
 
       <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
         <div className="px-7 pt-[26px] pb-5">
-          <h2 className="mb-1 text-[17px] font-bold text-[oklch(22%_0.01_150)]">Signalements du conseil syndical</h2>
-          <p className="text-[13.5px] text-muted-foreground">
+          <h2 className="text-lg font-extrabold text-[oklch(20%_0.02_150)]">Signalements du conseil syndical</h2>
+          <p className="mt-1.5 max-w-[820px] text-sm leading-normal text-[oklch(50%_0.01_150)]">
             Bloquer l'accès suspend le résident pour cette résidence uniquement : ses lots, publications et messages
             sont conservés, il est retiré du conseil syndical et peut écrire au médiateur depuis l'app.
           </p>
         </div>
 
         {!loading && sorted.length === 0 ? (
-          <div className="flex flex-col items-center gap-4 border-t border-[oklch(95%_0.003_100)] px-10 py-16">
-            <div className="flex size-16 items-center justify-center rounded-[18px] bg-[oklch(93%_0.05_150)]">
-              <Inbox className="size-7 text-[oklch(38%_0.09_155)]" />
+          <div className="flex flex-col items-center gap-3.5 border-t border-[oklch(95%_0.003_100)] px-5 py-16">
+            <div className="flex size-20 items-center justify-center rounded-[22px] bg-[oklch(94%_0.05_160)]">
+              <Inbox className="size-[34px] text-[oklch(35%_0.09_155)]" />
             </div>
-            <div className="text-center text-base font-bold text-[oklch(24%_0.01_150)]">Aucune demande</div>
+            <div className="text-center text-lg font-extrabold text-[oklch(24%_0.01_150)]">Aucune demande</div>
           </div>
         ) : (
-          <Table>
-            <TableHeader className="bg-muted/40">
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Résidence</TableHead>
-                <TableHead>Résident concerné</TableHead>
-                <TableHead>Demandé par</TableHead>
-                <TableHead>Motif</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="bg-white">
-              {sorted.map((request) => (
-                <TableRow key={request.id} className="cursor-pointer" onClick={() => setSelected(request)}>
-                  <TableCell className="text-muted-foreground">
-                    {request.createdAt ? request.createdAt.toDate().toLocaleDateString("fr-FR") : "—"}
-                  </TableCell>
-                  <TableCell className="font-medium">{residenceNames[request.residenceId] ?? "…"}</TableCell>
-                  <TableCell>{fullName(users[request.targetUid], request.targetUid)}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {fullName(users[request.requestedBy], request.requestedBy)}
-                  </TableCell>
-                  <TableCell>{REMOVAL_REASON_LABEL[request.reason] ?? request.reason}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={REMOVAL_STATUS_BADGE_CLASS[request.status]}>
-                      {REMOVAL_STATUS_LABEL[request.status]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" onClick={() => setSelected(request)}>
-                      <Eye />
-                      {request.status === "pending" ? "Examiner" : "Voir"}
+          sorted.map((request) => {
+            const target = users[request.targetUid]
+            const requester = users[request.requestedBy]
+            return (
+              <div
+                key={request.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelected(request)}
+                onKeyDown={(e) => e.key === "Enter" && setSelected(request)}
+                className="flex cursor-pointer flex-wrap items-center gap-4 border-t border-[oklch(95%_0.003_100)] px-7 py-[18px] hover:bg-[oklch(98.5%_0.003_100)]"
+              >
+                <div className="flex size-[42px] shrink-0 items-center justify-center rounded-[14px] bg-[oklch(94%_0.04_150)] text-sm font-extrabold text-[oklch(35%_0.08_155)]">
+                  {initialsOf(fullName(target, "?"))}
+                </div>
+                <div className="min-w-[240px] flex-1">
+                  <div className="flex flex-wrap items-center gap-2 text-[15px] font-extrabold text-[oklch(22%_0.01_150)]">
+                    {fullName(target, request.targetUid)}
+                    <span className="rounded-full bg-[oklch(94%_0.04_285)] px-2.5 py-[3px] text-xs font-bold text-[oklch(40%_0.12_285)]">
+                      {residenceNames[request.residenceId] ?? "…"}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[13px] text-[oklch(50%_0.01_150)]">
+                    {REMOVAL_REASON_LABEL[request.reason] ?? request.reason} · Demandé par{" "}
+                    {fullName(requester, request.requestedBy)}
+                    {request.createdAt ? ` · ${request.createdAt.toDate().toLocaleDateString("fr-FR")}` : ""}
+                  </div>
+                </div>
+                {request.status === "pending" ? (
+                  // Décision depuis le dialogue (description, pièces jointes,
+                  // motif de refus transmis au CS) : les deux boutons
+                  // l'ouvrent, rien n'est décidé sans l'avoir lu.
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-9 rounded-[11px] px-4 text-[13px] font-bold"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelected(request)
+                      }}
+                    >
+                      Refuser
                     </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    <Button
+                      className="h-9 rounded-[11px] bg-[oklch(45%_0.17_27)] px-4 text-[13px] font-bold text-white hover:bg-[oklch(40%_0.17_27)]"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelected(request)
+                      }}
+                    >
+                      Bloquer l'accès
+                    </Button>
+                  </div>
+                ) : (
+                  <Badge variant="outline" className={REMOVAL_STATUS_BADGE_CLASS[request.status]}>
+                    {REMOVAL_STATUS_LABEL[request.status]}
+                  </Badge>
+                )}
+              </div>
+            )
+          })
         )}
       </div>
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { BadgeCheck, Building2, CheckCircle2, Clock, Eye, Home, Search, ShieldQuestion, User as UserIcon, UserX, Users } from "lucide-react"
+import { BadgeCheck, Building2, CheckCircle2, Clock, Eye, Home, Search, ShieldQuestion, User as UserIcon, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -26,7 +26,7 @@ import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { DateInput } from "@/components/DateInput"
 import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import { subscribeToUsersInScope } from "@/lib/users"
-import { subscribeToRemovalRequests } from "@/lib/residentRemovals"
+import { UsersSectionToggle } from "@/components/UsersSectionToggle"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useAllLots } from "@/hooks/useAllLots"
@@ -89,14 +89,6 @@ export default function ResidentsPage() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const { isSuperAdmin } = useAccountRole()
-  const [pendingRemovalCount, setPendingRemovalCount] = useState(0)
-  useEffect(() => {
-    if (!isSuperAdmin) return
-    return subscribeToRemovalRequests(
-      (requests) => setPendingRemovalCount(requests.filter((r) => r.status === "pending").length),
-      () => {}
-    )
-  }, [isSuperAdmin])
   const { scopedResidenceIds, loading: scopeLoading } = useScopedResidenceIds()
   // Les utilisateurs ne portent pas de residenceId direct - le périmètre
   // RBAC se déduit des lots qu'ils possèdent/louent dans le périmètre
@@ -218,18 +210,8 @@ export default function ResidentsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Utilisateurs</h1>
-        {isSuperAdmin && (
-          <Button variant="outline" render={<Link to="/residents/retraits" />}>
-            <UserX />
-            Demandes de retrait
-            {pendingRemovalCount > 0 && (
-              <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-[oklch(78%_0.15_75)] px-1 text-[10px] font-bold text-[oklch(25%_0.02_75)]">
-                {pendingRemovalCount}
-              </span>
-            )}
-          </Button>
-        )}
+        <h1 className="text-[30px] font-extrabold tracking-tight text-[oklch(20%_0.02_150)]">Utilisateurs</h1>
+        {isSuperAdmin && <UsersSectionToggle current="annuaire" />}
       </div>
 
       {/* Cliquer sur une carte pilote le même état que le filtre "Statut"
@@ -359,7 +341,7 @@ export default function ResidentsPage() {
       <div className="flex flex-col">
         <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
           <Table>
-            <TableHeader className="bg-muted/40">
+            <TableHeader className="[&_th]:text-[12.5px] [&_th]:font-extrabold [&_th]:tracking-[0.06em] [&_th]:text-[oklch(50%_0.01_150)] [&_th]:uppercase">
               <TableRow>
                 <TableHead>Nom</TableHead>
                 <TableHead>Email</TableHead>
@@ -372,10 +354,10 @@ export default function ResidentsPage() {
             <TableBody className="bg-white">
               {filteredResidents.map((user) => (
                 <TableRow key={user.uid}>
-                  <TableCell className="font-medium">
+                  <TableCell className="font-bold">
                     <div className="flex items-center gap-3">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-                        <UserIcon className="size-4" />
+                      <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[oklch(94%_0.05_155)] text-[oklch(38%_0.08_155)]">
+                        <UserIcon className="size-[18px]" />
                       </div>
                       <span className="flex items-center gap-1.5">
                         {user.name || user.surname ? `${user.name} ${user.surname}`.trim() : "—"}

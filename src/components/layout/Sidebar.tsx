@@ -22,6 +22,7 @@ import { useAuth } from "@/lib/auth-context"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { usePendingUsersCount } from "@/hooks/usePendingUsersCount"
+import { usePendingRemovalRequestsCount } from "@/hooks/usePendingRemovalRequestsCount"
 import { usePendingContactsCount } from "@/hooks/usePendingContactsCount"
 import { usePendingResidenceRequestsCount } from "@/hooks/usePendingResidenceRequestsCount"
 import { subscribeToUser } from "@/lib/users"
@@ -139,6 +140,7 @@ export function Sidebar() {
   const pendingUsersCount = usePendingUsersCount()
   const pendingContactsCount = usePendingContactsCount()
   const pendingResidenceRequestsCount = usePendingResidenceRequestsCount(isSuperAdmin)
+  const pendingRemovalRequestsCount = usePendingRemovalRequestsCount(isSuperAdmin)
   const location = useLocation()
   // profil.profilPic n'est pas porté par Firebase Auth (displayName/photoURL
   // ne sont jamais renseignés côté résident) - souscription dédiée à sa
@@ -165,8 +167,9 @@ export function Sidebar() {
     : isAgence
       ? navItems.map((item) => (item.to === "/agences" ? { ...item, label: "Agence" } : item))
       : navItems
-  // Résidences : sous-menu Actives / Demandes (inscriptions konodal.com) pour
-  // le superAdmin, seul à traiter les demandes - lien simple pour les autres.
+  // Résidences : sous-menu Actives / Demandes (inscriptions konodal.com) et
+  // Utilisateurs : Annuaire / Demandes de retrait, pour le superAdmin, seul
+  // à traiter ces demandes - liens simples pour les autres.
   const withResidenceChildren: NavItem[] = isSuperAdmin
     ? baseNavItems.map((item) =>
         item.to === "/residences"
@@ -177,9 +180,24 @@ export function Sidebar() {
                 { to: "/residences/demandes", label: "Demandes" },
               ],
             }
-          : item
+          : item.to === "/residents"
+            ? {
+                ...item,
+                children: [
+                  { to: "/residents", label: "Annuaire", end: true },
+                  { to: "/residents/retraits", label: "Demandes de retrait" },
+                ],
+              }
+            : item
       )
     : baseNavItems
+  // Pastilles d'une section rétractable : sur chaque sous-lien, et leur
+  // somme sur le parent quand la section est fermée.
+  const childBadgeCount: Record<string, number> = {
+    "/residences/demandes": pendingResidenceRequestsCount,
+    "/residents": pendingUsersCount,
+    "/residents/retraits": pendingRemovalRequestsCount,
+  }
   const allNavItems: NavItem[] = isSuperAdmin ? [...withResidenceChildren, ...superAdminNavItems] : baseNavItems
   const [openSections, toggleSection] = useOpenSections(allNavItems)
 
@@ -228,9 +246,10 @@ export function Sidebar() {
                   <NavLink to={item.to} className="flex flex-1 items-center gap-3">
                     <item.icon className="size-4.5" />
                     {item.label}
-                    {item.to === "/residences" && !isOpen && pendingResidenceRequestsCount > 0 && (
-                      <NavBadge count={pendingResidenceRequestsCount} />
-                    )}
+                    {(() => {
+                      const total = item.children.reduce((sum, child) => sum + (childBadgeCount[child.to] ?? 0), 0)
+                      return !isOpen && total > 0 ? <NavBadge count={total} /> : null
+                    })()}
                   </NavLink>
                   <button
                     type="button"
@@ -268,9 +287,7 @@ export function Sidebar() {
                               )}
                             />
                             <span className="truncate">{child.label}</span>
-                            {child.to === "/residences/demandes" && pendingResidenceRequestsCount > 0 && (
-                              <NavBadge count={pendingResidenceRequestsCount} />
-                            )}
+                            {(childBadgeCount[child.to] ?? 0) > 0 && <NavBadge count={childBadgeCount[child.to]} />}
                           </>
                         )}
                       </NavLink>
