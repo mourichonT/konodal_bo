@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { ArrowDownLeft, ArrowUpRight, Mail, Send } from "lucide-react"
+import { ArrowDownLeft, ArrowUpRight, Send } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,7 +15,7 @@ import {
   subscribeToUserEmails,
   type UserEmail,
 } from "@/lib/userEmails"
-import { PRIMARY_CTA_CLASS } from "@/lib/utils"
+import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 
 const SOURCE_LABELS: Record<UserEmail["source"], string> = {
   konodal: "Konodal",
@@ -25,9 +25,12 @@ const SOURCE_LABELS: Record<UserEmail["source"], string> = {
   residence: "Résidence",
 }
 
+const EMPTY_CLASS = "rounded-[14px] bg-[oklch(97.5%_0.004_100)] p-[18px] text-[13.5px] text-[oklch(52%_0.01_150)]"
+const TAG_CLASS = "rounded-[7px] bg-[oklch(95%_0.005_100)] px-2 py-0.5 font-bold text-[oklch(35%_0.01_150)]"
+
 function formatDate(date: Date | null): string {
   if (!date) return "—"
-  return `${date.toLocaleDateString("fr-FR")} ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
+  return `${date.toLocaleDateString("fr-FR")} à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
 }
 
 // Échanges mails avec ce compte (lib/userEmails.ts) - visible par tous les
@@ -37,11 +40,14 @@ export function UserEmailsCard({
   userName,
   residenceIds,
   lotIds,
+  onCountChange,
 }: {
   uid: string
   userName: string
   residenceIds: string[]
   lotIds: string[]
+  // Compteur de l'onglet "Échanges" de la fiche utilisateur.
+  onCountChange?: (count: number) => void
 }) {
   const [logged, setLogged] = useState<UserEmail[]>([])
   const [threads, setThreads] = useState<UserEmail[]>([])
@@ -96,6 +102,10 @@ export function UserEmailsCard({
     [logged, threads]
   )
 
+  useEffect(() => {
+    onCountChange?.(emails.length)
+  }, [emails.length, onCountChange])
+
   async function handleSend() {
     setSending(true)
     try {
@@ -112,31 +122,26 @@ export function UserEmailsCard({
   }
 
   return (
-    <Card>
+    <Card className="[--card-spacing:--spacing(7)]">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Mail className="size-4" />
-          Échanges mails
-        </CardTitle>
-        <CardDescription>
-          Mails envoyés par Konodal à ce compte et ses réponses (enregistrés depuis le 15/10/2026), et messages
-          échangés avec le syndic depuis l'application. Réponses relevées plusieurs fois par jour.
+        <CardTitle className="text-lg font-extrabold text-[oklch(22%_0.01_150)]">Échanges mails</CardTitle>
+        <CardDescription className="max-w-[560px] leading-normal">
+          Mails envoyés par Konodal à ce compte et ses réponses (depuis le 15/10/2026), et messages échangés avec le
+          syndic depuis l'application. Réponses relevées plusieurs fois par jour.
         </CardDescription>
         <CardAction>
-          <Button size="sm" className={PRIMARY_CTA_CLASS} onClick={() => setComposing(true)}>
+          <Button className={cn("h-10 rounded-[12px] px-[18px] text-[13px] font-bold", PRIMARY_CTA_CLASS)} onClick={() => setComposing(true)}>
             <Send />
             Écrire
           </Button>
         </CardAction>
       </CardHeader>
-      <CardContent className="flex flex-col gap-1">
-        {loading && <p className="text-sm text-muted-foreground">Chargement…</p>}
+      <CardContent className="flex flex-col gap-2.5">
+        {loading && <p className={EMPTY_CLASS}>Chargement…</p>}
         {!loading && unavailable && (
-          <p className="text-sm text-muted-foreground">Historique des mails Konodal indisponible pour le moment.</p>
+          <p className={EMPTY_CLASS}>Historique des mails Konodal indisponible pour le moment.</p>
         )}
-        {!loading && emails.length === 0 && !unavailable && (
-          <p className="text-sm text-muted-foreground">Aucun mail pour l'instant.</p>
-        )}
+        {!loading && emails.length === 0 && !unavailable && <p className={EMPTY_CLASS}>Aucun mail pour l'instant.</p>}
         {emails.map((email) => {
           const incoming = email.source === "toSyndic" || email.source === "fromUser"
           const author = email.sentBy ? authors.get(email.sentBy) : null
@@ -145,23 +150,30 @@ export function UserEmailsCard({
               key={email.id}
               type="button"
               onClick={() => setOpened(email)}
-              className="flex w-full min-w-0 items-start gap-3 rounded-lg px-2 py-2 text-left hover:bg-muted"
+              className="flex w-full min-w-0 items-center gap-3.5 rounded-[16px] border border-[oklch(93%_0.005_100)] p-[16px_18px] text-left hover:bg-[oklch(98%_0.004_100)]"
             >
-              {incoming ? (
-                <ArrowDownLeft className="mt-0.5 size-4 shrink-0 text-sky-600" />
-              ) : (
-                <ArrowUpRight className="mt-0.5 size-4 shrink-0 text-primary" />
-              )}
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <span
+                className={cn(
+                  "flex size-[38px] shrink-0 items-center justify-center rounded-[12px]",
+                  incoming ? "bg-sky-50 text-sky-600" : "bg-[oklch(95%_0.02_150)] text-[oklch(42%_0.08_155)]"
+                )}
+              >
+                {incoming ? <ArrowDownLeft className="size-4" /> : <ArrowUpRight className="size-4" />}
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col gap-[5px]">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate text-sm font-medium">{email.subject || "(sans objet)"}</span>
+                  <span className="truncate text-sm font-bold text-[oklch(24%_0.01_150)]">
+                    {email.subject || "(sans objet)"}
+                  </span>
                   {!email.success && <Badge variant="destructive">Échec</Badge>}
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-[oklch(55%_0.01_150)]">
                   <span>{formatDate(email.date)}</span>
-                  <Badge variant="secondary">{author ? `BO : ${author}` : SOURCE_LABELS[email.source]}</Badge>
+                  <span className={TAG_CLASS}>{author ? `BO : ${author}` : SOURCE_LABELS[email.source]}</span>
                   {emailKindLabel(email.kind) && email.kind !== "bo_message" && (
-                    <Badge variant="outline">{emailKindLabel(email.kind)}</Badge>
+                    <span className={cn(TAG_CLASS, "bg-transparent font-semibold ring-1 ring-[oklch(92%_0.005_100)]")}>
+                      {emailKindLabel(email.kind)}
+                    </span>
                   )}
                 </div>
               </div>

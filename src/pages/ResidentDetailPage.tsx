@@ -1,10 +1,25 @@
 import { useEffect, useState } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Ban, BadgeCheck, Check, Home, PlusCircle, Save, Trash2, TriangleAlert, Unlink } from "lucide-react"
+import {
+  ArrowLeft,
+  Ban,
+  BadgeCheck,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  Home,
+  Mail,
+  Phone,
+  Plus,
+  PlusCircle,
+  Save,
+  Trash2,
+  TriangleAlert,
+  Unlink,
+} from "lucide-react"
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -38,7 +53,6 @@ import {
   rejectUser,
   resolveUserLabels,
   setUserApproved,
-  setUserCertified,
   subscribeToUser,
   subscribeToUserLotDocuments,
   subscribeToUserLots,
@@ -50,6 +64,14 @@ import {
 import type { KonodalUser } from "@/types/user"
 import type { Residence } from "@/types/residence"
 import type { Lot } from "@/types/lot"
+
+type DetailTab = "profil" | "lots" | "mails"
+const DETAIL_TABS: DetailTab[] = ["profil", "lots", "mails"]
+
+type TodoItem = { key: string; title: string; hint: string; done: boolean; tab: DetailTab }
+
+const PILL_CLASS = "rounded-full px-[11px] py-1 text-xs font-bold"
+const HEADER_BUTTON_CLASS = "h-10 rounded-[12px] px-4 text-[13px] font-bold"
 
 function initialsFor(nameOrEmail: string): string {
   const parts = nameOrEmail.trim().split(/\s+/)
@@ -66,7 +88,14 @@ export default function ResidentDetailPage() {
   const [loading, setLoading] = useState(true)
   const [lots, setLots] = useState<UserLot[]>([])
   const [savingApproval, setSavingApproval] = useState(false)
-  const [savingCertification, setSavingCertification] = useState(false)
+  const [emailCount, setEmailCount] = useState(0)
+  // Onglet dans l'URL (?onglet=lots) : survit au rechargement et se partage.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get("onglet") as DetailTab | null
+  const tab: DetailTab = tabParam && DETAIL_TABS.includes(tabParam) ? tabParam : "profil"
+  function setTab(next: DetailTab) {
+    setSearchParams(next === "profil" ? {} : { onglet: next }, { replace: true })
+  }
   const [rejecting, setRejecting] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const [savingRejection, setSavingRejection] = useState(false)
@@ -172,19 +201,6 @@ export default function ResidentDetailPage() {
     }
   }
 
-  async function handleToggleCertified() {
-    if (!user) return
-    setSavingCertification(true)
-    try {
-      await setUserCertified(user.uid, !user.isCertified)
-      toast.success(user.isCertified ? "Certification retirée" : "Identité certifiée")
-    } catch (err) {
-      toast.error("Échec de la mise à jour : " + (err as Error).message)
-    } finally {
-      setSavingCertification(false)
-    }
-  }
-
   async function handleReject() {
     if (!user || !rejectReason.trim()) return
     setSavingRejection(true)
@@ -230,265 +246,311 @@ export default function ResidentDetailPage() {
     }
   }
 
-  return (
-    <div className="-mt-[20px] flex flex-col gap-8">
-      <div className="flex flex-col gap-3">
-        <Link
-          to="/residents"
-          className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Utilisateurs
-        </Link>
-        {!user && <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">{loading ? "…" : "Résident introuvable"}</h1>}
-      </div>
+  const fullName = user ? `${user.name ?? ""} ${user.surname ?? ""}`.trim() || user.email : ""
 
-      {!loading && !user && (
-        <p className="text-muted-foreground">Ce compte n'existe pas ou a été supprimé.</p>
+  // Colonne "À traiter" : ce qui reste à faire sur la fiche, chaque ligne
+  // ouvre l'onglet concerné. La certification n'y figure que pour le
+  // superAdmin, seul à pouvoir la décider.
+  const todo: TodoItem[] = []
+  if (user) {
+    if (isSuperAdmin) {
+      todo.push(
+        user.isCertified
+          ? { key: "cert", title: "Identité certifiée", hint: "Pièce vérifiée", done: true, tab: "profil" }
+          : user.certificationStatus === "pending"
+            ? { key: "cert", title: "Demande de certification", hint: "Pièce et selfie à examiner", done: false, tab: "profil" }
+            : {
+                key: "cert",
+                title: "Certifier l'identité",
+                hint: user.certificationStatus === "rejected" ? "Dernière demande refusée" : "Aucune demande reçue",
+                done: false,
+                tab: "profil",
+              }
+      )
+    }
+    todo.push({
+      key: "infos",
+      title: "Infos confirmées",
+      hint: user.isInfoCorrect ? "Confirmées par l'utilisateur" : "Non confirmées par l'utilisateur",
+      done: user.isInfoCorrect,
+      tab: "profil",
+    })
+    todo.push(
+      pendingLots.length > 0
+        ? {
+            key: "lots",
+            title: isSuperAdmin ? "Valider les lots" : "Lots en attente",
+            hint: isSuperAdmin
+              ? pendingLots.length === 1
+                ? "1 demande en attente de validation"
+                : `${pendingLots.length} demandes en attente de validation`
+              : "En cours de validation par Konodal",
+            done: false,
+            tab: "lots",
+          }
+        : lots.length === 0
+          ? { key: "lots", title: "Rattacher un lot", hint: "Aucun lot sur ce compte", done: false, tab: "lots" }
+          : {
+              key: "lots",
+              title: "Lot rattaché",
+              hint: lots.length === 1 ? "1 lot approuvé" : `${lots.length} lots approuvés`,
+              done: true,
+              tab: "lots",
+            }
+    )
+  }
+  const openTodo = todo.filter((item) => !item.done)
+
+  const tabs: { key: DetailTab; label: string; count?: number }[] = [
+    { key: "profil", label: "Profil" },
+    { key: "lots", label: "Lots", count: lots.length },
+    { key: "mails", label: "Échanges", count: emailCount > 0 ? emailCount : undefined },
+  ]
+
+  return (
+    <div className="-mt-[20px] flex flex-col gap-5">
+      <Link
+        to="/residents"
+        className="flex w-fit items-center gap-1.5 text-[13px] font-semibold text-[oklch(50%_0.01_150)] hover:text-foreground"
+      >
+        <ArrowLeft className="size-3.5" />
+        Utilisateurs
+      </Link>
+
+      {!user && (
+        <div className="flex flex-col gap-2">
+          <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
+            {loading ? "…" : "Utilisateur introuvable"}
+          </h1>
+          {!loading && <p className="text-muted-foreground">Ce compte n'existe pas ou a été supprimé.</p>}
+        </div>
       )}
 
       {user && (
         <>
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex size-[52px] shrink-0 items-center justify-center rounded-2xl bg-[oklch(93%_0.05_150)] text-lg font-extrabold text-[oklch(32%_0.09_155)]">
-              {initialsFor(`${user.name} ${user.surname}`.trim() || user.email)}
+          <div className="flex flex-wrap items-center gap-5 rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-[24px_28px] shadow-[0_14px_34px_-24px_oklch(20%_0_0/0.14)]">
+            <div className="flex size-16 shrink-0 items-center justify-center rounded-[20px] bg-[oklch(93%_0.05_150)] text-[22px] font-extrabold text-[oklch(32%_0.09_155)]">
+              {initialsFor(fullName)}
             </div>
-            <div className="min-w-[200px] flex-1">
-              <h1 className="flex items-center gap-1.5 text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
-                {`${user.name} ${user.surname}`.trim() || user.email}
-                {/* Statut à part de isApproved ci-dessous - vérification
-                    manuelle de la pièce d'identité ET des données, jamais
-                    posée automatiquement, cf. lib/users.ts setUserCertified. */}
+            <div className="min-w-[240px] flex-1">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">{fullName}</h1>
+                {/* Statut à part de isApproved - vérification manuelle de la
+                    pièce d'identité ET des données, jamais posée
+                    automatiquement, cf. lib/users.ts setUserCertified. */}
                 {user.isCertified && (
                   <span title="Identité certifiée">
-                    <BadgeCheck className="size-5 shrink-0 fill-blue-500 text-white" />
+                    <BadgeCheck className="size-[22px] shrink-0 fill-blue-500 text-white" />
                   </span>
                 )}
-              </h1>
-              <div className="mt-0.5 text-[13px] text-[oklch(52%_0.01_150)]">{user.email}</div>
-            </div>
-            {/* Vocabulaire aligné sur ResidentsPage (colonne Statut) - depuis
-                que isApproved n'est plus un prérequis d'accès à l'app
-                (compte créé approuvé par défaut, cf. types/user.ts),
-                "En attente d'approbation" laissait croire à un blocage qui
-                n'existe plus : ce n'est qu'une certification optionnelle. */}
-            {user.isApproved ? (
-              <Badge variant="default" className="gap-1.5 rounded-full">
-                Validé
-              </Badge>
-            ) : user.rejectionReason ? (
-              <Badge variant="destructive" className="gap-1.5 rounded-full">
-                Bloquée
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="gap-1.5 rounded-full border-transparent bg-amber-100 text-amber-800">
-                <span className="size-[6px] rounded-full bg-current" />
-                Non certifiée
-              </Badge>
-            )}
-            {/* Suppression de compte réservée superAdmin (comme côté serveur,
-                cf. requireSuperAdmin dans adminDeleteUser) - action
-                irréversible (Auth + toutes les données via cleanupUserData),
-                séparée visuellement des actions de validation d'identité. */}
-            {isSuperAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-auto border-red-200 text-red-700 hover:bg-red-50"
-                onClick={() => setDeletingAccount(true)}
-              >
-                <Trash2 />
-                Supprimer le compte
-              </Button>
-            )}
-          </div>
-
-          {/* Depuis que isApproved est posé automatiquement à l'inscription
-              (cf. types/user.ts), la seule action réellement en attente sur
-              une fiche est la validation d'un lot (isApprovedLot) - sans ce
-              bandeau, elle n'apparaissait qu'en bas de page. */}
-          {pendingLots.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3 rounded-[14px] border border-amber-200 bg-amber-50 p-[12px_16px] text-sm text-amber-900">
-              <Home className="size-4 shrink-0" />
-              <span className="flex-1">
-                <span className="font-semibold">
-                  {pendingLots.length === 1
-                    ? "1 demande de lot en attente de validation"
-                    : `${pendingLots.length} demandes de lot en attente de validation`}
-                </span>
-                {isSuperAdmin ? " — vérifier le justificatif puis approuver." : " — en cours de validation par Konodal."}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
-                onClick={() => document.getElementById("lots")?.scrollIntoView({ behavior: "smooth" })}
-              >
-                Voir les lots
-              </Button>
-            </div>
-          )}
-
-          <div className={cn("grid gap-5", isSuperAdmin ? "lg:grid-cols-[1.7fr_1fr]" : "grid-cols-1")}>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Informations du compte</CardTitle>
-                {isSuperAdmin && (
-                  <CardDescription>
-                    Vérifier la pièce d'identité ci-contre avant d'approuver l'accès à l'application.
-                  </CardDescription>
+                {/* Vocabulaire aligné sur ResidentsPage (colonne Statut) :
+                    isApproved n'est plus un prérequis d'accès à l'app
+                    (compte créé approuvé par défaut, cf. types/user.ts). */}
+                {user.isApproved ? (
+                  <span className={cn(PILL_CLASS, "bg-[oklch(93%_0.05_150)] text-[oklch(36%_0.09_155)]")}>
+                    Compte validé
+                  </span>
+                ) : user.rejectionReason ? (
+                  <span className={cn(PILL_CLASS, "bg-red-100 text-red-700")}>Bloqué</span>
+                ) : (
+                  <span className={cn(PILL_CLASS, "bg-amber-100 text-amber-800")}>Non certifiée</span>
                 )}
-                <CardAction className="flex items-center gap-2">
-                  {/* Validation d'identité (isApproved) réservée Superadmin -
-                      ni Agence ni Agent, cf. matrice de droits BO : c'est une
-                      vérification de pièce d'identité, pas une correction de
-                      fiche courante. Visible uniquement pour un compte non
-                      certifié (ni déjà approuvé, ni bloqué) - une fois
-                      approuvé, seul "Bloquer" (avec motif) permet de revenir
-                      en arrière, jamais ce toggle muet (cf. discussion :
-                      "Révoquer" bloquait sans motif, faisait doublon avec
-                      Bloquer). Masqué une fois bloqué (isRejected) : plus
-                      aucune action possible tant qu'une nouvelle soumission
-                      n'arrive pas de l'application. */}
-                  {isSuperAdmin && !isRejected && !user.isApproved && (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      disabled={savingApproval}
-                      onClick={handleApprove}
-                      className={PRIMARY_CTA_CLASS}
-                    >
-                      <Check />
-                      Approuver l'identité
-                    </Button>
-                  )}
-                  {isSuperAdmin && !isRejected && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-red-200 text-red-700 hover:bg-red-50"
-                      onClick={() => setRejecting(true)}
-                    >
-                      <Ban />
-                      Bloquer
-                    </Button>
-                  )}
-                  {/* Certification : statut à part de isApproved ci-dessus
-                      (cf. types/user.ts) - toujours disponible, jamais gelée
-                      par isRejected (une certification déjà accordée reste
-                      un fait vérifié, indépendant d'un blocage ultérieur
-                      pour un autre motif). */}
-                  {/* Masqué tant qu'une demande app est en attente : la
-                      décision se prend alors dans CertificationRequestCard
-                      (seule à reporter les informations lues sur la pièce),
-                      pas de second CTA de validation. */}
-                  {isSuperAdmin && (user.isCertified || user.certificationStatus !== "pending") && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={savingCertification}
-                      onClick={handleToggleCertified}
-                      className={
-                        user.isCertified
-                          ? undefined
-                          : "border-blue-200 text-blue-700 hover:bg-blue-50"
-                      }
-                    >
-                      <Check />
-                      {user.isCertified ? "Retirer la certification" : "Certifier l'identité"}
-                    </Button>
-                  )}
-                </CardAction>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                {isRejected && (
-                  <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                    <span className="font-medium">Motif du blocage : </span>
-                    {user.rejectionReason}
-                    <p className="mt-1.5 text-xs text-destructive/80">
-                      Fiche gelée : plus aucune modification possible tant que ce compte n'a pas resoumis son
-                      inscription depuis l'application.
-                    </p>
-                  </div>
-                )}
-                {/* Identité (nom/prénom/date de naissance/pièce...) réservée
-                    superAdmin - une Agence reste en lecture seule ici, même
-                    traitement qu'un Agent (correction d'une identité mal
-                    reconnue = action superAdmin, distincte de la gestion de
-                    ses propres lots/agents). locked (isRejected) prime sur
-                    canEdit : gèle aussi le téléphone, éditable par
-                    Agence/Agent en temps normal. */}
-                <IdentityFields user={user} canEdit={isSuperAdmin} locked={isRejected} />
-              </CardContent>
-            </Card>
-
-            {/* Demande de certification envoyée depuis l'app (pièce +
-                selfie + score de ressemblance), décision Super Admin - à
-                droite des champs d'identité pour les comparer d'un coup
-                d'œil. Remplace l'ancienne carte "Pièce d'identité"
-                (users/{uid}/documents, pièce déposée à l'inscription) : la
-                pièce fait désormais partie de la demande. */}
-            {isSuperAdmin && <CertificationRequestCard uid={user.uid} isCertified={user.isCertified} />}
-          </div>
-
-          {isSuperAdmin && user.blockedResidencesIds.length > 0 && (
-            <BlockedResidencesCard uid={user.uid} residenceIds={user.blockedResidencesIds} />
-          )}
-
-          <div id="lots" className="flex scroll-mt-6 flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-lg font-semibold">Lots</h2>
-                <p className="text-sm text-muted-foreground">
-                  {!isSuperAdmin
-                    ? "Lots de ce compte dans les résidences de votre portefeuille."
-                    : user.isApproved
-                    ? "Rattachement propriétaire/locataire à valider par lot."
-                    : "Approuve d'abord l'identité ci-dessus pour pouvoir valider les lots."}
-                </p>
               </div>
-              {/* Rattacher un lot écrit directement idProprietaire/
-                  idLocataire côté résidence (cf. lib/lots.ts, grantLotRole) -
-                  réservé isSuperAdmin côté firestore.rules, jamais ouvert à
-                  Agence/Agent sur ce champ précis (contrairement à
-                  isApprovedLot, cf. canApprove plus bas). */}
-              {isSuperAdmin && (
-                <Button variant="outline" size="sm" onClick={() => setAddingLot(true)}>
-                  <PlusCircle />
-                  Ajouter un lot
+              <div className="mt-2 flex flex-wrap items-center gap-x-[18px] gap-y-1 text-[13px] font-medium text-[oklch(48%_0.01_150)]">
+                <span className="inline-flex items-center gap-1.5">
+                  <Mail className="size-3.5" />
+                  {user.email}
+                </span>
+                {user.phone && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Phone className="size-3.5" />
+                    {user.phone}
+                  </span>
+                )}
+                {user.createdDate && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarDays className="size-3.5" />
+                    Inscrit(e) le {user.createdDate.toLocaleDateString("fr-FR")}
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* Validation d'identité, blocage (motif obligatoire) et
+                suppression du compte réservés superAdmin, comme côté
+                serveur (requireSuperAdmin dans adminDeleteUser). Plus
+                aucune action d'identité sur un compte bloqué (isRejected)
+                tant qu'une nouvelle soumission n'arrive pas de l'app. */}
+            {isSuperAdmin && (
+              <div className="flex flex-wrap gap-2">
+                {!isRejected && !user.isApproved && (
+                  <Button disabled={savingApproval} onClick={handleApprove} className={cn(HEADER_BUTTON_CLASS, PRIMARY_CTA_CLASS)}>
+                    <Check />
+                    Approuver l'identité
+                  </Button>
+                )}
+                {!isRejected && (
+                  <Button variant="outline" className={HEADER_BUTTON_CLASS} onClick={() => setRejecting(true)}>
+                    <Ban />
+                    Bloquer
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  className={cn(HEADER_BUTTON_CLASS, "border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700")}
+                  onClick={() => setDeletingAccount(true)}
+                >
+                  <Trash2 />
+                  Supprimer
                 </Button>
-              )}
-            </div>
-            <div
-              className={cn(
-                "flex flex-col gap-2",
-                !user.isApproved && "pointer-events-none opacity-50"
-              )}
-            >
-              {lots.length === 0 && (
-                <p className="text-sm text-muted-foreground">Aucun lot rattaché à ce compte.</p>
-              )}
-              {sortedLots.map((lot) => (
-                <LotRow
-                  key={lot.id}
-                  uid={uid}
-                  lot={lot}
-                  userLotIds={lots.map((l) => l.id)}
-                  userApproved={user.isApproved}
-                  canApprove={canApproveLots}
-                  canRevoke={isSuperAdmin}
-                  showDocuments={isSuperAdmin}
-                />
-              ))}
-            </div>
+              </div>
+            )}
           </div>
 
-          <UserEmailsCard
-            uid={user.uid}
-            userName={`${user.name ?? ""} ${user.surname ?? ""}`.trim() || user.email}
-            residenceIds={[...new Set(lots.map((l) => l.residenceId))]}
-            lotIds={lots.map((l) => l.id)}
-          />
+          <div className={cn("grid items-start gap-5", openTodo.length > 0 && "lg:grid-cols-[minmax(0,1fr)_320px]")}>
+            <div className="flex min-w-0 flex-col gap-4">
+              <div
+                role="tablist"
+                className="flex w-fit max-w-full flex-wrap gap-1 rounded-[16px] bg-[oklch(94%_0.006_100)] p-[5px]"
+              >
+                {tabs.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === t.key}
+                    onClick={() => setTab(t.key)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-[12px] px-[18px] py-[9px] text-[13.5px] font-bold transition-colors",
+                      tab === t.key
+                        ? "bg-white text-[oklch(24%_0.01_150)] shadow-[0_1px_3px_oklch(20%_0_0/0.1)]"
+                        : "text-[oklch(48%_0.01_150)] hover:text-[oklch(30%_0.01_150)]"
+                    )}
+                  >
+                    {t.label}
+                    {t.count !== undefined && (
+                      <span className="min-w-5 rounded-full bg-[oklch(45%_0.1_155/0.12)] px-1.5 py-px text-center text-[11.5px] font-extrabold text-[oklch(38%_0.09_155)]">
+                        {t.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Les trois onglets restent montés (simplement masqués) : le
+                  compteur "Échanges" vient de la card mails, et les lots ne
+                  sont pas rechargés à chaque changement d'onglet. */}
+              <div className={cn("flex flex-col gap-4", tab !== "profil" && "hidden")}>
+                {isSuperAdmin && user.blockedResidencesIds.length > 0 && (
+                  <BlockedResidencesCard uid={user.uid} residenceIds={user.blockedResidencesIds} />
+                )}
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] items-start gap-4">
+                  {/* Identité (nom/prénom/date de naissance...) réservée
+                      superAdmin - une Agence reste en lecture seule ici, même
+                      traitement qu'un Agent. locked (isRejected) prime sur
+                      canEdit : gèle aussi le téléphone, éditable par
+                      Agence/Agent en temps normal. */}
+                  <IdentityFields user={user} canEdit={isSuperAdmin} locked={isRejected} />
+                  {/* Demande de certification envoyée depuis l'app (pièce +
+                      selfie + score de ressemblance), décision Super Admin -
+                      à côté des champs d'identité pour les comparer d'un coup
+                      d'œil. */}
+                  {isSuperAdmin && <CertificationRequestCard uid={user.uid} isCertified={user.isCertified} />}
+                </div>
+              </div>
+
+              <Card className={cn("[--card-spacing:--spacing(7)]", tab !== "lots" && "hidden")}>
+                <CardHeader>
+                  <CardTitle className="text-lg font-extrabold text-[oklch(22%_0.01_150)]">Lots</CardTitle>
+                  <CardDescription>
+                    {!isSuperAdmin
+                      ? "Lots de ce compte dans les résidences de votre portefeuille."
+                      : user.isApproved
+                        ? "Rattachement propriétaire / locataire à valider par lot."
+                        : "Approuvez d'abord l'identité pour pouvoir valider les lots."}
+                  </CardDescription>
+                  {/* Rattacher un lot écrit directement idProprietaire/
+                      idLocataire côté résidence (cf. lib/lots.ts,
+                      grantLotRole) - réservé isSuperAdmin côté
+                      firestore.rules. */}
+                  {isSuperAdmin && (
+                    <CardAction>
+                      <Button variant="outline" className={HEADER_BUTTON_CLASS} onClick={() => setAddingLot(true)}>
+                        <Plus />
+                        Ajouter un lot
+                      </Button>
+                    </CardAction>
+                  )}
+                </CardHeader>
+                <CardContent
+                  className={cn("flex flex-col gap-3.5", !user.isApproved && "pointer-events-none opacity-50")}
+                >
+                  {lots.length === 0 && (
+                    <div className="flex flex-col items-center gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-[oklch(88%_0.01_150)] px-5 py-10 text-center">
+                      <div className="flex size-11 items-center justify-center rounded-[14px] bg-[oklch(95%_0.02_150)] text-[oklch(42%_0.08_155)]">
+                        <Home className="size-5" />
+                      </div>
+                      <div className="text-[15px] font-bold text-[oklch(26%_0.01_150)]">Aucun lot rattaché à ce compte</div>
+                      {isSuperAdmin && (
+                        <div className="max-w-[320px] text-[13px] leading-normal text-[oklch(52%_0.01_150)]">
+                          Rattachez un lot pour donner accès à la résidence correspondante.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {sortedLots.map((lot) => (
+                    <LotRow
+                      key={lot.id}
+                      uid={uid}
+                      lot={lot}
+                      userLotIds={lots.map((l) => l.id)}
+                      userApproved={user.isApproved}
+                      canApprove={canApproveLots}
+                      canRevoke={isSuperAdmin}
+                      showDocuments={isSuperAdmin}
+                    />
+                  ))}
+                </CardContent>
+              </Card>
+
+              <div className={cn(tab !== "mails" && "hidden")}>
+                <UserEmailsCard
+                  uid={user.uid}
+                  userName={fullName}
+                  residenceIds={[...new Set(lots.map((l) => l.residenceId))]}
+                  lotIds={lots.map((l) => l.id)}
+                  onCountChange={setEmailCount}
+                />
+              </div>
+            </div>
+
+            {openTodo.length > 0 && (
+              <div className="order-first rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-[22px] shadow-[0_14px_34px_-24px_oklch(20%_0_0/0.12)] lg:sticky lg:top-6 lg:order-none">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[15px] font-extrabold text-[oklch(22%_0.01_150)]">À traiter</h3>
+                  <span className="rounded-full bg-[oklch(94%_0.06_75)] px-2.5 py-[3px] text-[11.5px] font-extrabold text-[oklch(45%_0.12_65)]">
+                    {openTodo.length} / {todo.length}
+                  </span>
+                </div>
+                <div className="mt-3.5 flex flex-col gap-1">
+                  {openTodo.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setTab(item.tab)}
+                      className="flex items-center gap-3 rounded-[14px] px-2.5 py-[11px] text-left hover:bg-[oklch(97%_0.006_100)]"
+                    >
+                      <span className="size-[22px] shrink-0 rounded-full border-2 border-[oklch(80%_0.06_75)]" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13.5px] font-bold text-[oklch(26%_0.01_150)]">{item.title}</span>
+                        <span className="mt-px block text-xs text-[oklch(54%_0.01_150)]">{item.hint}</span>
+                      </span>
+                      <ChevronRight className="size-3.5 shrink-0 text-[oklch(65%_0.01_150)]" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </>
       )}
 
@@ -734,78 +796,147 @@ function IdentityFields({
     }
   }
 
+  // Le téléphone reste modifiable par Agence/Agent (correction d'un numéro
+  // erroné = besoin courant) ; le reste de l'identité est réservé
+  // superAdmin. locked (compte bloqué) gèle tout le monde, superAdmin compris.
+  const identityDisabled = !canEdit || !!locked
+
   return (
-    <div className="flex flex-col gap-3">
-      <div
-        className={cn("grid gap-3 text-sm sm:grid-cols-2", locked && "pointer-events-none opacity-50")}
-      >
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="identity-email">Email</Label>
-          <Input id="identity-email" value={user.email} disabled />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="identity-phone">Téléphone</Label>
-          <Input id="identity-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </div>
-      </div>
+    <Card className="[--card-spacing:--spacing(7)]">
+      <CardContent className="flex flex-col gap-[26px]">
+        {locked && (
+          <div className="rounded-[14px] bg-destructive/10 p-[14px_16px] text-sm text-destructive">
+            <span className="font-semibold">Motif du blocage : </span>
+            {user.rejectionReason}
+            <p className="mt-1.5 text-xs text-destructive/80">
+              Fiche gelée : plus aucune modification possible tant que ce compte n'a pas resoumis son inscription
+              depuis l'application.
+            </p>
+          </div>
+        )}
 
-      {/* Le reste de l'identité (nom/prénom/date de naissance/pièce...)
-          reste réservé superAdmin - seul le téléphone ci-dessus est
-          modifiable par Agence/Agent. locked (compte refusé) prime sur
-          canEdit : gèle tout le monde, superAdmin compris. */}
-      <div className={cn("grid gap-3 text-sm sm:grid-cols-2", (!canEdit || locked) && "pointer-events-none opacity-50")}>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="identity-name">Nom</Label>
-          <Input id="identity-name" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="identity-surname">Prénom</Label>
-          <Input id="identity-surname" value={surname} onChange={(e) => setSurname(e.target.value)} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="identity-birthday">Date de naissance</Label>
-          <Input
-            id="identity-birthday"
-            type="date"
-            value={birthday}
-            onChange={(e) => setBirthday(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="identity-sex">Sexe</Label>
-          <Input id="identity-sex" value={sex} onChange={(e) => setSex(e.target.value)} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="identity-nationality">Nationalité</Label>
-          <Input
-            id="identity-nationality"
-            value={nationality}
-            onChange={(e) => setNationality(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="identity-placeofborn">Lieu de naissance</Label>
-          <Input
-            id="identity-placeofborn"
-            value={placeOfborn}
-            onChange={(e) => setPlaceOfborn(e.target.value)}
-          />
-        </div>
-      </div>
+        <FieldGroup title="Identité">
+          <ProfileField id="identity-name" label="Nom">
+            <Input
+              id="identity-name"
+              className={FIELD_INPUT_CLASS}
+              placeholder="Non renseigné"
+              disabled={identityDisabled}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </ProfileField>
+          <ProfileField id="identity-surname" label="Prénom">
+            <Input
+              id="identity-surname"
+              className={FIELD_INPUT_CLASS}
+              placeholder="Non renseigné"
+              disabled={identityDisabled}
+              value={surname}
+              onChange={(e) => setSurname(e.target.value)}
+            />
+          </ProfileField>
+          <ProfileField id="identity-sex" label="Sexe">
+            <Input
+              id="identity-sex"
+              className={FIELD_INPUT_CLASS}
+              placeholder="Non renseigné"
+              disabled={identityDisabled}
+              value={sex}
+              onChange={(e) => setSex(e.target.value)}
+            />
+          </ProfileField>
+        </FieldGroup>
 
-      <p className="text-sm">
-        <span className="text-muted-foreground">Infos confirmées par l'utilisateur : </span>
-        {user.isInfoCorrect ? "Oui" : "Non"}
-      </p>
+        <FieldGroup title="Contact">
+          <ProfileField id="identity-email" label="Email">
+            <Input id="identity-email" className={FIELD_INPUT_CLASS} value={user.email} disabled />
+          </ProfileField>
+          <ProfileField id="identity-phone" label="Téléphone">
+            <Input
+              id="identity-phone"
+              className={FIELD_INPUT_CLASS}
+              placeholder="Non renseigné"
+              disabled={!!locked}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </ProfileField>
+        </FieldGroup>
 
-      {!locked && (
-        <div className="mb-[20px] flex justify-end">
-          <Button size="sm" disabled={saving} onClick={canEdit ? handleSave : handleSavePhone} className={PRIMARY_CTA_CLASS}>
-            <Save />
-            {canEdit ? "Enregistrer les modifications" : "Enregistrer le téléphone"}
-          </Button>
+        <FieldGroup title="Naissance">
+          <ProfileField id="identity-birthday" label="Date de naissance">
+            <Input
+              id="identity-birthday"
+              type="date"
+              className={FIELD_INPUT_CLASS}
+              disabled={identityDisabled}
+              value={birthday}
+              onChange={(e) => setBirthday(e.target.value)}
+            />
+          </ProfileField>
+          <ProfileField id="identity-placeofborn" label="Lieu de naissance">
+            <Input
+              id="identity-placeofborn"
+              className={FIELD_INPUT_CLASS}
+              placeholder="Non renseigné"
+              disabled={identityDisabled}
+              value={placeOfborn}
+              onChange={(e) => setPlaceOfborn(e.target.value)}
+            />
+          </ProfileField>
+          <ProfileField id="identity-nationality" label="Nationalité">
+            <Input
+              id="identity-nationality"
+              className={FIELD_INPUT_CLASS}
+              placeholder="Non renseigné"
+              disabled={identityDisabled}
+              value={nationality}
+              onChange={(e) => setNationality(e.target.value)}
+            />
+          </ProfileField>
+        </FieldGroup>
+
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[oklch(95%_0.003_100)] pt-5">
+          <span className="text-[13px] font-medium text-[oklch(50%_0.01_150)]">
+            Infos confirmées par l'utilisateur :{" "}
+            <b className="text-[oklch(24%_0.01_150)]">{user.isInfoCorrect ? "Oui" : "Non"}</b>
+          </span>
+          {!locked && (
+            <Button
+              disabled={saving}
+              onClick={canEdit ? handleSave : handleSavePhone}
+              className={cn(HEADER_BUTTON_CLASS, PRIMARY_CTA_CLASS)}
+            >
+              <Save />
+              {canEdit ? "Enregistrer les modifications" : "Enregistrer le téléphone"}
+            </Button>
+          )}
         </div>
-      )}
+      </CardContent>
+    </Card>
+  )
+}
+
+const FIELD_INPUT_CLASS =
+  "h-10 rounded-[11px] border-[oklch(90%_0.008_150)] bg-white px-[13px] text-[13.5px] text-[oklch(26%_0.01_150)] disabled:bg-[oklch(97.5%_0.003_100)] disabled:opacity-100"
+
+function FieldGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mb-3.5 text-xs font-extrabold tracking-[0.08em] text-[oklch(45%_0.09_155)] uppercase">{title}</div>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-x-4 gap-y-3.5">{children}</div>
+    </div>
+  )
+}
+
+function ProfileField({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id} className="text-xs font-bold text-[oklch(50%_0.01_150)]">
+        {label}
+      </Label>
+      {children}
     </div>
   )
 }
@@ -1014,169 +1145,171 @@ function LotRow({
   // simplement rattaché (non groupé) garde sa propre ligne.
   if (groupedParentId && userLotIds.includes(groupedParentId)) return null
 
+  const lotLabel = (info: { refLot: string; batiment: string; lot: string; id?: string }) =>
+    `${info.batiment || info.id || ""}${info.lot ? ` — ${info.lot}` : ""}${info.refLot ? ` · Réf. ${info.refLot}` : ""}`
+  const hasBody = groupedChildren.length > 0 || pendingChildrenInfo.length > 0 || showDocuments
+
   return (
-    // Même découpage que "Informations du compte" / "Pièce d'identité" : le
-    // justificatif dans sa propre carte à droite, sur la même ligne que le
-    // lot, se vérifie d'un coup d'œil à côté du bouton "Approuver".
-    <div className={cn("grid items-start gap-5", showDocuments && "lg:grid-cols-[1.7fr_1fr]")}>
+    <div
+      className={cn(
+        "overflow-hidden rounded-[18px] border bg-white",
+        lot.isApprovedLot ? "border-[oklch(93%_0.005_100)]" : "border-amber-300 ring-2 ring-amber-100"
+      )}
+    >
       <div
         className={cn(
-          "flex flex-col overflow-hidden rounded-[18px] border bg-white",
-          lot.isApprovedLot ? "border-[oklch(93%_0.005_100)]" : "border-amber-300 ring-2 ring-amber-100"
+          "flex flex-wrap items-center justify-between gap-4 p-[18px_20px]",
+          lot.isApprovedLot ? "bg-[oklch(98%_0.003_100)]" : "bg-amber-50"
         )}
       >
-        <div
-          className={cn(
-            "flex flex-wrap items-center justify-between gap-3 p-[14px_18px]",
-            lot.isApprovedLot ? "bg-[oklch(98%_0.003_100)]" : "bg-amber-50"
+        <div className="min-w-0">
+          <div className="text-[15px] font-extrabold text-[oklch(22%_0.01_150)]">
+            {residenceName ?? lot.residenceId}
+            {lotInfo?.batiment ? ` — ${lotInfo.batiment}` : ""}
+            {lotInfo?.lot ? ` — ${lotInfo.lot}` : ""}
+          </div>
+          <div className="mt-[3px] text-[12.5px] text-[oklch(52%_0.01_150)]">
+            {[lotInfo?.refLot ? `Réf. ${lotInfo.refLot}` : null, role].filter(Boolean).join(" · ") || "—"}
+          </div>
+          {parentLotInfo && (
+            <div className="mt-[3px] text-[12.5px] text-[oklch(52%_0.01_150)]">
+              Rattaché à {lotLabel(parentLotInfo)}
+            </div>
           )}
-        >
-          <div className="flex flex-col text-sm">
-            <span className="font-bold text-[oklch(22%_0.01_150)]">
-              {residenceName ?? lot.residenceId}
-              {lotInfo?.batiment ? ` — ${lotInfo.batiment}` : ""}
-              {lotInfo?.lot ? ` — ${lotInfo.lot}` : ""}
-            </span>
-            <span className="pl-3 text-muted-foreground">
-              {lotInfo?.refLot ? `Réf. ${lotInfo.refLot}` : "—"}
-            </span>
-            {parentLotInfo && (
-              <span className="text-muted-foreground">
-                Rattaché à{parentLotInfo.batiment ? ` ${parentLotInfo.batiment}` : ""}
-                {parentLotInfo.lot ? ` — ${parentLotInfo.lot}` : ""}
-                {parentLotInfo.refLot ? ` · Réf. ${parentLotInfo.refLot}` : ""}
-              </span>
-            )}
-          </div>
-          <div className="flex-1 text-center text-sm text-muted-foreground">
-            {lot.statutResident || resolvedStatut || "—"}
-          </div>
-          <div className="flex items-center gap-3">
-            <Badge variant={lot.isApprovedLot ? "default" : "destructive"} className="rounded-full">
-              {lot.isApprovedLot ? "Approuvé" : lot.pendingPeerApproval ? "En attente de l'occupant" : "En attente"}
-            </Badge>
-            {canApprove && !lot.isApprovedLot && (
-              <Button
-                size="sm"
-                disabled={approving || !userApproved}
-                title={!userApproved ? "Approuve d'abord l'identité pour que la synchronisation fonctionne" : undefined}
-                onClick={handleApprove}
-                className={PRIMARY_CTA_CLASS}
-              >
-                <Check />
-                Approuver
-              </Button>
-            )}
-            {canRevoke && (role === "Propriétaire" || role === "Locataire") && (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={revoking}
-                onClick={handleRevoke}
-                className="border-red-200 text-red-700 hover:bg-red-50"
-              >
-                <Unlink />
-                Révoquer
-              </Button>
-            )}
-          </div>
         </div>
-
-        {groupedChildren.length > 0 && (
-          <div className="flex flex-col gap-1 border-b border-[oklch(95%_0.003_100)] p-[14px_18px] text-sm">
-            <span className="font-medium text-muted-foreground">Lots groupés avec celui-ci</span>
-            {groupedChildren.map((child) => (
-              <span key={child.id} className="pl-3 text-muted-foreground">
-                {child.batiment || child.id}
-                {child.lot ? ` — ${child.lot}` : ""}
-                {child.refLot ? ` · Réf. ${child.refLot}` : ""}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {pendingChildrenInfo.length > 0 && (
-          <div className="flex flex-col gap-1 border-b border-[oklch(95%_0.003_100)] p-[14px_18px] text-sm">
-            <span className="font-medium text-muted-foreground">
-              Lot(s) supplémentaire(s) demandé(s) à l'inscription (rattaché(s) automatiquement à l'approbation de ce lot)
-            </span>
-            {pendingChildrenInfo.map((child) => (
-              <span key={child.id} className="pl-3 text-muted-foreground">
-                {child.batiment || child.id}
-                {child.lot ? ` — ${child.lot}` : ""}
-                {child.refLot ? ` · Réf. ${child.refLot}` : ""}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span
+            className={cn(
+              "rounded-full px-3 py-[5px] text-xs font-bold",
+              lot.isApprovedLot
+                ? "bg-[oklch(93%_0.05_150)] text-[oklch(36%_0.09_155)]"
+                : "bg-amber-100 text-amber-800"
+            )}
+          >
+            {lot.isApprovedLot ? "Approuvé" : lot.pendingPeerApproval ? "En attente de l'occupant" : "En attente"}
+          </span>
+          {canApprove && !lot.isApprovedLot && (
+            <Button
+              size="sm"
+              disabled={approving || !userApproved}
+              title={!userApproved ? "Approuve d'abord l'identité pour que la synchronisation fonctionne" : undefined}
+              onClick={handleApprove}
+              className={cn("rounded-[10px] font-bold", PRIMARY_CTA_CLASS)}
+            >
+              <Check />
+              Approuver
+            </Button>
+          )}
+          {canRevoke && (role === "Propriétaire" || role === "Locataire") && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={revoking}
+              onClick={handleRevoke}
+              className="rounded-[10px] border-red-200 font-bold text-red-700 hover:bg-red-50 hover:text-red-700"
+            >
+              <Unlink />
+              Révoquer
+            </Button>
+          )}
+        </div>
       </div>
 
-      {showDocuments && (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Justificatif(s)</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {/* Parcours sans justificatif (invitation/demande acceptée par un
-              propriétaire en place côté app, cf. UserLot.approvedByOwner) :
-              l'absence de document est normale, on le dit plutôt que de
-              laisser croire à un oubli. */}
-          {/* Colocation refusée par le locataire en place (lot sans
-              propriétaire) : la décision revient à Konodal. */}
-          {!lot.isApprovedLot && lot.peerRefusal && (
-            <div className="flex items-start gap-2 rounded-[12px] bg-amber-50 p-[10px_12px] text-sm text-amber-900">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-              <span>
-                <span className="font-semibold">Colocation refusée par le locataire en place</span>
-                {lot.peerRefusal.reason ? ` (motif : ${lot.peerRefusal.reason})` : ""}
-                {" "}- demande transmise à Konodal : approuver ou révoquer ce lot.
-              </span>
-            </div>
-          )}
-          {lot.approvedByOwner && (
-            <div className="flex items-start gap-2 rounded-[12px] bg-emerald-50 p-[10px_12px] text-sm text-emerald-800">
-              <BadgeCheck className="mt-0.5 size-4 shrink-0" />
-              <span>
-                <span className="font-semibold">Validé par le propriétaire</span>
-                {ownerLabel ? ` (${ownerLabel})` : ""}
-              </span>
-            </div>
-          )}
-          {documents.length === 0 ? (
-            !lot.approvedByOwner && (
-              <p className="text-sm text-muted-foreground">Aucun document déposé pour ce lot.</p>
-            )
-          ) : (
-            // Aperçu direct (comme la pièce d'identité) plutôt qu'un simple
-            // bouton "Ouvrir" : le justificatif se vérifie sans quitter la
-            // fiche avant d'approuver le lot.
-            <div className="flex flex-col items-center gap-4">
-              {documents.map((document) => (
-                <div key={document.id} className="flex flex-col items-center gap-1.5">
-                  {document.documentPathVerso && (
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {document.type || document.name || "Document"}
-                    </span>
-                  )}
-                  <div className="flex flex-col items-center gap-3">
-                    <DocumentThumbnail
-                      path={document.documentPathRecto}
-                      label={document.documentPathVerso ? "Recto" : document.type || document.name || "Document"}
-                    />
-                    {document.documentPathVerso && (
-                      <DocumentThumbnail path={document.documentPathVerso} label="Verso" />
-                    )}
+      {hasBody && (
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-6 gap-y-4 border-t border-[oklch(94%_0.004_100)] p-[16px_20px]">
+          {groupedChildren.length > 0 && (
+            <div>
+              <div className={LOT_SUBTITLE_CLASS}>Lots groupés avec celui-ci</div>
+              <div className="flex flex-col gap-1.5">
+                {groupedChildren.map((child) => (
+                  <div key={child.id} className={LOT_CHIP_CLASS}>
+                    {lotLabel(child)}
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+
+          {/* Info seule (pas encore de lien réel tant que ce lot principal
+              n'est pas approuvé), cf. pendingChildLotIds plus haut. */}
+          {pendingChildrenInfo.length > 0 && (
+            <div>
+              <div className={LOT_SUBTITLE_CLASS}>Lot(s) supplémentaire(s) demandé(s) à l'inscription</div>
+              <div className="flex flex-col gap-1.5">
+                {pendingChildrenInfo.map((child) => (
+                  <div key={child.id} className={LOT_CHIP_CLASS}>
+                    {lotLabel(child)}
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-[oklch(54%_0.01_150)]">
+                Rattaché(s) automatiquement à l'approbation de ce lot.
+              </p>
+            </div>
+          )}
+
+          {/* Justificatifs (documents personnels du résident) réservés
+              superAdmin : la vue agence/agent ne les lit même pas. */}
+          {showDocuments && (
+            <div>
+              <div className={LOT_SUBTITLE_CLASS}>Justificatif</div>
+              <div className="flex flex-col gap-3">
+                {/* Colocation refusée par le locataire en place (lot sans
+                    propriétaire) : la décision revient à Konodal. */}
+                {!lot.isApprovedLot && lot.peerRefusal && (
+                  <div className="flex items-start gap-2 rounded-[12px] bg-amber-50 p-[10px_12px] text-sm text-amber-900">
+                    <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                    <span>
+                      <span className="font-semibold">Colocation refusée par le locataire en place</span>
+                      {lot.peerRefusal.reason ? ` (motif : ${lot.peerRefusal.reason})` : ""}
+                      {" "}- demande transmise à Konodal : approuver ou révoquer ce lot.
+                    </span>
+                  </div>
+                )}
+                {/* Parcours sans justificatif (invitation/demande acceptée
+                    par un propriétaire en place, cf. UserLot.approvedByOwner) :
+                    l'absence de document est normale. */}
+                {lot.approvedByOwner && (
+                  <div className="flex items-start gap-2 rounded-[12px] bg-emerald-50 p-[10px_12px] text-sm text-emerald-800">
+                    <BadgeCheck className="mt-0.5 size-4 shrink-0" />
+                    <span>
+                      <span className="font-semibold">Validé par le propriétaire</span>
+                      {ownerLabel ? ` (${ownerLabel})` : ""}
+                    </span>
+                  </div>
+                )}
+                {documents.length === 0
+                  ? !lot.approvedByOwner && (
+                      <p className="text-sm text-[oklch(52%_0.01_150)]">Aucun document déposé pour ce lot.</p>
+                    )
+                  : documents.map((document) => (
+                      <div key={document.id} className="flex flex-col gap-1.5">
+                        <span className="text-[13px] font-semibold text-[oklch(30%_0.01_150)]">
+                          {document.type || document.name || "Document"}
+                        </span>
+                        <div className="flex flex-wrap items-start gap-3">
+                          <DocumentThumbnail
+                            path={document.documentPathRecto}
+                            label={document.documentPathVerso ? "Recto" : "Aperçu"}
+                          />
+                          {document.documentPathVerso && (
+                            <DocumentThumbnail path={document.documentPathVerso} label="Verso" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
 }
+
+const LOT_SUBTITLE_CLASS = "mb-2 text-xs font-bold text-[oklch(50%_0.01_150)]"
+const LOT_CHIP_CLASS =
+  "rounded-[12px] bg-[oklch(97%_0.006_100)] px-3 py-[9px] text-[13px] font-semibold text-[oklch(30%_0.01_150)]"
 
 // Accès suspendu par un superAdmin (demande de retrait du CS acceptée, cf.
 // RemovalRequestsPage) : rien n'a été supprimé, lever le blocage rend

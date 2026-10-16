@@ -1,18 +1,19 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { BadgeCheck, Ban, ShieldQuestion } from "lucide-react"
+import { BadgeCheck, Ban, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DocumentThumbnail } from "@/components/DocumentThumbnail"
 import { useAuth } from "@/lib/auth-context"
-import { subscribeToUserDocuments, type UserDocument } from "@/lib/users"
+import { setUserCertified, subscribeToUserDocuments, type UserDocument } from "@/lib/users"
 import {
   approveCertification,
   rejectCertification,
   subscribeToCertificationRequest,
   type CertificationRequest,
 } from "@/lib/certification"
+import { cn } from "@/lib/utils"
 
 const EXTRACTED_LABELS: Record<string, string> = {
   name: "Nom",
@@ -22,6 +23,8 @@ const EXTRACTED_LABELS: Record<string, string> = {
   nationality: "Nationalité",
   placeOfBorn: "Lieu de naissance",
 }
+
+const ACTION_BUTTON_CLASS = "h-10 rounded-[12px] px-4 text-[13px] font-bold"
 
 // Score SFace (similarité cosinus) : ≥ 0,363 = même personne selon les
 // auteurs du modèle. Indicatif : la pièce et le selfie restent à comparer à
@@ -45,23 +48,14 @@ function ScoreBadge({ request }: { request: CertificationRequest }) {
   )
 }
 
-// Même vignette que les justificatifs de lot (DocumentThumbnail : ratio
-// réel, ouverture en grand dans un Dialog) ; le selfie, supprimé dès la
-// décision, et la pièce, 30 jours après, laissent un emplacement vide
-// explicite.
-function Photo({
-  url,
-  label,
-  emptyText = "Supprimé après décision",
-}: {
-  url: string | null
-  label: string
-  emptyText?: string
-}) {
+// Emplacement d'une photo : vignette DocumentThumbnail (ratio réel,
+// ouverture en grand dans un Dialog) ; le selfie, supprimé dès la décision,
+// et la pièce, 30 jours après, laissent un emplacement vide explicite.
+function Slot({ url, label, emptyText }: { url: string | null; label: string; emptyText: string }) {
   if (url) return <DocumentThumbnail path={url} label={label} />
   return (
-    <div className="flex flex-col items-center gap-1.5">
-      <div className="flex h-40 w-64 items-center justify-center rounded-lg border border-dashed text-sm text-[oklch(52%_0.01_150)]">
+    <div className="flex w-full max-w-64 flex-col items-center gap-1.5">
+      <div className="flex aspect-[16/10] w-full items-center justify-center rounded-[16px] border-[1.5px] border-dashed border-[oklch(86%_0.01_150)] bg-[oklch(98%_0.003_100)] px-3 text-center text-[12.5px] font-semibold text-[oklch(62%_0.01_150)]">
         {emptyText}
       </div>
       <span className="text-xs text-muted-foreground">{label}</span>
@@ -69,8 +63,10 @@ function Photo({
   )
 }
 
-// Carte "Demande de certification" (fiche résident, Super Admin) : pièce,
-// selfie, score de ressemblance, informations lues, et décision.
+// Carte "Demande de certification" (fiche utilisateur, Super Admin
+// uniquement : pièce d'identité et selfie ne sont jamais montrés à une
+// agence/agent) : pièce, selfie, score, informations lues, décision, et
+// certification manuelle hors demande.
 export function CertificationRequestCard({ uid, isCertified }: { uid: string; isCertified: boolean }) {
   const { user: authUser } = useAuth()
   const [request, setRequest] = useState<CertificationRequest | null>(null)
@@ -90,9 +86,7 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
 
   // Comptes antérieurs au parcours de certification : pas de demande, mais
   // une pièce déposée à l'inscription (users/{uid}/documents, lisible
-  // superAdmin seulement - cette carte n'est rendue que pour lui). Affichée
-  // ici à défaut de demande, depuis la suppression de la carte "Pièce
-  // d'identité" de la fiche.
+  // superAdmin seulement), affichée à défaut de demande.
   const [legacyDocuments, setLegacyDocuments] = useState<UserDocument[]>([])
   useEffect(
     () =>
@@ -102,45 +96,10 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
     [uid]
   )
 
-  // Carte toujours présente (à droite des champs d'identité, cf.
-  // ResidentDetailPage) : un état vide plutôt qu'un trou dans la grille.
-  if (!request) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <ShieldQuestion className="size-5" />
-            Demande de certification
-          </CardTitle>
-          <CardDescription>
-            {legacyDocuments.length > 0
-              ? "Aucune demande · pièce déposée à l'inscription"
-              : "Aucune demande de certification."}
-          </CardDescription>
-        </CardHeader>
-        {legacyDocuments.length > 0 && (
-          <CardContent className="flex flex-col items-center gap-4">
-            {legacyDocuments.map((document) => (
-              <div key={document.id} className="flex flex-col items-center gap-1.5">
-                {document.type && (
-                  <span className="text-xs font-medium text-muted-foreground">{document.type}</span>
-                )}
-                <div className="flex flex-col items-center gap-3">
-                  <DocumentThumbnail path={document.documentPathRecto} label="Recto" />
-                  {document.documentPathVerso && (
-                    <DocumentThumbnail path={document.documentPathVerso} label="Verso" />
-                  )}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        )}
-      </Card>
-    )
-  }
-  // Certifié entre-temps à la main (bouton de la carte Compte) : plus de
-  // décision à prendre sur cette demande.
-  const pending = request.status === "pending" && !isCertified
+  // Certifié entre-temps à la main : plus de décision à prendre sur cette
+  // demande.
+  const pending = request?.status === "pending" && !isCertified
+  const hasLegacy = !request && legacyDocuments.length > 0
 
   async function approve() {
     if (!request || !authUser) return
@@ -170,42 +129,122 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
     }
   }
 
-  const extracted = Object.entries(request.extracted).filter(([, v]) => v)
+  // Certification manuelle (hors demande) ou retrait - masquée tant qu'une
+  // demande est en attente : la décision se prend alors ci-dessous, seule à
+  // reporter les informations lues sur la pièce.
+  async function toggleCertified() {
+    setSaving(true)
+    try {
+      await setUserCertified(uid, !isCertified)
+      toast.success(isCertified ? "Certification retirée" : "Identité certifiée")
+    } catch (err) {
+      toast.error("Échec de la mise à jour : " + (err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const submitted = request?.submittedAt ? ` Envoyée le ${request.submittedAt.toLocaleDateString("fr-FR")}.` : ""
+  const description = pending
+    ? "Pièce d'identité et selfie envoyés depuis l'application. Comparez-les avec les informations du profil avant de certifier." +
+      submitted
+    : request?.status === "rejected" && !isCertified
+      ? `Demande refusée : ${request.rejectionReason ?? ""}.${submitted}`
+      : request
+        ? `Demande envoyée depuis l'application.${submitted}`
+        : hasLegacy
+          ? "Pièce d'identité déposée à l'inscription. Comparez-la avec les informations du profil."
+          : isCertified
+            ? "Identité certifiée manuellement."
+            : "Aucune demande reçue."
+
+  const extracted = request ? Object.entries(request.extracted).filter(([, v]) => v) : []
 
   return (
-    <Card>
+    <Card className="[--card-spacing:--spacing(7)]">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <ShieldQuestion className="size-5" />
-          Demande de certification
-        </CardTitle>
-        <CardDescription>
-          {pending
-            ? "En attente de décision"
-            : request.status === "approved" || isCertified
-              ? "Certifiée"
-              : `Refusée : ${request.rejectionReason ?? ""}`}
-          {request.submittedAt && ` · envoyée le ${request.submittedAt.toLocaleDateString("fr-FR")}`}
-        </CardDescription>
+        <CardTitle className="text-lg font-extrabold text-[oklch(22%_0.01_150)]">Demande de certification</CardTitle>
+        <CardDescription className="max-w-[520px] leading-normal">{description}</CardDescription>
+        {!pending && (
+          <CardAction>
+            {isCertified ? (
+              <Button
+                variant="outline"
+                disabled={saving}
+                onClick={toggleCertified}
+                className={cn(ACTION_BUTTON_CLASS, "border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700")}
+              >
+                Retirer la certification
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                disabled={saving}
+                onClick={toggleCertified}
+                className={cn(
+                  ACTION_BUTTON_CLASS,
+                  "border-[oklch(85%_0.06_155)] bg-[oklch(96%_0.02_150)] text-[oklch(36%_0.09_155)] hover:bg-[oklch(93%_0.04_150)] hover:text-[oklch(36%_0.09_155)]"
+                )}
+              >
+                <Check />
+                Certifier manuellement
+              </Button>
+            )}
+          </CardAction>
+        )}
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <ScoreBadge request={request} />
-          <span className="text-sm text-[oklch(52%_0.01_150)]">{request.idType}</span>
+      <CardContent className="flex flex-col gap-5">
+        {isCertified && (
+          <div className="inline-flex w-fit items-center gap-2 rounded-full bg-[oklch(95%_0.03_250)] px-3.5 py-[7px] text-[12.5px] font-bold text-[oklch(42%_0.14_250)]">
+            <BadgeCheck className="size-4" />
+            Identité certifiée
+            {request?.status === "approved" ? " · demande depuis l'application" : hasLegacy ? " · pièce déposée à l'inscription" : ""}
+          </div>
+        )}
+
+        {request && (
+          <div className="flex flex-wrap items-center gap-2">
+            <ScoreBadge request={request} />
+            <span className="text-sm text-[oklch(52%_0.01_150)]">{request.idType}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,200px),1fr))] justify-items-center gap-4">
+          {request ? (
+            <>
+              <Slot
+                url={request.idRectoUrl}
+                label="Pièce d'identité · Recto"
+                emptyText={
+                  request.idPurgedAt
+                    ? `Supprimée le ${request.idPurgedAt.toLocaleDateString("fr-FR")} (conservation 30 jours)`
+                    : "Supprimée (conservation 30 jours)"
+                }
+              />
+              {request.idVersoUrl && (
+                <Slot url={request.idVersoUrl} label="Pièce d'identité · Verso" emptyText="Supprimée après décision" />
+              )}
+              <Slot url={request.selfieUrl} label="Selfie" emptyText="Supprimé après décision" />
+            </>
+          ) : hasLegacy ? (
+            legacyDocuments.flatMap((document) => {
+              const prefix = document.type ? `${document.type} · ` : ""
+              return [
+                <DocumentThumbnail key={`${document.id}-r`} path={document.documentPathRecto} label={`${prefix}Recto`} />,
+                ...(document.documentPathVerso
+                  ? [<DocumentThumbnail key={`${document.id}-v`} path={document.documentPathVerso} label={`${prefix}Verso`} />]
+                  : []),
+              ]
+            })
+          ) : (
+            <>
+              <Slot url={null} label="Pièce d'identité · Recto" emptyText="Non reçu" />
+              <Slot url={null} label="Pièce d'identité · Verso" emptyText="Non reçu" />
+              <Slot url={null} label="Selfie" emptyText="Non reçu" />
+            </>
+          )}
         </div>
-        <div className="flex flex-col items-center gap-3">
-          <Photo
-            url={request.idRectoUrl}
-            label="Recto"
-            emptyText={
-              request.idPurgedAt
-                ? `Supprimée le ${request.idPurgedAt.toLocaleDateString("fr-FR")} (conservation 30 jours)`
-                : "Supprimée (conservation 30 jours)"
-            }
-          />
-          {request.idVersoUrl && <Photo url={request.idVersoUrl} label="Verso" />}
-          <Photo url={request.selfieUrl} label="Selfie" />
-        </div>
+
         {extracted.length > 0 && (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
             {extracted.map(([key, value]) => (
@@ -216,28 +255,35 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
             ))}
           </dl>
         )}
+
+        {!request && !hasLegacy && !isCertified && (
+          <div className="rounded-[14px] bg-[oklch(97%_0.012_90)] p-[14px_16px] text-[13px] leading-normal text-[oklch(45%_0.04_80)]">
+            Aucune demande de certification pour le moment. L'utilisateur peut la lancer depuis son profil dans
+            l'application.
+          </div>
+        )}
+
         {pending && (
           <p className="text-xs text-[oklch(52%_0.01_150)]">
-            Le score est une aide : comparez la pièce et le selfie avant de décider. Le selfie est supprimé
-            dès la décision. Certifier complète le compte avec les informations lues ci-dessus, sans écraser celles déjà renseignées.
+            Le score est une aide : comparez la pièce et le selfie avant de décider. Le selfie est supprimé dès la
+            décision. Certifier complète le compte avec les informations lues ci-dessus, sans écraser celles déjà
+            renseignées.
           </p>
         )}
         {pending && !rejecting && (
           <div className="flex flex-wrap gap-2">
             <Button
-              size="sm"
               disabled={saving}
               onClick={approve}
-              className="bg-blue-600 text-white hover:bg-blue-700"
+              className={cn(ACTION_BUTTON_CLASS, "bg-blue-600 text-white hover:bg-blue-700")}
             >
               <BadgeCheck />
               Certifier l'identité
             </Button>
             <Button
               variant="outline"
-              size="sm"
               disabled={saving}
-              className="border-red-200 text-red-700 hover:bg-red-50"
+              className={cn(ACTION_BUTTON_CLASS, "border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700")}
               onClick={() => setRejecting(true)}
             >
               <Ban />
