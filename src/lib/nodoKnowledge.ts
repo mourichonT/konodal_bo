@@ -98,16 +98,3 @@ export async function addKnowledgeSource(input: KnowledgeSourceInput) {
 export async function deleteKnowledgeSource(id: string) {
   await httpsCallable<{ id: string }, { ok: boolean }>(functions, "nodo_kb_delete_source")({ id })
 }
-
-// Fiches copropriété de service-public.gouv.fr (Licence Ouverte, réutilisables
-// en citant la source) : les 5 dossiers copro (acteurs, documents, budget et
-// charges, assemblée générale, copropriété en difficulté) + fiches isolées
-// (vente, travaux, aides). Adresses et extraction du texte vérifiées le
-// 16/10/2026. Légifrance (loi de 1965, décret de 1967) bloque les robots :
-// à ajouter en PDF via l'onglet Fichier.
-const SERVICE_PUBLIC_COPRO_CODES =
-  "F2606 F38886 F2608 F2610 F32051 F11384 F1548 F31671 F896 F31644 F39760 F2589 F2665 F34051 F32059 F36760 F37504 F31672 F33877 F2127 F32058 F20586 F2590 F2603 F31418 F14745 F34026 F35451 F32920 F640 F2122 F31531 F2615 F2619 F2636 F2137 F3107 F35288 F20388 F2643 F32088 F2667 F37190 F32573 F38064 F2604 F31513 F37827 F37294"
-
-export const SERVICE_PUBLIC_COPRO_URLS = SERVICE_PUBLIC_COPRO_CODES.split(" ").map(
-  (code) => `https://www.service-public.gouv.fr/particuliers/vosdroits/${code}`
-)

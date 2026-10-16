@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { toast } from "sonner"
-import { FileText, Link2, ListPlus, LoaderCircle, Plus, TextQuote, Trash2, TriangleAlert } from "lucide-react"
+import { FileText, FileUp, Link2, ListPlus, LoaderCircle, Plus, TextQuote, Trash2, TriangleAlert } from "lucide-react"
 import { NodoIcon } from "@/components/nodo/NodoIcon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,7 +13,6 @@ import {
   deleteKnowledgeSource,
   KNOWLEDGE_CATEGORIES,
   KNOWLEDGE_MAX_FILE_BYTES,
-  SERVICE_PUBLIC_COPRO_URLS,
   subscribeToKnowledgeSources,
   type KnowledgeCategory,
   type KnowledgeKind,
@@ -39,6 +38,25 @@ const ADD_MODES: { key: AddMode; label: string; icon: typeof FileText }[] = [
 // Pause entre deux ajouts : chaque lien déclenche une indexation (Haiku) et
 // un téléchargement sur le site source.
 const BULK_DELAY_MS = 1500
+
+type BulkEntry = { url: string; category: KnowledgeCategory | null; title: string }
+
+// Une source par ligne : "url" seule, ou "url;catégorie;titre" (format du
+// CSV importé, séparateur ; ou ,). Ligne d'en-tête et lignes sans URL
+// http(s) ignorées ; catégorie inconnue = catégorie choisie dans le dialogue.
+function parseBulkLines(value: string): BulkEntry[] {
+  const entries: BulkEntry[] = []
+  for (const line of value.split(/\r?\n/)) {
+    const separator = line.includes(";") ? ";" : ","
+    const [rawUrl = "", rawCategory = "", ...rawTitle] = line.split(separator)
+    const clean = (cell: string) => cell.trim().replace(/^"(.*)"$/, "$1").replace(/""/g, '"').trim()
+    const url = clean(rawUrl)
+    if (!/^https?:\/\//i.test(url)) continue
+    const category = KNOWLEDGE_CATEGORIES.find((c) => c.toLowerCase() === clean(rawCategory).toLowerCase()) ?? null
+    entries.push({ url, category, title: clean(rawTitle.join(separator)) })
+  }
+  return entries
+}
 
 const STATUS_META = {
   pending: { label: "En attente", className: "bg-[oklch(95%_0.005_100)] text-[oklch(45%_0.01_150)]" },
@@ -246,6 +264,7 @@ function AddSourceDialog({
 }) {
   const [kind, setKind] = useState<AddMode>("file")
   const [bulkUrls, setBulkUrls] = useState("")
+  const csvInputRef = useRef<HTMLInputElement>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [title, setTitle] = useState("")
   const [category, setCategory] = useState<KnowledgeCategory>("Juridique")
@@ -266,37 +285,50 @@ function AddSourceDialog({
     setProgress(null)
   }, [open])
 
-  // Une URL http(s) par ligne, sans doublon ni lien déjà présent dans la base.
+  // Sans doublon ni lien déjà présent dans la base.
   const parsedBulk = useMemo(() => {
-    const urls = [
-      ...new Set(
-        bulkUrls
-          .split(/\s+/)
-          .map((u) => u.trim())
-          .filter((u) => /^https?:\/\//i.test(u))
-      ),
-    ]
-    return { urls: urls.filter((u) => !existingUrls.has(u)), skipped: urls.filter((u) => existingUrls.has(u)).length }
+    const unique = [...new Map(parseBulkLines(bulkUrls).map((e) => [e.url, e])).values()]
+    return {
+      entries: unique.filter((e) => !existingUrls.has(e.url)),
+      skipped: unique.filter((e) => existingUrls.has(e.url)).length,
+    }
   }, [bulkUrls, existingUrls])
 
+  async function handleCsvFile(csvFile: File | undefined) {
+    if (!csvFile) return
+    try {
+      const content = await csvFile.text()
+      setBulkUrls(content.replace(/^\uFEFF/, ""))
+      const count = parseBulkLines(content).length
+      if (count === 0) toast.error("Aucune adresse http(s) trouvée dans ce fichier")
+    } catch {
+      toast.error("Lecture du fichier impossible")
+    }
+  }
+
   async function handleBulk() {
-    const { urls } = parsedBulk
-    if (urls.length === 0) return toast.error("Aucun nouveau lien à ajouter")
+    const { entries } = parsedBulk
+    if (entries.length === 0) return toast.error("Aucun nouveau lien à ajouter")
     setSaving(true)
     let failed = 0
-    for (const [index, link] of urls.entries()) {
-      setProgress({ done: index, total: urls.length })
+    for (const [index, entry] of entries.entries()) {
+      setProgress({ done: index, total: entries.length })
       try {
-        await addKnowledgeSource({ kind: "url", title: "", category, url: link })
+        await addKnowledgeSource({
+          kind: "url",
+          title: entry.title,
+          category: entry.category ?? category,
+          url: entry.url,
+        })
       } catch {
         failed += 1
       }
-      if (index < urls.length - 1) await new Promise((resolve) => setTimeout(resolve, BULK_DELAY_MS))
+      if (index < entries.length - 1) await new Promise((resolve) => setTimeout(resolve, BULK_DELAY_MS))
     }
     setSaving(false)
     setProgress(null)
-    if (failed) toast.error(`${urls.length - failed} lien(s) ajouté(s), ${failed} refusé(s)`)
-    else toast.success(`${urls.length} lien(s) ajouté(s) : indexation en cours`)
+    if (failed) toast.error(`${entries.length - failed} lien(s) ajouté(s), ${failed} refusé(s)`)
+    else toast.success(`${entries.length} lien(s) ajouté(s) : indexation en cours`)
     onOpenChange(false)
   }
 
@@ -378,24 +410,33 @@ function AddSourceDialog({
                     size="sm"
                     variant="outline"
                     disabled={saving}
-                    onClick={() => {
-                      setBulkUrls(SERVICE_PUBLIC_COPRO_URLS.join("\n"))
-                      setCategory("Juridique")
-                    }}
+                    onClick={() => csvInputRef.current?.click()}
                   >
-                    Fiches copro service-public ({SERVICE_PUBLIC_COPRO_URLS.length})
+                    <FileUp />
+                    Importer un CSV
                   </Button>
+                  <input
+                    ref={csvInputRef}
+                    type="file"
+                    accept=".csv,text/csv,.txt"
+                    className="hidden"
+                    onChange={(e) => {
+                      handleCsvFile(e.target.files?.[0])
+                      e.target.value = ""
+                    }}
+                  />
                 </div>
                 <textarea
                   id="kb-bulk"
                   className={cn(FIELD_CLASS, "min-h-48 resize-y font-mono text-xs")}
                   value={bulkUrls}
                   disabled={saving}
-                  placeholder={"https://…\nhttps://…"}
+                  placeholder={"https://…\nhttps://…;Juridique;Titre facultatif"}
                   onChange={(e) => setBulkUrls(e.target.value)}
                 />
                 <span className="text-xs text-muted-foreground">
-                  {parsedBulk.urls.length} nouveau(x) lien(s)
+                  CSV : url;catégorie;titre (catégorie et titre facultatifs) · {parsedBulk.entries.length}{" "}
+                  nouveau(x) lien(s)
                   {parsedBulk.skipped > 0 ? ` · ${parsedBulk.skipped} déjà dans la base, ignoré(s)` : ""}
                   {progress ? ` · ajout ${progress.done + 1} / ${progress.total}…` : ""}
                 </span>
