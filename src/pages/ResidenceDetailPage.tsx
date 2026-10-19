@@ -67,6 +67,7 @@ import {
   updateLot,
   type LotInput,
 } from "@/lib/lots"
+import { CsAvanceSection } from "@/components/CsAvanceSection"
 import { LotImportDialog } from "@/components/LotImportDialog"
 import { VoteFormDialog } from "@/components/VoteFormDialog"
 import { saveResidenceAccessPoint, setStructureAccessPoint, subscribeToResidenceAccessPoint } from "@/lib/accessPoints"
@@ -180,6 +181,7 @@ export default function ResidenceDetailPage() {
             <div className="flex flex-col gap-5">
               <InfoSection residence={residence} />
               <CsMembersSection residenceId={id} residence={residence} />
+              <CsAvanceSection residenceId={id} />
               <CharterStatusSection residenceId={id} />
             </div>
           )}
