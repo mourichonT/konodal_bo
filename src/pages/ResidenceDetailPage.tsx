@@ -68,6 +68,7 @@ import {
   updateLot,
   type LotInput,
 } from "@/lib/lots"
+import { DeleteResidenceSection } from "@/components/DeleteResidenceSection"
 import { LotImportDialog } from "@/components/LotImportDialog"
 import { VoteFormDialog } from "@/components/VoteFormDialog"
 import { saveResidenceAccessPoint, setStructureAccessPoint, subscribeToResidenceAccessPoint } from "@/lib/accessPoints"
@@ -111,6 +112,7 @@ export default function ResidenceDetailPage() {
   const [loading, setLoading] = useState(true)
   const [structures, setStructures] = useState<StructureResidence[]>([])
   const [activeTab, setActiveTab] = useState<ResidenceTabKey>("information")
+  const { isSuperAdmin } = useIsSuperAdmin()
 
   useEffect(() => {
     if (!id) return
@@ -182,6 +184,7 @@ export default function ResidenceDetailPage() {
               <InfoSection residence={residence} />
               <CsMembersSection residenceId={id} residence={residence} />
               <CharterStatusSection residenceId={id} />
+              {isSuperAdmin && <DeleteResidenceSection residence={residence} />}
             </div>
           )}
 

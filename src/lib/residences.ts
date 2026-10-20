@@ -109,6 +109,39 @@ export async function updateResidenceAlternateAddresses(id: string, addresses: A
   await updateDoc(doc(db, "residences", id), { alternateAddresses: addresses })
 }
 
+// Bilan renvoyé par adminDeleteResidence (konodal_app/functions/index.js) :
+// en dryRun, sert à la fenêtre de confirmation ; après suppression, deleted.
+export type ResidenceDeletionSummary = {
+  name: string
+  lots: number
+  residents: number
+  csMembers: number
+  accounts: number
+  posts: number
+  documents: number
+  votes: number
+  subscribed: boolean
+  deleted?: boolean
+}
+
+// Suppression complète d'une résidence (superAdmin) : arborescence
+// residences/{id}, fichiers Storage, lots et listes des comptes rattachés,
+// jetons et marqueurs liés. Faite côté serveur (Admin SDK) : firestore.rules
+// interdit au client, même superAdmin, de supprimer plusieurs sous-
+// collections (votes clos, chats, charte, facturation...). Refusée par le
+// serveur tant qu'un abonnement CS avancé est en cours, et si confirmName
+// n'est pas exactement le nom de la résidence.
+export async function deleteResidence(
+  residenceId: string,
+  options: { dryRun: true } | { confirmName: string }
+): Promise<ResidenceDeletionSummary> {
+  const call = httpsCallable<
+    { residenceId: string; dryRun?: boolean; confirmName?: string },
+    ResidenceDeletionSummary
+  >(functions, "adminDeleteResidence", { timeout: 540_000 })
+  return (await call({ residenceId, ...options })).data
+}
+
 export async function updateResidenceGeo(id: string, lat: number, lng: number) {
   await updateDoc(doc(db, "residences", id), { lat, lng })
 }
