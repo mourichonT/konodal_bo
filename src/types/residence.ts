@@ -44,6 +44,9 @@ export type Residence = {
   // par champ, un tableau de résidences exposé sur un contact partagé
   // ferait fuiter les résidences des autres agences à chacune d'elles.
   contactRefs?: Record<string, boolean>
+  // « Nodo répond aux copropriétaires » : filtre des mails au syndic, réglé
+  // par le syndic (set_nodo_mail_filter, functions_python/nodo_mail.py).
+  nodoMailFilter?: { enabled?: boolean; updatedBy?: string }
 }
 
 export const emptyAddress: Address = {

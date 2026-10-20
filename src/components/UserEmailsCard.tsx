@@ -13,6 +13,7 @@ import {
   fetchResidenceThreads,
   sendUserEmail,
   subscribeToUserEmails,
+  type NodoMailState,
   type UserEmail,
 } from "@/lib/userEmails"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
@@ -23,6 +24,14 @@ const SOURCE_LABELS: Record<UserEmail["source"], string> = {
   toSyndic: "Message au syndic",
   fromSyndic: "Réponse reçue",
   residence: "Résidence",
+}
+
+// Message au syndic lu par Nodo (filtre des mails, cf. NodoMailState).
+const NODO_LABELS: Record<NodoMailState["state"], string> = {
+  pending: "Nodo l'analyse",
+  answered: "Traité par Nodo",
+  passed: "Transmis par Nodo",
+  forwarded: "Transmis après la réponse de Nodo",
 }
 
 const EMPTY_CLASS = "rounded-[14px] bg-[oklch(97.5%_0.004_100)] p-[18px] text-[13.5px] text-[oklch(52%_0.01_150)]"
@@ -166,6 +175,7 @@ export function UserEmailsCard({
                     {email.subject || "(sans objet)"}
                   </span>
                   {!email.success && <Badge variant="destructive">Échec</Badge>}
+                  {email.nodo && <Badge variant="secondary">{NODO_LABELS[email.nodo.state]}</Badge>}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-[oklch(55%_0.01_150)]">
                   <span>{formatDate(email.date)}</span>
@@ -206,6 +216,17 @@ export function UserEmailsCard({
                 />
               ) : (
                 <p className="text-sm whitespace-pre-wrap">{opened?.text || "Contenu non disponible."}</p>
+              )}
+              {opened?.nodo && (
+                <div className="mt-4 flex flex-col gap-2 rounded-[14px] bg-[oklch(96%_0.02_150)] p-4">
+                  <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">
+                    {NODO_LABELS[opened.nodo.state]}
+                  </span>
+                  {opened.nodo.reason && (
+                    <p className="text-xs text-muted-foreground">Motif de Nodo : {opened.nodo.reason}</p>
+                  )}
+                  {opened.nodo.answer && <p className="text-sm whitespace-pre-wrap">{opened.nodo.answer}</p>}
+                </div>
               )}
             </div>
           </div>
