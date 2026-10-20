@@ -45,7 +45,8 @@ export type Residence = {
   // ferait fuiter les résidences des autres agences à chacune d'elles.
   contactRefs?: Record<string, boolean>
   // « Nodo répond aux copropriétaires » : filtre des mails au syndic, réglé
-  // par le syndic (set_nodo_mail_filter, functions_python/nodo_mail.py).
+  // par le compte agence du syndic ou un superAdmin (set_nodo_mail_filter,
+  // functions_python/nodo_mail.py), jamais en direct (firestore.rules).
   nodoMailFilter?: { enabled?: boolean; updatedBy?: string }
 }
 

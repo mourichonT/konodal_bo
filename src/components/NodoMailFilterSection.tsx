@@ -1,23 +1,44 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Sparkles } from "lucide-react"
+import { doc, onSnapshot } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
-import { functions } from "@/firebase"
+import { db, functions } from "@/firebase"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useAccountRole } from "@/hooks/useAccountRole"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 import type { Residence } from "@/types/residence"
 
 type FilterPayload = { residenceId?: string; geranceId?: string; enabled: boolean }
 
 // « Nodo répond aux copropriétaires » (filtre des mails au syndic,
-// functions_python/nodo_mail.py) : réglé par le syndic de la résidence ou un
-// administrateur Konodal (set_nodo_mail_filter), désactivé par défaut. La
-// fiche suit le réglage par l'abonnement à la résidence.
+// functions_python/nodo_mail.py) : réglé par le compte agence du syndic de la
+// résidence - pas un agent - ou un administrateur Konodal
+// (set_nodo_mail_filter, qui revérifie le rôle), désactivé par défaut. La
+// fiche suit le réglage par l'abonnement à la résidence. Activation fermée
+// tant que config/app.nodoMailFilterAvailable est faux (app des stores qui
+// n'affiche pas encore les réponses de Nodo) : carte cachée à l'agence,
+// bouton grisé pour le superAdmin ; désactiver reste possible.
 export function NodoMailFilterSection({ residenceId, residence }: { residenceId: string; residence: Residence }) {
+  const { isSuperAdmin, isAgence, geranceId: ownGeranceId } = useAccountRole()
   const [saving, setSaving] = useState(false)
+  const [available, setAvailable] = useState(false)
   const enabled = residence.nodoMailFilter?.enabled === true
   const geranceId = residence.geranceRef?.geranceId
+  const isResidenceAgence = isAgence && !!geranceId && geranceId === ownGeranceId
+
+  useEffect(
+    () =>
+      onSnapshot(
+        doc(db, "config", "app"),
+        (snap) => setAvailable(snap.data()?.nodoMailFilterAvailable === true),
+        () => setAvailable(false)
+      ),
+    []
+  )
+
+  if (!isSuperAdmin && !(isResidenceAgence && (available || enabled))) return null
 
   async function save(payload: FilterPayload, done: (updated: number) => string) {
     setSaving(true)
@@ -47,7 +68,7 @@ export function NodoMailFilterSection({ residenceId, residence }: { residenceId:
         </CardDescription>
         <CardAction>
           <Button
-            disabled={saving}
+            disabled={saving || (!enabled && !available)}
             className={cn("h-10 rounded-[12px] px-[18px] text-[13px] font-bold", !enabled && PRIMARY_CTA_CLASS)}
             variant={enabled ? "outline" : "default"}
             onClick={() =>
@@ -62,7 +83,7 @@ export function NodoMailFilterSection({ residenceId, residence }: { residenceId:
         <span className={cn("font-bold", enabled ? "text-[oklch(42%_0.08_155)]" : "text-[oklch(52%_0.01_150)]")}>
           {enabled ? "Activé pour cette résidence" : "Désactivé pour cette résidence"}
         </span>
-        {geranceId && (
+        {isResidenceAgence && available && (
           <Button
             variant="outline"
             disabled={saving}
@@ -75,6 +96,12 @@ export function NodoMailFilterSection({ residenceId, residence }: { residenceId:
           >
             Activer pour toutes mes résidences
           </Button>
+        )}
+        {!available && (
+          <span className="basis-full text-muted-foreground">
+            Pas encore ouvert : à activer quand la version de l'application qui affiche les réponses de Nodo sera
+            publiée{isSuperAdmin && " (config/app.nodoMailFilterAvailable)"}.
+          </span>
         )}
       </CardContent>
     </Card>
