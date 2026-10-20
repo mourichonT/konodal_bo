@@ -84,8 +84,8 @@ const superAdminNavItems: NavItem[] = [
     icon: Library,
     children: [
       { to: "/nodo/connaissances/sources", label: "Sources" },
-      { to: "/nodo/connaissances/propositions", label: "Propositions" },
       { to: "/nodo/connaissances/sites", label: "Sites web autorisés" },
+      { to: "/nodo/connaissances/propositions", label: "Propositions" },
     ],
   },
 ]

@@ -121,8 +121,8 @@ type View = "sources" | "proposals" | "web"
 // directement depuis le sous-menu Base Nodo, comme Sinistres.
 const VIEW_PATH: Record<View, string> = { sources: "sources", proposals: "propositions", web: "sites" }
 
-// Bascule Sources / Propositions / Sites web autorisés, même style que
-// UsersSectionToggle.
+// Bascule Sources / Sites web autorisés / Propositions, même style que
+// UsersSectionToggle (même ordre que le sous-menu Base Nodo).
 function ViewToggle({
   view,
   onChange,
@@ -145,6 +145,11 @@ function ViewToggle({
         <Library className="size-3.5 sm:size-4" />
         Sources
       </button>
+      <button type="button" className={item(view === "web")} onClick={() => onChange("web")}>
+        <Globe className="size-3.5 sm:size-4" />
+        <span className="sm:hidden">Sites web</span>
+        <span className="hidden sm:inline">Sites web autorisés</span>
+      </button>
       <button type="button" className={item(view === "proposals")} onClick={() => onChange("proposals")}>
         <Lightbulb className="size-3.5 sm:size-4" />
         Propositions
@@ -158,11 +163,6 @@ function ViewToggle({
             {proposalCount}
           </span>
         )}
-      </button>
-      <button type="button" className={item(view === "web")} onClick={() => onChange("web")}>
-        <Globe className="size-3.5 sm:size-4" />
-        <span className="sm:hidden">Sites web</span>
-        <span className="hidden sm:inline">Sites web autorisés</span>
       </button>
     </div>
   )
