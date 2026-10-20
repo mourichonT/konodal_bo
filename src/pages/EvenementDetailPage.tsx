@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { communicationAudienceLabels } from "@/types/communication"
 import { Link, useLocation, useParams } from "react-router-dom"
-import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
+import { doc, getDoc } from "firebase/firestore"
 import { toast } from "sonner"
 import { ArrowLeft, Eye, Mail, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -9,82 +9,12 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { EventFormDialog } from "@/components/EventFormDialog"
 import { PostCommentsCard } from "@/components/PostCommentsCard"
-// ?url : cf. commentaire équivalent dans lib/events.ts (GERANCE_PLACEHOLDER_LOGO_URL).
-import { emailButtonHtml, emailContactHtml, konodalEmailHtml } from "@/lib/emailTemplate"
 import { db } from "@/firebase"
 import { subscribeToEvent, updateEvent, cancelEvent } from "@/lib/events"
+import { findPrestataireMail, sendInterventionEmail } from "@/lib/interventionEmail"
 import { subscribeToRapportsForEvent, type Rapport } from "@/lib/rapports"
 import type { ResidenceEvent } from "@/types/event"
 import { emptyAddress, type Address, type GeranceRef } from "@/types/residence"
-
-// Le lien reste valable jusqu'à 48h après la date d'intervention (le temps
-// pour le prestataire de consulter/déclarer un compte-rendu autour de sa
-// venue), pas une durée fixe depuis l'envoi - fallback 30j si jamais
-// eventDate est absent (ne devrait pas arriver, EventInput l'exige).
-const SHARE_LINK_GRACE_PERIOD_MS = 48 * 60 * 60 * 1000
-const SHARE_LINK_FALLBACK_VALIDITY_MS = 30 * 24 * 60 * 60 * 1000
-
-// Cherche l'email du prestataire choisi parmi les contacts de la résidence
-// (contactRefs déjà chargés sur cette page) en matchant sur le nom - la
-// gérance n'est pas couverte (pas d'email d'agent résolu ici), cf. plan.
-async function findPrestataireMail(
-  contactRefs: Record<string, boolean> | undefined,
-  prestaName: string
-): Promise<string | undefined> {
-  if (!contactRefs || !prestaName) return undefined
-  for (const contactId of Object.keys(contactRefs)) {
-    const snap = await getDoc(doc(db, "contacts", contactId))
-    if (snap.exists() && (snap.data().name as string) === prestaName) {
-      return (snap.data().mail as string) || undefined
-    }
-  }
-  return undefined
-}
-
-// Gabarit commun des mails (lib/emailTemplate.ts).
-function buildInterventionEmailHtml({
-  residenceName,
-  address,
-  event,
-  link,
-}: {
-  residenceName: string
-  address: Address
-  event: ResidenceEvent
-  link: string
-}): string {
-  const dateLabel = event.eventDate
-    ? `${event.eventDate.toLocaleDateString("fr-FR")} à ${event.eventDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
-    : "—"
-  return konodalEmailHtml({
-    title: "Intervention programmée",
-    bodyHtml: `
-            <div style="text-align: center;">
-                <p>Une intervention vous a été assignée dans la résidence :</p>
-                <h2>${residenceName}</h2>
-                <p>${address.street}<br>${address.zipCode} ${address.city}</p>
-            </div>
-
-            <p style="font-size: 16px; text-align: center; margin-top: 20px;"><strong>Intitulé : ${event.title || "Sans titre"}</strong></p>
-
-            ${
-              event.pathImage
-                ? `<div style="text-align: center; margin: 20px 0;">
-                <img src="${event.pathImage}" alt="Illustration Intervention" width="400" style="max-width: 100%; border-radius: 8px;" />
-            </div>`
-                : ""
-            }
-            <p><strong>Prestataire :</strong> ${event.prestaName || "—"}</p>
-            <p><strong>Date d'intervention :</strong> ${dateLabel}</p>
-            <p><strong>Description :</strong><br>
-            ${event.description || "Aucune description."}
-            </p>
-
-        <p style="margin: 30px 0 5px; text-align: center;">Pour plus d'informations</p>
-        ${emailButtonHtml(link, "Consulter l'intervention")}
-        ${emailContactHtml}`,
-  })
-}
 
 export default function EvenementDetailPage() {
   const { residenceId, postId } = useParams<{ residenceId: string; postId: string }>()
@@ -150,32 +80,13 @@ export default function EvenementDetailPage() {
         return
       }
 
-      const token = crypto.randomUUID()
-      const expiresAt = event.eventDate
-        ? new Date(event.eventDate.getTime() + SHARE_LINK_GRACE_PERIOD_MS)
-        : new Date(Date.now() + SHARE_LINK_FALLBACK_VALIDITY_MS)
-      await setDoc(doc(db, "shareTokens", token), {
+      await sendInterventionEmail({
         residenceId,
         postId,
-        createdAt: serverTimestamp(),
-        expiresAt,
-      })
-
-      // BASE_URL porte déjà le préfixe de déploiement (ex: /portail/ sous
-      // konodal.com, / en local) et se termine par un slash - cf.
-      // base dans vite.config.ts.
-      const link = `${window.location.origin}${import.meta.env.BASE_URL}partage/${token}`
-      await addDoc(collection(db, "residences", residenceId, "mail"), {
-        to: [prestataireMail],
-        message: {
-          subject: `Intervention : ${event.title || "Sans titre"}`,
-          html: buildInterventionEmailHtml({
-            residenceName: residenceName ?? "",
-            address: residenceAddress ?? emptyAddress,
-            event,
-            link,
-          }),
-        },
+        residenceName: residenceName ?? "",
+        address: residenceAddress ?? emptyAddress,
+        event,
+        prestataireMail,
       })
       toast.success("Email envoyé au prestataire")
     } catch (error) {

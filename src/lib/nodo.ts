@@ -18,7 +18,7 @@ import { db, functions } from "@/firebase"
 // le panneau l'affiche en direct via onSnapshot, l'appel callable ne sert
 // qu'à déclencher. Conversations privées à leur auteur (firestore.rules).
 
-export type NodoActionType = "communication" | "event" | "email"
+export type NodoActionType = "communication" | "event" | "email" | "intervention"
 export type NodoActionStatus = "pending" | "done" | "cancelled" | "error"
 
 export type NodoAction = {
@@ -40,6 +40,19 @@ export type NodoAction = {
     recipientEmail?: string
     subject?: string
     body?: string
+    // intervention : programmée sur un sinistre, ordre envoyé au prestataire
+    // (cf. _intervention_payload, functions_python/nodo.py).
+    sinistreId?: string
+    ticket?: string
+    sinistreTitle?: string
+    sinistreStatut?: string
+    contactId?: string
+    prestaService?: string
+    prestaMail?: string
+    message?: string
+    reason?: string
+    locationElement?: string
+    locationFloor?: string
   }
 }
 
@@ -136,21 +149,32 @@ export async function sendNodoMessage(conversationId: string, message: string) {
   await call({ conversationId, message })
 }
 
+// Champ du brouillon modifié par l'utilisateur avant confirmation : Nodo en
+// tire des préférences durables (mémoire de l'agence, _learn_from_edits).
+export type NodoActionEdit = { field: string; proposed: string; final: string }
+
 export async function reportNodoActionResult(
   conversationId: string,
   messageId: string,
   actionId: string,
   status: Exclude<NodoActionStatus, "pending">,
-  detail?: string
+  detail?: string,
+  edits?: NodoActionEdit[]
 ) {
   const call = httpsCallable<
     {
       conversationId: string
-      actionResult: { messageId: string; actionId: string; status: string; detail?: string }
+      actionResult: {
+        messageId: string
+        actionId: string
+        status: string
+        detail?: string
+        edits?: NodoActionEdit[]
+      }
     },
     { ok: boolean }
-  >(functions, "nodo_send_message")
-  await call({ conversationId, actionResult: { messageId, actionId, status, detail } })
+  >(functions, "nodo_send_message", { timeout: 60_000 })
+  await call({ conversationId, actionResult: { messageId, actionId, status, detail, edits } })
 }
 
 export async function deleteNodoConversation(uid: string, conversationId: string) {

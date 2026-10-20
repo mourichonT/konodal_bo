@@ -168,8 +168,9 @@ export type EventInput = {
 // Réservé isSuperAdmin() côté firestore.rules (posts/{id}.create) - la règle
 // de base (isResidenceMember + auteur == uid) ne couvre pas le compte
 // backoffice, cf. mémoire projet sur ce lot.
-export async function createEvent(residenceId: string, uid: string, input: EventInput) {
-  await addDoc(collection(db, "residences", residenceId, "posts"), {
+// Renvoie l'id du post créé (envoi de l'ordre d'intervention par Nodo).
+export async function createEvent(residenceId: string, uid: string, input: EventInput): Promise<string> {
+  const ref = await addDoc(collection(db, "residences", residenceId, "posts"), {
     type: "events",
     refResidence: residenceId,
     user: uid,
@@ -192,6 +193,7 @@ export async function createEvent(residenceId: string, uid: string, input: Event
     // Champ absent = tous les résidents, comme Post.toMap() côté app.
     ...(input.audience === "proprietaires" ? { audience: "proprietaires" } : {}),
   })
+  return ref.id
 }
 
 export async function updateEvent(residenceId: string, postId: string, input: EventInput) {
