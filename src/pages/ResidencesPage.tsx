@@ -51,6 +51,30 @@ const ResidencesMap = lazy(() =>
   import("@/components/ResidencesMap").then((m) => ({ default: m.ResidencesMap }))
 )
 
+// Axe des villes du "Top 5" : aussi large que le nom le plus long (mesuré
+// dans la police de la page, une largeur fixe coupait "Castelnau-le-Lez"),
+// plafonné pour laisser la place aux barres - au-delà, le nom est tronqué
+// (…) et reste complet dans l'infobulle.
+const CITY_AXIS_FONT_SIZE = 12
+const CITY_AXIS_MAX_WIDTH = 120
+const CITY_AXIS_GAP = 8
+
+let measureContext: CanvasRenderingContext2D | null = null
+
+function cityLabelWidth(text: string): number {
+  measureContext ??= document.createElement("canvas").getContext("2d")
+  if (!measureContext) return text.length * CITY_AXIS_FONT_SIZE * 0.6
+  measureContext.font = `${CITY_AXIS_FONT_SIZE}px ${getComputedStyle(document.body).fontFamily}`
+  return measureContext.measureText(text).width
+}
+
+function fitCityLabel(city: string, maxWidth: number): string {
+  if (cityLabelWidth(city) <= maxWidth) return city
+  let end = city.length
+  while (end > 1 && cityLabelWidth(`${city.slice(0, end)}…`) > maxWidth) end--
+  return `${city.slice(0, end)}…`
+}
+
 function matchesSearch(residence: Residence, search: string): boolean {
   const haystack = [
     residence.name,
@@ -162,6 +186,11 @@ export default function ResidencesPage() {
       .slice(0, 5)
   }, [scopedResidences])
 
+  const cityAxisWidth = useMemo(() => {
+    const widest = Math.max(0, ...topCities.map(({ city }) => cityLabelWidth(city)))
+    return Math.min(CITY_AXIS_MAX_WIDTH, Math.ceil(widest) + CITY_AXIS_GAP)
+  }, [topCities])
+
   return (
     <div className="flex flex-col gap-6">
 
@@ -194,8 +223,9 @@ export default function ResidencesPage() {
                       dataKey="city"
                       tickLine={false}
                       axisLine={false}
-                      width={70}
-                      tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
+                      width={cityAxisWidth}
+                      tickFormatter={(city: string) => fitCityLabel(city, cityAxisWidth - CITY_AXIS_GAP)}
+                      tick={{ fill: "var(--muted-foreground)", fontSize: CITY_AXIS_FONT_SIZE }}
                     />
                     <Tooltip
                       cursor={{ fill: "var(--muted)" }}
