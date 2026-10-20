@@ -192,7 +192,7 @@ export default function EvenementsCalendarPage() {
       </div>
 
       {viewMode === "reprogrammed" ? (
-        <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
+        <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
           <div className="border-b bg-muted/40 px-4 py-3">
             <h2 className="text-lg">Interventions reprogrammées</h2>
           </div>
@@ -235,7 +235,7 @@ export default function EvenementsCalendarPage() {
             </p>
           )}
           {scheduledByDay.map(({ date, events: dayEvents }) => (
-            <div key={date.toISOString()} className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
+            <div key={date.toISOString()} className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
               <div className="border-b bg-muted/40 px-4 py-3">
                 <h2 className="text-lg capitalize">
                   {date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
@@ -270,7 +270,7 @@ export default function EvenementsCalendarPage() {
           ))}
         </div>
       ) : viewMode === "today" ? (
-        <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
+        <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
           <div className="border-b bg-muted/40 px-4 py-3">
             <h2 className="text-lg capitalize">
               {today.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
@@ -338,7 +338,7 @@ export default function EvenementsCalendarPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
+          <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
             {/* overflow-x-auto + min-width partagé : les 7 colonnes défilent
                 ensemble (en-tête + jours synchronisés) plutôt que de se
                 comprimer sur un écran étroit - aucun effet tant que le
