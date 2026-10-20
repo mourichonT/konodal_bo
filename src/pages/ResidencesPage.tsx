@@ -54,7 +54,10 @@ const ResidencesMap = lazy(() =>
 // Axe des villes du "Top 5" : aussi large que le nom le plus long (mesuré
 // dans la police de la page, une largeur fixe coupait "Castelnau-le-Lez"),
 // plafonné pour laisser la place aux barres - au-delà, le nom est tronqué
-// (…) et reste complet dans l'infobulle.
+// (…) et reste complet dans l'infobulle. Noms alignés à gauche : recharts
+// les ancre à droite, à CITY_AXIS_GAP du bord droit de l'axe (tickSize 0 +
+// tickMargin) ; textAnchor "start" et un décalage de toute la largeur utile
+// les ramènent au bord gauche.
 const CITY_AXIS_FONT_SIZE = 12
 const CITY_AXIS_MAX_WIDTH = 120
 const CITY_AXIS_GAP = 8
@@ -224,8 +227,15 @@ export default function ResidencesPage() {
                       tickLine={false}
                       axisLine={false}
                       width={cityAxisWidth}
+                      tickSize={0}
+                      tickMargin={CITY_AXIS_GAP}
                       tickFormatter={(city: string) => fitCityLabel(city, cityAxisWidth - CITY_AXIS_GAP)}
-                      tick={{ fill: "var(--muted-foreground)", fontSize: CITY_AXIS_FONT_SIZE }}
+                      tick={{
+                        fill: "var(--muted-foreground)",
+                        fontSize: CITY_AXIS_FONT_SIZE,
+                        textAnchor: "start",
+                        dx: -(cityAxisWidth - CITY_AXIS_GAP),
+                      }}
                     />
                     <Tooltip
                       cursor={{ fill: "var(--muted)" }}
