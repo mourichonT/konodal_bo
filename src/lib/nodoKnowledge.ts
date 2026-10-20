@@ -1,13 +1,26 @@
-import { collection, onSnapshot, orderBy, query, type Unsubscribe } from "firebase/firestore"
+import {
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+  type Unsubscribe,
+} from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
-import { db, functions } from "@/firebase"
+import { auth, db, functions } from "@/firebase"
 
 // Base de connaissances de Nodo (articles, procédures, textes de référence),
 // commune à toutes les agences et alimentée par le superAdmin. Ajout et
 // suppression passent par les callables nodo_kb_add_source /
-// nodo_kb_delete_source ; l'indexation (découpage + mots-clés par Haiku) est
-// faite côté serveur par nodo_kb_process (konodal_app/functions_python/
-// nodo_knowledge.py), qui met à jour `status` au fil du traitement.
+// nodo_kb_delete_source ; l'indexation (découpage + vecteurs bge-m3 calculés
+// par OVHcloud AI Endpoints) est faite côté serveur par nodo_kb_process
+// (konodal_app/functions_python/nodo_knowledge.py), qui met à jour `status` au
+// fil du traitement. Chaque lundi, nodo_kb_refresh relit les sources « lien »
+// et réindexe celles qui ont changé (refreshedAt, contentChangedAt,
+// refreshError).
 
 export const KNOWLEDGE_CATEGORIES = ["Juridique", "Procédure", "Technique", "Article", "Autre"] as const
 export type KnowledgeCategory = (typeof KNOWLEDGE_CATEGORIES)[number]
@@ -26,6 +39,9 @@ export type KnowledgeSource = {
   charCount: number
   error?: string | null
   createdAt: Date | null
+  refreshedAt: Date | null
+  contentChangedAt: Date | null
+  refreshError?: string | null
 }
 
 function toDate(value: unknown): Date | null {
@@ -56,6 +72,9 @@ export function subscribeToKnowledgeSources(
             charCount: (data.charCount as number) ?? 0,
             error: data.error as string | null | undefined,
             createdAt: toDate(data.createdAt),
+            refreshedAt: toDate(data.refreshedAt),
+            contentChangedAt: toDate(data.contentChangedAt),
+            refreshError: data.refreshError as string | null | undefined,
           }
         })
       ),
@@ -78,23 +97,168 @@ function fileToBase64(file: File): Promise<string> {
 
 export type KnowledgeSourceInput =
   | { kind: "file"; title: string; category: KnowledgeCategory; file: File }
-  | { kind: "url"; title: string; category: KnowledgeCategory; url: string }
+  // allowWeb : ajoute aussi le site du lien aux sites web autorisés.
+  | { kind: "url"; title: string; category: KnowledgeCategory; url: string; allowWeb?: boolean }
   | { kind: "text"; title: string; category: KnowledgeCategory; text: string }
 
-export async function addKnowledgeSource(input: KnowledgeSourceInput) {
+export async function addKnowledgeSource(input: KnowledgeSourceInput): Promise<string> {
   const call = httpsCallable<Record<string, unknown>, { id: string }>(functions, "nodo_kb_add_source", {
     timeout: 120_000,
   })
   const base = { kind: input.kind, title: input.title, category: input.category }
   if (input.kind === "file") {
-    await call({ ...base, fileName: input.file.name, contentBase64: await fileToBase64(input.file) })
-  } else if (input.kind === "url") {
-    await call({ ...base, url: input.url })
-  } else {
-    await call({ ...base, text: input.text })
+    return (await call({ ...base, fileName: input.file.name, contentBase64: await fileToBase64(input.file) })).data.id
   }
+  if (input.kind === "url") {
+    return (await call({ ...base, url: input.url, allowWeb: !!input.allowWeb })).data.id
+  }
+  return (await call({ ...base, text: input.text })).data.id
+}
+
+// Propositions de fiches écrites chaque lundi par la relecture du journal de
+// Nodo (konodal_app/functions_python/nodo_review.py), à partir des échanges
+// marqués chaque nuit (réponse contestée, lacune, source non lue…). Rien
+// n'entre dans la base sans validation ici : valider ajoute la fiche (et, pour
+// une correction, retire l'ancienne version) ; rejeter la classe. Politique de
+// confidentialité : aucun extrait de conversation ici, seulement des cas
+// décrits sans nom, adresse, lot ni résidence (les échanges restent dans le
+// journal, réservé au superAdmin).
+
+export type KnowledgeProposal = {
+  id: string
+  kind: "nouvelle" | "correction"
+  title: string
+  category: KnowledgeCategory
+  text: string
+  reason: string
+  sources: string[]
+  cases: string[]
+  reasons: string[]
+  channels: string[]
+  targetTitle: string | null
+  targetSourceId: string | null
+  createdAt: Date | null
+}
+
+export function subscribeToKnowledgeProposals(
+  onData: (proposals: KnowledgeProposal[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    query(collection(db, "nodoKnowledgeProposals"), where("status", "==", "pending")),
+    (snapshot) =>
+      onData(
+        snapshot.docs
+          .map((d) => {
+            const data = d.data({ serverTimestamps: "estimate" })
+            const category = KNOWLEDGE_CATEGORIES.find((c) => c === data.category) ?? "Juridique"
+            return {
+              id: d.id,
+              kind: data.kind === "correction" ? "correction" : "nouvelle",
+              title: (data.title as string) ?? "",
+              category,
+              text: (data.text as string) ?? "",
+              reason: (data.reason as string) ?? "",
+              sources: (data.sources as string[]) ?? [],
+              cases: (data.cases as string[]) ?? [],
+              reasons: (data.reasons as string[]) ?? [],
+              channels: (data.channels as string[]) ?? [],
+              targetTitle: (data.targetTitle as string | null) ?? null,
+              targetSourceId: (data.targetSourceId as string | null) ?? null,
+              createdAt: toDate(data.createdAt),
+            } satisfies KnowledgeProposal
+          })
+          .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+      ),
+    onError
+  )
+}
+
+// La nouvelle fiche est ajoutée avant de retirer l'ancienne : en cas d'échec,
+// Nodo garde toujours une version.
+export async function acceptKnowledgeProposal(
+  proposal: KnowledgeProposal,
+  edited: { title: string; category: KnowledgeCategory; text: string }
+) {
+  const sourceId = await addKnowledgeSource({ kind: "text", ...edited })
+  if (proposal.kind === "correction" && proposal.targetSourceId) {
+    await deleteKnowledgeSource(proposal.targetSourceId)
+  }
+  await updateDoc(doc(db, "nodoKnowledgeProposals", proposal.id), {
+    status: "accepted",
+    ...edited,
+    sourceId,
+    decidedAt: serverTimestamp(),
+    decidedBy: auth.currentUser?.uid ?? null,
+  })
+}
+
+export async function rejectKnowledgeProposal(proposal: KnowledgeProposal, reason: string) {
+  await updateDoc(doc(db, "nodoKnowledgeProposals", proposal.id), {
+    status: "rejected",
+    rejectReason: reason.trim() || null,
+    decidedAt: serverTimestamp(),
+    decidedBy: auth.currentUser?.uid ?? null,
+  })
 }
 
 export async function deleteKnowledgeSource(id: string) {
   await httpsCallable<{ id: string }, { ok: boolean }>(functions, "nodo_kb_delete_source")({ id })
 }
+
+// Sites web autorisés de la recherche web de Nodo (nodoConfig/web, lu et
+// écrit par le callable nodo_web_domains, cf. nodo_web.py) : les 9 sites
+// officiels par défaut tant que la liste n'a jamais été modifiée.
+// residence : site local (mairie, intercommunalité) ajouté par Nodo pour une
+// résidence de son territoire (nodo_local.py).
+export type WebDomainOrigin = "défaut" | "manuel" | "base" | "residence"
+// Comment Nodo cherche dans le site : moteur écrit pour lui (« dediee »), ou
+// détecté automatiquement à l'ajout - sa propre recherche (« recherche ») ou
+// une page d'articles (« rubrique ») ; « aucun » ; null = pas encore testé.
+export type WebSearchMode = "dediee" | "recherche" | "rubrique" | "aucun" | null
+export type WebFamily = "officiel" | "presse"
+// direct : recherche dans le site lui-même (SearXNG, cf. konodal_app/searxng) ;
+// sinon par l'outil web d'Anthropic (payant), sauf si le site bloque son
+// robot (filet à false : pages lisibles seulement).
+export type WebDomain = {
+  domain: string
+  origin: WebDomainOrigin
+  addedAt: Date | null
+  direct: boolean
+  filet: boolean
+  mode: WebSearchMode
+  family: WebFamily | null
+  searchUrl: string | null
+  testedAt: Date | null
+  // Site local : territoires couverts (ville, intercommunalité) ; null =
+  // site national, interrogé pour toutes les questions.
+  localTo: string[] | null
+}
+// searxng : recherche directe configurée ; sinon tout passe par l'outil
+// web d'Anthropic, limité aux mêmes sites.
+export type WebDomainsState = { domains: WebDomain[]; searxng: boolean }
+
+type WebDomainsPayload = { action: "list" | "add" | "remove" | "detect"; domain?: string; family?: WebFamily }
+type WebDomainJson = Omit<WebDomain, "addedAt" | "testedAt"> & { addedAt: string | null; testedAt: string | null }
+
+async function callWebDomains(payload: WebDomainsPayload) {
+  // Ajout et nouveau test : Nodo teste la recherche du site (jusqu'à ~1 min).
+  const { data } = await httpsCallable<WebDomainsPayload, { domains: WebDomainJson[]; searxng: boolean }>(
+    functions,
+    "nodo_web_domains",
+    { timeout: 120_000 }
+  )(payload)
+  return {
+    searxng: data.searxng,
+    domains: data.domains.map((d) => ({
+      ...d,
+      addedAt: d.addedAt ? new Date(d.addedAt) : null,
+      testedAt: d.testedAt ? new Date(d.testedAt) : null,
+    })),
+  } satisfies WebDomainsState
+}
+
+export const listWebDomains = () => callWebDomains({ action: "list" })
+export const addWebDomain = (domain: string, family: WebFamily) => callWebDomains({ action: "add", domain, family })
+export const detectWebDomain = (domain: string) => callWebDomains({ action: "detect", domain })
+export const removeWebDomain = (domain: string) => callWebDomains({ action: "remove", domain })
