@@ -26,6 +26,7 @@ import { usePendingUsersCount } from "@/hooks/usePendingUsersCount"
 import { usePendingRemovalRequestsCount } from "@/hooks/usePendingRemovalRequestsCount"
 import { usePendingContactsCount } from "@/hooks/usePendingContactsCount"
 import { usePendingResidenceRequestsCount } from "@/hooks/usePendingResidenceRequestsCount"
+import { usePendingKnowledgeProposalsCount } from "@/hooks/usePendingKnowledgeProposalsCount"
 import { subscribeToUser } from "@/lib/users"
 import { cn } from "@/lib/utils"
 import { EnvBadge } from "./EnvBadge"
@@ -77,7 +78,16 @@ const navItems: NavItem[] = [
 const superAdminNavItems: NavItem[] = [
   { to: "/publicites", label: "Publicités", icon: Megaphone, end: true },
   { to: "/acces", label: "Accès", icon: ShieldCheck },
-  { to: "/nodo/connaissances", label: "Base Nodo", icon: Library },
+  {
+    to: "/nodo/connaissances",
+    label: "Base Nodo",
+    icon: Library,
+    children: [
+      { to: "/nodo/connaissances/sources", label: "Sources" },
+      { to: "/nodo/connaissances/propositions", label: "Propositions" },
+      { to: "/nodo/connaissances/sites", label: "Sites web autorisés" },
+    ],
+  },
 ]
 
 function initialsFor(name?: string | null, email?: string | null): string {
@@ -143,6 +153,7 @@ export function Sidebar() {
   const pendingContactsCount = usePendingContactsCount()
   const pendingResidenceRequestsCount = usePendingResidenceRequestsCount(isSuperAdmin)
   const pendingRemovalRequestsCount = usePendingRemovalRequestsCount(isSuperAdmin)
+  const pendingKnowledgeProposalsCount = usePendingKnowledgeProposalsCount(isSuperAdmin)
   const location = useLocation()
   // profil.profilPic n'est pas porté par Firebase Auth (displayName/photoURL
   // ne sont jamais renseignés côté résident) - souscription dédiée à sa
@@ -199,6 +210,7 @@ export function Sidebar() {
     "/residences/demandes": pendingResidenceRequestsCount,
     "/residents": pendingUsersCount,
     "/residents/retraits": pendingRemovalRequestsCount,
+    "/nodo/connaissances/propositions": pendingKnowledgeProposalsCount,
   }
   const allNavItems: NavItem[] = isSuperAdmin ? [...withResidenceChildren, ...superAdminNavItems] : baseNavItems
   const [openSections, toggleSection] = useOpenSections(allNavItems)

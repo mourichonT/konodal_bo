@@ -123,8 +123,11 @@ function App() {
             </RequireSuperAdmin>
           }
         />
+        {/* Base Nodo : une page, trois vues (Sources / Propositions / Sites web
+            autorisés) atteintes directement depuis le sous-menu, comme Sinistres. */}
+        <Route path="nodo/connaissances" element={<Navigate to="sources" replace />} />
         <Route
-          path="nodo/connaissances"
+          path="nodo/connaissances/:vue"
           element={
             <RequireSuperAdmin>
               <NodoKnowledgePage />

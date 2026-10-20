@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 import {
   Check,
@@ -115,6 +116,10 @@ const SEARCH_MODE_LABEL: Record<NonNullable<WebSearchMode>, string> = {
 }
 
 type View = "sources" | "proposals" | "web"
+
+// Chaque vue a son adresse (/nodo/connaissances/<chemin>), atteinte
+// directement depuis le sous-menu Base Nodo, comme Sinistres.
+const VIEW_PATH: Record<View, string> = { sources: "sources", proposals: "propositions", web: "sites" }
 
 // Bascule Sources / Propositions / Sites web autorisés, même style que
 // UsersSectionToggle.
@@ -392,7 +397,10 @@ export default function NodoKnowledgePage() {
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState<KnowledgeSource | null>(null)
-  const [view, setView] = useState<View>("sources")
+  const { vue } = useParams()
+  const navigate = useNavigate()
+  const view = (Object.keys(VIEW_PATH) as View[]).find((key) => VIEW_PATH[key] === vue) ?? "sources"
+  const setView = (next: View) => navigate(`/nodo/connaissances/${VIEW_PATH[next]}`)
   const [proposals, setProposals] = useState<KnowledgeProposal[]>([])
   const [proposalsLoading, setProposalsLoading] = useState(true)
 
