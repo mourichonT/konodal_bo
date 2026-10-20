@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, ChevronDown, Eye, GripVertical, Home, Info, MoreVertical, Plus, Search, Settings2, ShieldOff, Trash2, Upload, UserPlus, Vote as VoteIcon, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Eye, GripVertical, Home, Info, MapPin, MoreVertical, Plus, Search, Settings2, ShieldOff, Trash2, Upload, UserPlus, Vote as VoteIcon, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -46,6 +46,7 @@ import {
   setCsMember,
   subscribeToResidence,
   updateResidence,
+  updateResidenceAlternateAddresses,
   updateResidenceGeranceRef,
   type ResidenceInput,
 } from "@/lib/residences"
@@ -81,7 +82,7 @@ import { subscribeToGerances } from "@/lib/gerances"
 import { resolveUsersByUids } from "@/lib/users"
 import { deleteVote, subscribeToVotes } from "@/lib/votes"
 import { useAuth } from "@/lib/auth-context"
-import { emptyAddress, type Residence } from "@/types/residence"
+import { emptyAddress, type Address, type Residence } from "@/types/residence"
 import { structureElementOptions, structureTypeOptions, type StructureResidence } from "@/types/structure"
 import { defaultIsLinkableForType, typeLotOptions, type Lot } from "@/types/lot"
 import { AGENT_UID_FIELD, serviceTypeLabels, type Gerance, type ServiceType } from "@/types/gerance"
@@ -516,6 +517,8 @@ function InfoSection({ residence }: { residence: Residence }) {
           </div>
         </div>
 
+        <AlternateAddresses residence={residence} />
+
         {isSuperAdmin && (
           <div className="flex flex-col gap-3 border-t pt-4">
             <Label>Gérance rattachée</Label>
@@ -568,6 +571,147 @@ function InfoSection({ residence }: { residence: Residence }) {
         </Button>
       </CardContent>
     </Card>
+  )
+}
+
+// Adresses alternatives (autre entrée, autre voie qui dessert la résidence) -
+// même bloc que l'app mobile (management_res_info_g.dart) : liste avec
+// suppression, ajout par recherche d'adresse, chaque changement enregistré
+// aussitôt (indépendant du bouton "Enregistrer" des autres champs).
+// codeQualite "00" quand une suggestion de l'API Adresse est choisie, "60"
+// dès que la rue est retouchée à la main - même règle que l'app.
+function AlternateAddresses({ residence }: { residence: Residence }) {
+  const addresses = residence.alternateAddresses ?? []
+  const [adding, setAdding] = useState(false)
+  const [street, setStreet] = useState("")
+  const [zipCode, setZipCode] = useState("")
+  const [city, setCity] = useState("")
+  const [codeQualite, setCodeQualite] = useState("60")
+  const [saving, setSaving] = useState(false)
+
+  function resetForm() {
+    setStreet("")
+    setZipCode("")
+    setCity("")
+    setCodeQualite("60")
+  }
+
+  async function save(next: Address[]): Promise<boolean> {
+    setSaving(true)
+    try {
+      await updateResidenceAlternateAddresses(residence.id, next)
+      return true
+    } catch (err) {
+      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleAdd() {
+    const address: Address = {
+      ...emptyAddress,
+      street: street.trim(),
+      zipCode: zipCode.trim(),
+      city: city.trim(),
+      codeQualite,
+    }
+    if (!address.street || !address.zipCode || !address.city) {
+      toast.error("Renseignez l'adresse, le code postal et la ville.")
+      return
+    }
+    if (await save([...addresses, address])) {
+      setAdding(false)
+      resetForm()
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {addresses.length > 0 && (
+        <>
+          <Label>Adresses alternatives</Label>
+          <ul className="flex flex-col gap-2">
+            {addresses.map((address, index) => (
+              <li
+                key={`${address.street}|${address.zipCode}|${index}`}
+                className="flex items-center gap-3 rounded-lg bg-muted/60 px-3 py-2"
+              >
+                <MapPin className="size-4 shrink-0 text-muted-foreground" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm">{address.street}</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {`${address.zipCode} ${address.city}`.trim()}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Supprimer cette adresse"
+                  disabled={saving}
+                  onClick={() => save(addresses.filter((_, i) => i !== index))}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {adding ? (
+        <div className="flex flex-col gap-3 rounded-lg border p-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="alt-street">Adresse alternative</Label>
+            <AddressAutocompleteInput
+              id="alt-street"
+              value={street}
+              onChange={(value) => {
+                setStreet(value)
+                setCodeQualite("60")
+              }}
+              onSelect={(a) => {
+                setStreet(a.street)
+                setZipCode(a.zipCode)
+                setCity(a.city)
+                setCodeQualite("00")
+              }}
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="alt-zip">Code postal</Label>
+              <ZipCodeCityInput id="alt-zip" value={zipCode} onChange={setZipCode} onCityResolved={setCity} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="alt-city">Ville</Label>
+              <Input id="alt-city" value={city} onChange={(e) => setCity(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button className={PRIMARY_CTA_CLASS} onClick={handleAdd} disabled={saving}>
+              Ajouter
+            </Button>
+            <Button
+              variant="outline"
+              disabled={saving}
+              onClick={() => {
+                setAdding(false)
+                resetForm()
+              }}
+            >
+              Annuler
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" className="w-fit" onClick={() => setAdding(true)}>
+          <Plus className="size-4" />
+          Ajouter une adresse alternative
+        </Button>
+      )}
+    </div>
   )
 }
 

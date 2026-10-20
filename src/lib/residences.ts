@@ -102,6 +102,13 @@ export async function updateResidence(id: string, input: ResidenceInput) {
   await updateDoc(doc(db, "residences", id), { ...input })
 }
 
+// Liste réécrite en entier à chaque ajout ou suppression, enregistrée
+// aussitôt - même écriture que l'app mobile (management_res_info_g.dart,
+// _saveAlternateAddresses).
+export async function updateResidenceAlternateAddresses(id: string, addresses: Address[]) {
+  await updateDoc(doc(db, "residences", id), { alternateAddresses: addresses })
+}
+
 export async function updateResidenceGeo(id: string, lat: number, lng: number) {
   await updateDoc(doc(db, "residences", id), { lat, lng })
 }

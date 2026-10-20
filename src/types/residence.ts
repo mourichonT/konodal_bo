@@ -22,6 +22,12 @@ export type Residence = {
   id: string
   name: string
   address: Address
+  // Autres adresses de la résidence (autre entrée, autre voie qui la
+  // dessert) - même champ que Residence.alternateAddresses côté app mobile
+  // (residence.dart) : la recherche de résidence à l'inscription et le
+  // contrôle du justificatif de domicile (verify_home_proof_document) les
+  // acceptent comme l'adresse principale.
+  alternateAddresses?: Address[]
   mail_contact?: string
   csmembers?: string[]
   totalLot: number
