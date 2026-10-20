@@ -185,9 +185,45 @@ const REASON_LABEL: Record<string, string> = {
   redactionJointe: "Rédaction",
 }
 
+type ProposalDraft = { title: string; category: KnowledgeCategory; text: string }
+
 // Propositions de fiches de la relecture hebdomadaire du journal : chacune
-// se valide (ajout à la base), se modifie avant validation ou se rejette.
+// se valide (ajout à la base), se modifie avant validation ou se rejette ;
+// « Tout valider » les ajoute toutes, telles qu'affichées (modifications en
+// cours comprises), après confirmation. Les brouillons sont gardés ici, pas
+// dans chaque carte, pour que la validation groupée les voie.
 function ProposalsPanel({ proposals, loading }: { proposals: KnowledgeProposal[]; loading: boolean }) {
+  const [drafts, setDrafts] = useState<Record<string, ProposalDraft>>({})
+  const [confirmAll, setConfirmAll] = useState(false)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const draftOf = (p: KnowledgeProposal): ProposalDraft =>
+    drafts[p.id] ?? { title: p.title, category: p.category, text: p.text }
+  const ready = proposals.filter((p) => draftOf(p).title.trim() && draftOf(p).text.trim())
+
+  async function handleAcceptAll() {
+    const list = [...ready]
+    setProgress({ done: 0, total: list.length })
+    let done = 0
+    for (const proposal of list) {
+      const draft = draftOf(proposal)
+      try {
+        await acceptKnowledgeProposal(proposal, {
+          title: draft.title.trim(),
+          category: draft.category,
+          text: draft.text.trim(),
+        })
+        done++
+        setProgress({ done, total: list.length })
+      } catch (err) {
+        toast.error(`« ${draft.title} » non validée : ${(err as Error).message}`)
+        break
+      }
+    }
+    setProgress(null)
+    setConfirmAll(false)
+    if (done > 0) toast.success(`${done} fiche${done > 1 ? "s" : ""} ajoutée${done > 1 ? "s" : ""} à la base`)
+  }
+
   if (loading) {
     return (
       <div className={cn(CARD_CLASS, "flex justify-center px-10 py-16")}>
@@ -210,17 +246,76 @@ function ProposalsPanel({ proposals, loading }: { proposals: KnowledgeProposal[]
   }
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-[13px] text-muted-foreground">
+          <b className="text-foreground">{proposals.length}</b> proposition{proposals.length > 1 ? "s" : ""} en
+          attente de validation
+        </div>
+        <Button
+          onClick={() => setConfirmAll(true)}
+          disabled={progress !== null || ready.length === 0}
+          className={PRIMARY_CTA_CLASS}
+        >
+          <Check />
+          Tout valider
+        </Button>
+      </div>
+
       {proposals.map((proposal) => (
-        <ProposalCard key={proposal.id} proposal={proposal} />
+        <ProposalCard
+          key={proposal.id}
+          proposal={proposal}
+          draft={draftOf(proposal)}
+          onDraftChange={(draft) => setDrafts((prev) => ({ ...prev, [proposal.id]: draft }))}
+          locked={progress !== null}
+        />
       ))}
+
+      <Dialog open={confirmAll} onOpenChange={(open) => !open && progress === null && setConfirmAll(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="pb-4">
+            <DialogTitle>Valider toutes les propositions ?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {ready.length} fiche{ready.length > 1 ? "s" : ""} {ready.length > 1 ? "seront ajoutées" : "sera ajoutée"}{" "}
+            à la base, telles qu'affichées ; pour une correction, l'ancienne version est retirée. Nodo s'en servira
+            aussitôt pour toutes les agences et tous les résidents.
+          </p>
+          {progress && (
+            <p className="text-sm font-semibold">
+              Validation en cours : {progress.done} / {progress.total}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmAll(false)} disabled={progress !== null}>
+              Annuler
+            </Button>
+            <Button onClick={handleAcceptAll} disabled={progress !== null} className={PRIMARY_CTA_CLASS}>
+              {progress ? <LoaderCircle className="animate-spin" /> : <Check />}
+              Tout valider
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
-function ProposalCard({ proposal }: { proposal: KnowledgeProposal }) {
-  const [title, setTitle] = useState(proposal.title)
-  const [category, setCategory] = useState<KnowledgeCategory>(proposal.category)
-  const [text, setText] = useState(proposal.text)
+function ProposalCard({
+  proposal,
+  draft,
+  onDraftChange,
+  locked,
+}: {
+  proposal: KnowledgeProposal
+  draft: ProposalDraft
+  onDraftChange: (draft: ProposalDraft) => void
+  locked: boolean
+}) {
+  const { title, category, text } = draft
+  const setTitle = (value: string) => onDraftChange({ ...draft, title: value })
+  const setCategory = (value: KnowledgeCategory) => onDraftChange({ ...draft, category: value })
+  const setText = (value: string) => onDraftChange({ ...draft, text: value })
   const [editing, setEditing] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
@@ -356,10 +451,10 @@ function ProposalCard({ proposal }: { proposal: KnowledgeProposal }) {
             aria-label="Raison du rejet"
           />
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setRejecting(false)} disabled={busy !== null}>
+            <Button variant="outline" onClick={() => setRejecting(false)} disabled={locked || busy !== null}>
               Annuler
             </Button>
-            <Button variant="destructive" onClick={handleReject} disabled={busy !== null}>
+            <Button variant="destructive" onClick={handleReject} disabled={locked || busy !== null}>
               {busy === "reject" && <LoaderCircle className="animate-spin" />}
               Rejeter
             </Button>
@@ -367,17 +462,17 @@ function ProposalCard({ proposal }: { proposal: KnowledgeProposal }) {
         </div>
       ) : (
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="outline" onClick={() => setRejecting(true)} disabled={busy !== null}>
+          <Button variant="outline" onClick={() => setRejecting(true)} disabled={locked || busy !== null}>
             <X />
             Rejeter
           </Button>
-          <Button variant="outline" onClick={() => setEditing(!editing)} disabled={busy !== null}>
+          <Button variant="outline" onClick={() => setEditing(!editing)} disabled={locked || busy !== null}>
             <Pencil />
             {editing ? "Terminer la modification" : "Modifier"}
           </Button>
           <Button
             onClick={handleAccept}
-            disabled={busy !== null || !title.trim() || !text.trim()}
+            disabled={locked || busy !== null || !title.trim() || !text.trim()}
             className={PRIMARY_CTA_CLASS}
           >
             {busy === "accept" ? <LoaderCircle className="animate-spin" /> : <Check />}
