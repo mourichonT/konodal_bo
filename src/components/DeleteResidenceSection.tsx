@@ -109,11 +109,17 @@ export function DeleteResidenceSection({ residence }: { residence: Residence }) 
                           summary.residents,
                           "résident",
                           "résidents"
-                        )} sur un lot, ${plural(summary.csMembers, "membre", "membres")} du conseil syndical). Leurs lots sont archivés dans leur historique.`}
+                        )} sur un lot, ${plural(summary.csMembers, "membre", "membres")} du conseil syndical).${
+                          summary.residents > 0 ? " Les lots des résidents sont archivés dans leur historique." : ""
+                        }`}
                   </p>
                   <div className="flex flex-col gap-1.5">
+                    {/* Un seul bloc dans le Label : il est en flex, la phrase et le
+                        nom en gras se coupaient sinon chacun de leur côté. */}
                     <Label htmlFor="delete-residence-name">
-                      Pour confirmer, saisissez le nom de la résidence : <strong>{residence.name}</strong>
+                      <span className="leading-snug">
+                        Pour confirmer, saisissez le nom de la résidence : <strong>{residence.name}</strong>
+                      </span>
                     </Label>
                     <Input
                       id="delete-residence-name"
