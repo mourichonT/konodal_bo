@@ -32,6 +32,19 @@ const SUGGESTIONS = [
 const MARKDOWN_CLASS =
   "text-[13.5px] leading-relaxed text-[oklch(24%_0.01_150)] [&_a]:font-semibold [&_a]:text-[oklch(40%_0.09_155)] [&_a]:underline [&_code]:rounded [&_code]:bg-[oklch(95%_0.005_100)] [&_code]:px-1 [&_h1]:mt-3 [&_h1]:mb-1 [&_h1]:text-[15px] [&_h1]:font-extrabold [&_h2]:mt-3 [&_h2]:mb-1 [&_h2]:text-[14.5px] [&_h2]:font-extrabold [&_h3]:mt-2 [&_h3]:mb-1 [&_h3]:font-bold [&_li]:my-0.5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_strong]:font-bold [&_td]:border [&_td]:border-[oklch(92%_0.005_100)] [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-[oklch(92%_0.005_100)] [&_th]:bg-[oklch(97%_0.004_100)] [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5"
 
+// Ligne « Source(s) : … » d'une réponse de Nodo (cf. prompt, nodo.py) : citée
+// à part, en petit, pour ne pas se confondre avec la réponse.
+const SOURCE_LINE = /^\s*sources?\s*:/i
+const SOURCE_CLASS =
+  "mt-3 border-t border-[oklch(93%_0.005_100)] pt-2 text-[11.5px] italic leading-snug text-[oklch(50%_0.01_150)]"
+
+function hastText(node: unknown): string {
+  const current = node as { value?: unknown; children?: unknown[] } | undefined
+  if (!current) return ""
+  if (typeof current.value === "string") return current.value
+  return (current.children ?? []).map(hastText).join("")
+}
+
 function formatConversationDate(date: Date | null): string {
   if (!date) return ""
   return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -255,6 +268,9 @@ export function NodoPanel({ onClose }: { onClose: () => void }) {
                                 </div>
                               ),
                               a: (props) => <a target="_blank" rel="noreferrer" {...props} />,
+                              p: ({ node, ...props }) => (
+                                <p {...props} className={SOURCE_LINE.test(hastText(node)) ? SOURCE_CLASS : undefined} />
+                              ),
                             }}
                           >
                             {message.text}
