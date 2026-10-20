@@ -5,28 +5,27 @@ import { doc, onSnapshot } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
 import { Button } from "@/components/ui/button"
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
-import type { Residence } from "@/types/residence"
 
-type FilterPayload = { residenceId?: string; geranceId?: string; enabled: boolean }
+type FilterPayload = { geranceId: string; enabled: boolean }
 
 // « Nodo répond aux copropriétaires » (filtre des mails au syndic,
-// functions_python/nodo_mail.py) : réglé par le compte agence du syndic de la
-// résidence - pas un agent - ou un administrateur Konodal
-// (set_nodo_mail_filter, qui revérifie le rôle), désactivé par défaut. La
-// fiche suit le réglage par l'abonnement à la résidence. Activation fermée
-// tant que config/app.nodoMailFilterAvailable est faux (app des stores qui
-// n'affiche pas encore les réponses de Nodo) : carte cachée à l'agence,
-// bouton grisé pour le superAdmin ; désactiver reste possible.
-export function NodoMailFilterSection({ residenceId, residence }: { residenceId: string; residence: Residence }) {
+// functions_python/nodo_mail.py) : option de l'agence, valable pour toutes
+// les résidences dont elle est le syndic (gerances/{id}.nodoMailFilter),
+// désactivée par défaut. Réglée par le compte agence - pas un agent - ou un
+// administrateur Konodal (set_nodo_mail_filter, qui revérifie le rôle ;
+// firestore.rules interdit l'écriture directe). Activation fermée tant que
+// config/app.nodoMailFilterAvailable est faux (app des stores qui n'affiche
+// pas encore les réponses de Nodo) : cachée à l'agence, bouton grisé pour le
+// superAdmin ; désactiver reste possible.
+export function NodoMailFilterSection({ geranceId }: { geranceId: string }) {
   const { isSuperAdmin, isAgence, geranceId: ownGeranceId } = useAccountRole()
   const [saving, setSaving] = useState(false)
   const [available, setAvailable] = useState(false)
-  const enabled = residence.nodoMailFilter?.enabled === true
-  const geranceId = residence.geranceRef?.geranceId
-  const isResidenceAgence = isAgence && !!geranceId && geranceId === ownGeranceId
+  const [enabled, setEnabled] = useState(false)
+  const [isSyndic, setIsSyndic] = useState(false)
+  const isOwnAgence = isAgence && geranceId === ownGeranceId
 
   useEffect(
     () =>
@@ -38,13 +37,30 @@ export function NodoMailFilterSection({ residenceId, residence }: { residenceId:
     []
   )
 
-  if (!isSuperAdmin && !(isResidenceAgence && (available || enabled))) return null
+  useEffect(
+    () =>
+      onSnapshot(
+        doc(db, "gerances", geranceId),
+        (snap) => {
+          setEnabled(snap.data()?.nodoMailFilter?.enabled === true)
+          setIsSyndic(!!snap.data()?.services?.serviceSyndic)
+        },
+        () => setIsSyndic(false)
+      ),
+    [geranceId]
+  )
 
-  async function save(payload: FilterPayload, done: (updated: number) => string) {
+  if (!isSyndic) return null
+  if (!isSuperAdmin && !(isOwnAgence && (available || enabled))) return null
+
+  async function toggle() {
     setSaving(true)
     try {
-      const result = await httpsCallable<FilterPayload, { updated: number }>(functions, "set_nodo_mail_filter")(payload)
-      toast.success(done(result.data.updated))
+      await httpsCallable<FilterPayload, { enabled: boolean }>(functions, "set_nodo_mail_filter")({
+        geranceId,
+        enabled: !enabled,
+      })
+      toast.success(enabled ? "Nodo ne répond plus aux résidents" : "Nodo répond aux résidents de vos résidences")
     } catch (err) {
       toast.error("Réglage impossible : " + (err instanceof Error ? err.message : String(err)))
     } finally {
@@ -53,57 +69,41 @@ export function NodoMailFilterSection({ residenceId, residence }: { residenceId:
   }
 
   return (
-    <Card className="[--card-spacing:--spacing(7)]">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg font-extrabold text-[oklch(22%_0.01_150)]">
-          <Sparkles className="size-4 text-primary" />
-          Nodo répond aux copropriétaires
-        </CardTitle>
-        <CardDescription className="max-w-[560px] leading-normal">
-          Quand un résident vous écrit depuis l'application, Nodo lit son message. S'il peut répondre à toute la
-          demande (règle, fonctionnement de la copropriété, documents et publications de la résidence), il répond à
-          votre place et le message ne vous est pas envoyé ; le résident peut toujours vous le transmettre. Sinon, ou au
-          moindre doute, le message vous parvient comme aujourd'hui. Les messages traités par Nodo restent visibles dans
-          les échanges mails de chaque résident. Fonctionne avec l'option CS avancé.
-        </CardDescription>
-        <CardAction>
-          <Button
-            disabled={saving || (!enabled && !available)}
-            className={cn("h-10 rounded-[12px] px-[18px] text-[13px] font-bold", !enabled && PRIMARY_CTA_CLASS)}
-            variant={enabled ? "outline" : "default"}
-            onClick={() =>
-              save({ residenceId, enabled: !enabled }, () => (enabled ? "Nodo ne répond plus aux résidents" : "Nodo répond aux résidents"))
-            }
-          >
-            {enabled ? "Désactiver" : "Activer"}
-          </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="flex flex-wrap items-center gap-3 text-sm">
-        <span className={cn("font-bold", enabled ? "text-[oklch(42%_0.08_155)]" : "text-[oklch(52%_0.01_150)]")}>
-          {enabled ? "Activé pour cette résidence" : "Désactivé pour cette résidence"}
-        </span>
-        {isResidenceAgence && available && (
-          <Button
-            variant="outline"
-            disabled={saving}
-            className="h-9 rounded-[10px] text-[13px]"
-            onClick={() =>
-              save({ geranceId, enabled: true }, (updated) =>
-                `Activé pour ${updated} résidence${updated > 1 ? "s" : ""} de votre cabinet`
-              )
-            }
-          >
-            Activer pour toutes mes résidences
-          </Button>
-        )}
-        {!available && (
-          <span className="basis-full text-muted-foreground">
-            Pas encore ouvert : à activer quand la version de l'application qui affiche les réponses de Nodo sera
-            publiée{isSuperAdmin && " (config/app.nodoMailFilterAvailable)"}.
+    <div className="flex flex-col gap-2.5 rounded-2xl bg-[oklch(97%_0.006_155)] p-[14px_18px] text-[12.5px]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <span className="flex items-center gap-2 font-bold text-[oklch(30%_0.01_150)]">
+            <Sparkles className="size-4 text-primary" />
+            Nodo répond aux copropriétaires
           </span>
-        )}
-      </CardContent>
-    </Card>
+          <span className="max-w-[560px] leading-normal text-muted-foreground">
+            Pour toutes les résidences dont l'agence est le syndic. Quand un résident écrit au syndic depuis
+            l'application, Nodo lit son message. S'il peut répondre à toute la demande (règle, fonctionnement de la
+            copropriété, documents et publications de la résidence), il répond à la place du syndic et le message
+            n'est pas envoyé ; le résident peut toujours le transmettre. Une demande (travaux, accord, ordre du jour…)
+            ou le moindre doute : le message part au syndic comme aujourd'hui. Les messages traités par Nodo restent
+            visibles dans les échanges mails de chaque résident.
+          </span>
+        </div>
+        <Button
+          type="button"
+          disabled={saving || (!enabled && !available)}
+          className={cn("h-9 shrink-0 rounded-[10px] px-4 text-[13px] font-bold", !enabled && PRIMARY_CTA_CLASS)}
+          variant={enabled ? "outline" : "default"}
+          onClick={toggle}
+        >
+          {enabled ? "Désactiver" : "Activer"}
+        </Button>
+      </div>
+      <span className={cn("font-bold", enabled ? "text-[oklch(42%_0.08_155)]" : "text-[oklch(52%_0.01_150)]")}>
+        {enabled ? "Activé pour toutes les résidences de l'agence" : "Désactivé"}
+      </span>
+      {!available && (
+        <span className="text-muted-foreground">
+          Pas encore ouvert : à activer quand la version de l'application qui affiche les réponses de Nodo sera
+          publiée{isSuperAdmin && " (config/app.nodoMailFilterAvailable)"}.
+        </span>
+      )}
+    </div>
   )
 }

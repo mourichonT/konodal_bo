@@ -23,7 +23,7 @@ import EvenementsCalendarPage from "@/pages/EvenementsCalendarPage"
 import EvenementDetailPage from "@/pages/EvenementDetailPage"
 import CommunicationsPage from "@/pages/CommunicationsPage"
 import CommunicationDetailPage from "@/pages/CommunicationDetailPage"
-import AgencesPage from "@/pages/AgencesPage"
+import AgencesPage, { AgenceDetailPage } from "@/pages/AgencesPage"
 import ContactsPage from "@/pages/ContactsPage"
 import ContactDetailPage from "@/pages/ContactDetailPage"
 import DocumentsPage from "@/pages/DocumentsPage"
@@ -102,6 +102,14 @@ function App() {
         />
         <Route path="residents/:uid" element={<ResidentDetailPage />} />
         <Route path="agences" element={<AgencesPage />} />
+        <Route
+          path="agences/:id"
+          element={
+            <RequireSuperAdmin>
+              <AgenceDetailPage />
+            </RequireSuperAdmin>
+          }
+        />
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="contacts/:id" element={<ContactDetailPage />} />
         <Route path="documents" element={<DocumentsPage />} />
