@@ -306,6 +306,7 @@ export default function AgencesPage() {
                           <Button
                             variant="outline"
                             size="sm"
+                            nativeButton={false}
                             render={<Link to={`/agences/${gerance.id}`} />}
                           >
                             <Pencil />
