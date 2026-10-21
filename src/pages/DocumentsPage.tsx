@@ -1,616 +1,543 @@
-import { Fragment, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ChevronDown, ChevronRight, Eye, EyeOff, FileText, Plus, Search, Trash2 } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { ChevronRight, Search, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { SearchableSelect } from "@/components/SearchableSelect"
+import { GedNavigator } from "@/components/ged/GedNavigator"
+import { GedOverviewPanel } from "@/components/ged/GedOverviewPanel"
+import { GedDocumentTable, type GedAction } from "@/components/ged/GedDocumentTable"
+import { GedDocumentSheet } from "@/components/ged/GedDocumentSheet"
+import { GedImportDialog } from "@/components/ged/GedImportDialog"
+import { foundPath } from "@/components/ged/gedShared"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { ResidenceDocumentFormDialog } from "@/components/ResidenceDocumentFormDialog"
-import { LotDocumentFormDialog } from "@/components/LotDocumentFormDialog"
-import {
-  useAllResidenceDocuments,
-  type ResidenceDocumentWithResidence,
-} from "@/hooks/useAllResidenceDocuments"
-import { useAllLots, type LotWithResidence } from "@/hooks/useAllLots"
-import { createResidenceDocument, deleteResidenceDocument, setResidenceDocumentAdminOnly } from "@/lib/residenceDocuments"
+  RECENT_KEY,
+  readStoredIds,
+  selectedResidenceId,
+  selectionFromParams,
+  selectionToParams,
+  writeStoredIds,
+  type GedSelection,
+} from "@/components/ged/gedSelection"
+import { useScopedResidences } from "@/hooks/useScopedResidenceIds"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
-import { createLotDocument, deleteLotDocument, subscribeToLotDocuments } from "@/lib/lotDocuments"
-import { lotDisplayLabel } from "@/types/lot"
-import { resolveUserLabels } from "@/lib/users"
-import { LOT_DOCUMENT_CATEGORIES, RESIDENCE_DOCUMENT_CATEGORIES } from "@/types/document"
-import { DateInput } from "@/components/DateInput"
-import { ClearFiltersButton } from "@/components/ClearFiltersButton"
-import { inDateRange } from "@/lib/filters"
-import type { LotDocument } from "@/types/document"
+import { subscribeToLots } from "@/lib/lots"
+import { subscribeToStructures } from "@/lib/structures"
+import {
+  fetchGedOverview,
+  findGedDocuments,
+  foundToDocument,
+  foundToKey,
+  gedFileUrl,
+  purgeGedDocument,
+  restoreGedDocument,
+  setGedVisibility,
+  subscribeToLotGed,
+  subscribeToResidenceGed,
+  trashGedDocument,
+  type GedTarget,
+} from "@/lib/ged"
+import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
+import { lotDisplayLabel, type Lot } from "@/types/lot"
+import type { StructureResidence } from "@/types/structure"
+import { defaultResidenceVisibility, type GedDocument, type GedFoundDocument, type GedOverview } from "@/types/ged"
 
-function formatDate(date: Date | null): string {
-  return date ? date.toLocaleDateString("fr-FR") : "—"
-}
+type Confirmation = { action: "share" | "internal" | "purge"; documents: GedDocument[] }
 
+// Onglet Documents (GED, maquette « GED Konodal BO ») : navigation résidences
+// → bâtiments → lots à gauche, vue d'ensemble / tableau à droite, fiche du
+// document en panneau. Chaque document reste à sa place (documents_copro,
+// documents de lot de l'app) ; la vue d'ensemble, la recherche, la corbeille
+// et les non partagés passent par functions_python/ged.py.
 export default function DocumentsPage() {
-  return (
-    <div className="flex flex-col gap-8">
-      <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Documents</h1>
-      <ResidenceDocumentsSection />
-      <LotDocumentsSection />
-    </div>
-  )
-}
-
-function ResidenceDocumentsSection() {
-  const { documents, residences, loading } = useAllResidenceDocuments((message) => toast.error(message))
-  const [search, setSearch] = useState("")
-  const [residenceFilter, setResidenceFilter] = useState("all")
-  const [categoryFilter, setCategoryFilter] = useState("all")
-  const [dateFrom, setDateFrom] = useState("")
-  const [dateTo, setDateTo] = useState("")
-  const [creating, setCreating] = useState(false)
-  const [deleting, setDeleting] = useState<ResidenceDocumentWithResidence | null>(null)
-  const [sharing, setSharing] = useState<ResidenceDocumentWithResidence | null>(null)
-  const [expandedResidenceIds, setExpandedResidenceIds] = useState<Set<string>>(new Set())
+  const [params, setParams] = useSearchParams()
+  const selection = useMemo(() => selectionFromParams(params), [params])
+  const residenceId = selectedResidenceId(selection)
+  const { residences, loading: residencesLoading } = useScopedResidences()
   const { isSuperAdmin } = useIsSuperAdmin()
 
-  const filteredDocuments = documents.filter((d) => {
-    if (residenceFilter !== "all" && d.residenceId !== residenceFilter) return false
-    if (categoryFilter !== "all" && d.category !== categoryFilter) return false
-    if (!inDateRange(d.timeStamp, dateFrom, dateTo)) return false
-    if (!search.trim()) return true
-    return [d.name, d.category, d.residenceName].join(" ").toLowerCase().includes(search.toLowerCase())
-  })
+  const [overview, setOverview] = useState<GedOverview | null>(null)
+  const [overviewLoading, setOverviewLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [structures, setStructures] = useState<StructureResidence[]>([])
+  const [lots, setLots] = useState<Lot[]>([])
+  const [residenceDocuments, setResidenceDocuments] = useState<GedDocument[]>([])
+  const [lotDocuments, setLotDocuments] = useState<GedDocument[]>([])
+  const [scopeLoading, setScopeLoading] = useState(false)
+  const [found, setFound] = useState<GedFoundDocument[]>([])
+  const [foundTotal, setFoundTotal] = useState(0)
+  const [foundLoading, setFoundLoading] = useState(false)
+  const [sheet, setSheet] = useState<GedDocument | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
+  const [working, setWorking] = useState(false)
+  const [searchDraft, setSearchDraft] = useState(selection.kind === "search" ? selection.query : "")
+  const searchRef = useRef<HTMLInputElement>(null)
 
-  // Un groupe repliable par résidence (ordre alphabétique), documents du plus
-  // récent au plus ancien - même présentation que la page Communication.
-  // Dépliés d'office quand une résidence est choisie ou qu'une recherche est
-  // en cours.
-  const groups = [
-    ...filteredDocuments
-      .reduce((byResidence, d) => byResidence.set(d.residenceId, [...(byResidence.get(d.residenceId) ?? []), d]),
-        new Map<string, ResidenceDocumentWithResidence[]>())
-      .values(),
-  ]
-    .map((items) => items.sort((a, b) => (b.timeStamp?.getTime() ?? 0) - (a.timeStamp?.getTime() ?? 0)))
-    .sort((a, b) => a[0].residenceName.localeCompare(b[0].residenceName))
-  const forceExpanded = residenceFilter !== "all" || !!search.trim()
+  const select = useCallback(
+    (next: GedSelection, replace = false) => {
+      setParams(selectionToParams(next), { replace })
+    },
+    [setParams]
+  )
+  const refresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
-  function toggleResidence(residenceId: string) {
-    setExpandedResidenceIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(residenceId)) {
-        next.delete(residenceId)
-      } else {
-        next.add(residenceId)
+  // Ctrl K (⌘K) : recherche dans tous les documents.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault()
+        searchRef.current?.focus()
+        searchRef.current?.select()
       }
-      return next
-    })
-  }
-
-  async function handleDelete() {
-    if (!deleting) return
-    try {
-      await deleteResidenceDocument(deleting.residenceId, deleting.id)
-      toast.success("Document supprimé")
-      setDeleting(null)
-    } catch (err) {
-      toast.error("Échec de la suppression : " + (err as Error).message)
     }
-  }
-
-  // Partager expose le document à l'agence et aux résidents : confirmé ;
-  // le masquer de nouveau est immédiat.
-  async function setAdminOnly(d: ResidenceDocumentWithResidence, adminOnly: boolean) {
-    try {
-      await setResidenceDocumentAdminOnly(d.residenceId, d.id, adminOnly)
-      toast.success(adminOnly ? "Document masqué à l'agence et aux résidents" : "Document partagé")
-      setSharing(null)
-    } catch (err) {
-      toast.error("Échec de la modification : " + (err as Error).message)
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg">Documents de résidence</h2>
-        <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
-          <Plus />
-          Ajouter un document
-        </Button>
-      </div>
-
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-3">
-          <div className="relative max-w-sm flex-1">
-            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Rechercher un document…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <SearchableSelect
-            className="w-56"
-            value={residenceFilter}
-            onChange={setResidenceFilter}
-            groups={[
-              {
-                options: [
-                  { value: "all", label: "Toutes les résidences" },
-                  ...[...residences]
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((r) => ({ value: r.id, label: r.name })),
-                ],
-              },
-            ]}
-          />
-          <SearchableSelect
-            className="w-64"
-            value={categoryFilter}
-            onChange={setCategoryFilter}
-            groups={[
-              {
-                options: [
-                  { value: "all", label: "Toutes les catégories" },
-                  ...RESIDENCE_DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: c })),
-                ],
-              },
-            ]}
-          />
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <span>Du</span>
-            <DateInput value={dateFrom} onChange={setDateFrom} />
-            <span>au</span>
-            <DateInput value={dateTo} onChange={setDateTo} />
-          </div>
-          <ClearFiltersButton
-            active={!!search || residenceFilter !== "all" || categoryFilter !== "all" || !!dateFrom || !!dateTo}
-            onClick={() => {
-              setSearch("")
-              setResidenceFilter("all")
-              setCategoryFilter("all")
-              setDateFrom("")
-              setDateTo("")
-            }}
-          />
-        </CardContent>
-      </Card>
-
-      <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
-        <Table>
-          <TableHeader className="bg-muted/40">
-            <TableRow>
-              <TableHead>Résidence</TableHead>
-              <TableHead>Nom</TableHead>
-              <TableHead>Catégorie</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className="bg-white">
-            {groups.map((items) => {
-              const residenceId = items[0].residenceId
-              const expanded = forceExpanded || expandedResidenceIds.has(residenceId)
-              const hiddenCount = items.filter((d) => d.adminOnly).length
-              return (
-                <Fragment key={residenceId}>
-                  <TableRow
-                    className="cursor-pointer bg-muted/30 hover:bg-muted/40"
-                    onClick={() => toggleResidence(residenceId)}
-                  >
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-1.5">
-                        {expanded ? (
-                          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-                        ) : (
-                          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                        )}
-                        {items[0].residenceName}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {items.length} document{items.length > 1 ? "s" : ""}
-                        {hiddenCount > 0 && (
-                          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
-                            {hiddenCount} non partagé{hiddenCount > 1 ? "s" : ""}
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell />
-                    <TableCell className="text-muted-foreground">{formatDate(items[0].timeStamp)}</TableCell>
-                    <TableCell />
-                  </TableRow>
-                  {expanded &&
-                    items.map((d) => (
-                      <TableRow key={`${d.residenceId}-${d.id}`} className="bg-muted/10">
-                        <TableCell />
-                        <TableCell className="font-medium">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {d.name || "Sans nom"}
-                            {d.adminOnly && (
-                              <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
-                                Non partagé
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{d.category || "—"}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{formatDate(d.timeStamp)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              render={<a href={d.documentPathRecto} target="_blank" rel="noreferrer" />}
-                            >
-                              <FileText />
-                              Voir
-                            </Button>
-                            {isSuperAdmin && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                title={d.adminOnly ? "Partager avec l'agence et les résidents" : "Masquer à l'agence et aux résidents"}
-                                onClick={() => (d.adminOnly ? setSharing(d) : setAdminOnly(d, true))}
-                              >
-                                {d.adminOnly ? <Eye /> : <EyeOff />}
-                                {d.adminOnly ? "Partager" : "Masquer"}
-                              </Button>
-                            )}
-                            <Button variant="outline" size="sm" onClick={() => setDeleting(d)}>
-                              <Trash2 />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </Fragment>
-              )
-            })}
-            {!loading && filteredDocuments.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                  {documents.length === 0
-                    ? "Aucun document de résidence pour l'instant."
-                    : "Aucun résultat pour ces filtres."}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <ResidenceDocumentFormDialog
-        open={creating}
-        onOpenChange={setCreating}
-        residences={residences}
-        initialResidenceId={residenceFilter}
-        canHide={isSuperAdmin}
-        onSubmit={async (residenceId, input) => {
-          await createResidenceDocument(residenceId, input)
-          toast.success(input.adminOnly ? "Document ajouté, non partagé" : "Document ajouté")
-          setCreating(false)
-        }}
-      />
-
-      <Dialog open={!!sharing} onOpenChange={(open) => !open && setSharing(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="pb-4">
-            <DialogTitle>Partager ce document ?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            "{sharing?.name}" deviendra visible de l'agence de {sharing?.residenceName} et des résidents dans
-            l'application.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSharing(null)}>
-              Annuler
-            </Button>
-            <Button className={PRIMARY_CTA_CLASS} onClick={() => sharing && setAdminOnly(sharing, false)}>
-              <Eye />
-              Partager
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="pb-4">
-            <DialogTitle>Supprimer ce document ?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            "{deleting?.name}" sera définitivement supprimé de la résidence {deleting?.residenceName}.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Supprimer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
-
-function LotDocumentsSection() {
-  const { lots, loading: lotsLoading } = useAllLots((message) => toast.error(message))
-  const [residenceFilter, setResidenceFilter] = useState("")
-  const [lotId, setLotId] = useState("")
-  const [lotSearch, setLotSearch] = useState("")
-  const [lotCategoryFilter, setLotCategoryFilter] = useState("all")
-  const [lotDateFrom, setLotDateFrom] = useState("")
-  const [lotDateTo, setLotDateTo] = useState("")
-  const [lotDocuments, setLotDocuments] = useState<LotDocument[]>([])
-  const [recipientLabels, setRecipientLabels] = useState<Map<string, string>>(new Map())
-  const [creating, setCreating] = useState(false)
-  const [deleting, setDeleting] = useState<LotDocument | null>(null)
-
-  const residenceOptions = useMemo(() => {
-    const byId = new Map<string, string>()
-    for (const l of lots) byId.set(l.residenceId, l.residenceName)
-    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]))
-  }, [lots])
-
-  // Lots de la résidence groupés par bâtiment, en ordre naturel (« Bâtiment B »
-  // avant « Bâtiment D », « 2 » avant « 10 »), libellés « Réf. 126 — D03 ·
-  // Appartement » : la recherche trouve « D03 » comme « 126 ».
-  const lotGroups = useMemo(() => {
-    const natural = (a: string, b: string) => a.localeCompare(b, "fr", { numeric: true })
-    const byBuilding = new Map<string, LotWithResidence[]>()
-    for (const l of lots) {
-      if (l.residenceId !== residenceFilter) continue
-      byBuilding.set(l.batiment, [...(byBuilding.get(l.batiment) ?? []), l])
-    }
-    return [...byBuilding.entries()]
-      .sort(([a], [b]) => natural(a, b))
-      .map(([batiment, items]) => ({
-        label: batiment || "Sans bâtiment",
-        options: items
-          .sort((a, b) => natural(a.lot, b.lot) || natural(a.refLot, b.refLot))
-          .map((l) => ({ value: l.id, label: lotDisplayLabel(l) })),
-      }))
-  }, [lots, residenceFilter])
-
-  // Une seule résidence dans le périmètre (compte agence) : choisie d'office.
-  useEffect(() => {
-    if (!residenceFilter && residenceOptions.length === 1) setResidenceFilter(residenceOptions[0][0])
-  }, [residenceOptions, residenceFilter])
-
-  const selectedLot: LotWithResidence | null = lots.find((l) => l.id === lotId) ?? null
-  const recipientUids = useMemo(
-    () => (selectedLot ? [...new Set([...selectedLot.idProprietaire, ...selectedLot.idLocataire])] : []),
-    [selectedLot]
-  )
-  const recipientUidsKey = recipientUids.slice().sort().join(",")
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
 
   useEffect(() => {
-    setLotId("")
-  }, [residenceFilter])
+    setSearchDraft(selection.kind === "search" ? selection.query : "")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection.kind === "search" ? selection.query : null])
+
+  // Recherche au fil de la frappe (pause d'une demi-seconde, deux caractères
+  // au moins) ; effacer le champ ramène à la vue d'ensemble.
+  useEffect(() => {
+    const query = searchDraft.trim()
+    const current = selection.kind === "search" ? selection.query : null
+    if (query === (current ?? "")) return
+    const timer = window.setTimeout(() => {
+      if (query.length >= 2) select({ kind: "search", query }, current !== null)
+      else if (!query && current !== null) select({ kind: "overview" }, true)
+    }, 500)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchDraft])
 
   useEffect(() => {
-    if (!selectedLot) {
-      setLotDocuments([])
-      return
+    let cancelled = false
+    setOverviewLoading(true)
+    fetchGedOverview()
+      .then((data) => !cancelled && setOverview(data))
+      .catch((err) => !cancelled && toast.error("Vue d'ensemble indisponible : " + (err as Error).message))
+      .finally(() => !cancelled && setOverviewLoading(false))
+    return () => {
+      cancelled = true
     }
-    return subscribeToLotDocuments(
-      selectedLot.residenceId,
-      selectedLot.id,
-      recipientUids,
+  }, [refreshKey])
+
+  // Résidence ouverte : la mettre en tête des récentes (navigateur).
+  useEffect(() => {
+    if (!residenceId) return
+    writeStoredIds(RECENT_KEY, [residenceId, ...readStoredIds(RECENT_KEY).filter((id) => id !== residenceId)].slice(0, 10))
+  }, [residenceId])
+
+  useEffect(() => {
+    setStructures([])
+    setLots([])
+    setResidenceDocuments([])
+    if (!residenceId) return
+    setScopeLoading(true)
+    const onError = (error: Error) => toast.error("Chargement impossible : " + error.message)
+    const unsubscribes = [
+      subscribeToStructures(residenceId, setStructures, onError),
+      subscribeToLots(residenceId, setLots, onError),
+      subscribeToResidenceGed(
+        residenceId,
+        (documents) => {
+          setResidenceDocuments(documents)
+          setScopeLoading(false)
+        },
+        (error) => {
+          setScopeLoading(false)
+          onError(error)
+        }
+      ),
+    ]
+    return () => unsubscribes.forEach((unsub) => unsub())
+  }, [residenceId])
+
+  const lotId = selection.kind === "lot" ? selection.lotId : null
+  const selectedLot = lots.find((l) => l.id === lotId) ?? null
+  const occupantsKey = selectedLot
+    ? [...new Set([...selectedLot.idProprietaire, ...selectedLot.idLocataire])].sort().join(",")
+    : ""
+
+  useEffect(() => {
+    setLotDocuments([])
+    if (!residenceId || !lotId || !selectedLot) return
+    return subscribeToLotGed(
+      residenceId,
+      lotId,
+      occupantsKey ? occupantsKey.split(",") : [],
       setLotDocuments,
       (error) => toast.error("Impossible de charger les documents de ce lot : " + error.message)
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLot?.residenceId, selectedLot?.id, recipientUidsKey])
+  }, [residenceId, lotId, occupantsKey, !!selectedLot])
+
+  // Recherche, corbeille, non partagés, catégorie : côté serveur (toutes les
+  // résidences du périmètre), relancés après chaque modification.
+  const findQuery =
+    selection.kind === "search"
+      ? { kind: "search" as const, query: selection.query }
+      : selection.kind === "trash"
+        ? { kind: "trash" as const }
+        : selection.kind === "internal"
+          ? { kind: "internal" as const }
+          : selection.kind === "category"
+            ? { kind: "category" as const, category: selection.category }
+            : null
+  const findKey = findQuery ? JSON.stringify(findQuery) : ""
 
   useEffect(() => {
-    if (recipientUids.length === 0) {
-      setRecipientLabels(new Map())
-      return
+    setFound([])
+    setFoundTotal(0)
+    if (!findQuery) return
+    if (findQuery.kind === "search" && findQuery.query.trim().length < 2) return
+    let cancelled = false
+    setFoundLoading(true)
+    findGedDocuments(findQuery)
+      .then(({ items, total }) => {
+        if (cancelled) return
+        setFound(items)
+        setFoundTotal(total)
+      })
+      .catch((err) => !cancelled && toast.error("Recherche impossible : " + (err as Error).message))
+      .finally(() => !cancelled && setFoundLoading(false))
+    return () => {
+      cancelled = true
     }
-    resolveUserLabels(recipientUids).then(setRecipientLabels)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipientUidsKey])
+  }, [findKey, refreshKey])
 
-  const filteredLotDocuments = lotDocuments.filter((d) => {
-    if (lotCategoryFilter !== "all" && d.category !== lotCategoryFilter) return false
-    if (!inDateRange(d.timeStamp, lotDateFrom, lotDateTo)) return false
-    if (!lotSearch.trim()) return true
-    return [d.name, d.category, ...d.recipientUids.map((uid) => recipientLabels.get(uid) ?? "")]
-      .join(" ")
-      .toLowerCase()
-      .includes(lotSearch.toLowerCase())
-  })
+  const residenceName = (id: string) => residences.find((r) => r.id === id)?.name ?? ""
+  const foundByKey = useMemo(() => new Map(found.map((f) => [foundToKey(f), f])), [found])
+  const visible = (d: GedDocument) => isSuperAdmin || !d.adminOnly
 
-  async function handleDelete() {
-    if (!deleting || !selectedLot) return
-    try {
-      await deleteLotDocument(selectedLot.id, deleting.id, deleting.recipientUids)
-      toast.success("Document supprimé")
-      setDeleting(null)
-    } catch (err) {
-      toast.error("Échec de la suppression : " + (err as Error).message)
+  const tableDocuments: GedDocument[] = useMemo(() => {
+    switch (selection.kind) {
+      case "residence":
+        return residenceDocuments.filter((d) => d.scope === "residence" && !d.deletedAt && visible(d))
+      case "building":
+        return residenceDocuments.filter((d) => d.batiment === selection.batiment && !d.deletedAt && visible(d))
+      case "lot":
+        return lotDocuments.filter((d) => !d.deletedAt && visible(d))
+      case "overview":
+        return []
+      default:
+        return found.map(foundToDocument).filter(visible)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection, residenceDocuments, lotDocuments, found, isSuperAdmin])
+
+  function attachedTo(d: GedDocument): string {
+    if (d.scope === "residence") return "Docs de résidence"
+    if (d.scope === "building") return d.batiment || "Bâtiment"
+    const lot = lots.find((l) => l.id === d.lotId) ?? foundByKey.get(d.key)?.lot
+    return lot ? lotDisplayLabel(lot) : "Lot"
+  }
+
+  function pathOf(d: GedDocument): string {
+    const f = foundByKey.get(d.key)
+    return f ? foundPath(f) : residenceName(d.residenceId)
+  }
+
+  const importTarget: GedTarget | null =
+    selection.kind === "residence"
+      ? { scope: "residence", residenceId: selection.residenceId }
+      : selection.kind === "building"
+        ? { scope: "building", residenceId: selection.residenceId, batiment: selection.batiment }
+        : selection.kind === "lot" && selectedLot
+          ? {
+              scope: "lot",
+              residenceId: selection.residenceId,
+              lotId: selection.lotId,
+              recipients: [...new Set([...selectedLot.idProprietaire, ...selectedLot.idLocataire])],
+            }
+          : null
+
+  const crumbs: { label: string; selection?: GedSelection }[] = [{ label: "Toutes les résidences", selection: { kind: "overview" } }]
+  if (residenceId) crumbs.push({ label: residenceName(residenceId) || "Résidence", selection: { kind: "residence", residenceId } })
+  if (selection.kind === "residence") crumbs.push({ label: "Docs de résidence" })
+  if (selection.kind === "building") crumbs.push({ label: selection.batiment })
+  if (selection.kind === "lot") {
+    if (selectedLot?.batiment) {
+      crumbs.push({
+        label: selectedLot.batiment,
+        selection: { kind: "building", residenceId: selection.residenceId, batiment: selectedLot.batiment },
+      })
+    }
+    crumbs.push({ label: selectedLot ? lotDisplayLabel(selectedLot) : "Lot" })
+  }
+  if (selection.kind === "trash") crumbs.push({ label: "Corbeille" })
+  if (selection.kind === "internal") crumbs.push({ label: "Non partagés" })
+  if (selection.kind === "category") crumbs.push({ label: selection.category })
+  if (selection.kind === "search") crumbs.push({ label: `Recherche « ${selection.query} »` })
+
+  const title =
+    selection.kind === "residence"
+      ? "Documents de la résidence"
+      : selection.kind === "building"
+        ? `Documents du ${selection.batiment}`
+        : selection.kind === "lot"
+          ? selectedLot
+            ? lotDisplayLabel(selectedLot)
+            : "Lot"
+          : crumbs[crumbs.length - 1].label
+
+  async function runEach(documents: GedDocument[], fn: (d: GedDocument) => Promise<unknown>, success: string) {
+    if (documents.length === 0) return
+    setWorking(true)
+    let failed = 0
+    for (const d of documents) {
+      try {
+        await fn(d)
+      } catch (err) {
+        failed += 1
+        console.error(err)
+      }
+    }
+    setWorking(false)
+    if (failed) toast.error(`${failed} document${failed > 1 ? "s" : ""} sur ${documents.length} n'ont pas pu être traités`)
+    else toast.success(success)
+    refresh()
+  }
+
+  async function handleAction(action: GedAction, documents: GedDocument[]) {
+    switch (action) {
+      case "open":
+        setSheet(documents[0])
+        return
+      case "download":
+        try {
+          const url = await gedFileUrl(documents[0])
+          if (url) window.open(url, "_blank", "noreferrer")
+        } catch (err) {
+          toast.error("Téléchargement impossible : " + (err as Error).message)
+        }
+        return
+      case "share":
+      case "internal":
+      case "purge":
+        if (documents.length) setConfirmation({ action, documents })
+        return
+      case "trash":
+        await runEach(documents, trashGedDocument, documents.length > 1 ? "Documents mis à la corbeille" : "Document mis à la corbeille")
+        return
+      case "restore":
+        await runEach(documents, restoreGedDocument, documents.length > 1 ? "Documents restaurés" : "Document restauré")
+        return
     }
   }
 
+  async function confirm() {
+    if (!confirmation) return
+    const { action, documents } = confirmation
+    setConfirmation(null)
+    if (action === "purge") {
+      setSheet(null)
+      await runEach(documents, purgeGedDocument, "Supprimé définitivement")
+    } else {
+      await runEach(
+        documents,
+        (d) =>
+          setGedVisibility(
+            d,
+            action === "internal" ? "internal" : d.scope === "residence" ? defaultResidenceVisibility(d.category) : "shared",
+            { notify: false }
+          ),
+        action === "share" ? "Partage mis à jour" : "Documents retirés du partage"
+      )
+    }
+  }
+
+  const n = confirmation?.documents.length ?? 0
+  const plural = n > 1 ? "s" : ""
+  const confirmText = !confirmation
+    ? ""
+    : confirmation.action === "purge"
+      ? `${n} document${plural} et ${n > 1 ? "leurs fichiers seront supprimés" : "son fichier sera supprimé"} définitivement. Cette action est irréversible.`
+      : confirmation.action === "share"
+        ? `${n} document${plural} deviendr${n > 1 ? "ont" : "a"} visible${plural} dans l'application : les propriétaires pour une assemblée générale ou un document juridique de la résidence, toute la résidence pour les autres documents de résidence, les occupants du bâtiment ou les destinataires du lot sinon. Pour un autre choix (conseil syndical…), passez par la fiche du document.`
+        : `${n} document${plural} ne ser${n > 1 ? "ont" : "a"} plus visible${plural} que des administrateurs Konodal ; ${n > 1 ? "leurs fichiers sont déplacés" : "son fichier est déplacé"} et les anciens liens cessent de fonctionner.`
+
+  const mode = selection.kind === "trash" ? "trash" : findQuery ? "results" : "browse"
+  const sheetResidence = sheet ? residenceName(sheet.residenceId) || foundByKey.get(sheet.key)?.residenceName || "" : ""
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg">Documents de lot</h2>
-        <Button onClick={() => setCreating(true)} disabled={!selectedLot} className={PRIMARY_CTA_CLASS}>
-          <Plus />
-          Ajouter un document
-        </Button>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="mr-2 text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Documents</h1>
+        <form
+          className={cn(
+            "group flex min-w-0 flex-1 basis-80 items-center gap-2.5 rounded-2xl border border-[oklch(90%_0.006_100)] bg-white px-4 py-3 text-[15px]",
+            "focus-within:border-[oklch(45%_0.09_155)] focus-within:shadow-[0_0_0_1px_oklch(45%_0.09_155),0_0_0_5px_oklch(55%_0.1_155/0.14)]",
+            selection.kind === "search" &&
+              "border-[oklch(45%_0.09_155)] shadow-[0_0_0_1px_oklch(45%_0.09_155),0_0_0_5px_oklch(55%_0.1_155/0.14)]"
+          )}
+          onSubmit={(e) => {
+            e.preventDefault()
+            const query = searchDraft.trim()
+            if (query.length >= 2) select({ kind: "search", query }, selection.kind === "search")
+          }}
+        >
+          <Search
+            className={cn(
+              "size-[18px] shrink-0 stroke-[2.2] text-[oklch(50%_0.01_150)] group-focus-within:text-[oklch(45%_0.09_155)]",
+              selection.kind === "search" && "text-[oklch(45%_0.09_155)]"
+            )}
+          />
+          <input
+            ref={searchRef}
+            value={searchDraft}
+            onChange={(e) => setSearchDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && e.currentTarget.blur()}
+            placeholder="Rechercher un document, un lot, un mot du contenu…"
+            aria-label="Rechercher dans les documents"
+            className="min-w-0 flex-1 bg-transparent font-semibold text-[oklch(20%_0.02_150)] outline-none placeholder:font-normal placeholder:text-[oklch(55%_0.01_150)]"
+          />
+          <kbd className="ml-auto shrink-0 rounded-[7px] border border-[oklch(90%_0.006_100)] px-2 py-0.5 font-sans text-xs whitespace-nowrap text-[oklch(50%_0.01_150)]">
+            Ctrl K
+          </kbd>
+        </form>
       </div>
 
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-3">
-          <SearchableSelect
-            className="w-56"
-            value={residenceFilter}
-            onChange={setResidenceFilter}
-            emptyLabel="Résidence : Choisir…"
-            groups={[{ options: residenceOptions.map(([id, name]) => ({ value: id, label: name })) }]}
-          />
-          <SearchableSelect
-            className="w-80"
-            value={lotId}
-            onChange={setLotId}
-            disabled={!residenceFilter}
-            placeholder="Réf., numéro (D03)…"
-            emptyLabel="Lot : Choisir…"
-            noResultsLabel="Aucun lot."
-            groups={lotGroups}
-          />
-          <div className="relative max-w-sm min-w-48 flex-1">
-            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Rechercher un document…"
-              value={lotSearch}
-              onChange={(e) => setLotSearch(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <SearchableSelect
-            className="w-56"
-            value={lotCategoryFilter}
-            onChange={setLotCategoryFilter}
-            groups={[
-              {
-                options: [
-                  { value: "all", label: "Toutes les catégories" },
-                  ...LOT_DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: c })),
-                ],
-              },
-            ]}
-          />
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <span>Du</span>
-            <DateInput value={lotDateFrom} onChange={setLotDateFrom} />
-            <span>au</span>
-            <DateInput value={lotDateTo} onChange={setLotDateTo} />
-          </div>
-          <ClearFiltersButton
-            active={!!residenceFilter || !!lotSearch || lotCategoryFilter !== "all" || !!lotDateFrom || !!lotDateTo}
-            onClick={() => {
-              setResidenceFilter("")
-              setLotId("")
-              setLotSearch("")
-              setLotCategoryFilter("all")
-              setLotDateFrom("")
-              setLotDateTo("")
-            }}
-          />
+      <Card className="overflow-visible">
+        <CardContent className="grid gap-6 p-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="lg:border-r lg:border-[oklch(95%_0.003_100)] lg:pr-5">
+            {residencesLoading ? (
+              <p className="p-2 text-sm text-muted-foreground">Chargement des résidences…</p>
+            ) : (
+              <GedNavigator
+                residences={residences}
+                overview={overview}
+                selection={selection}
+                onSelect={select}
+                structures={structures}
+                lots={lots}
+              />
+            )}
+          </aside>
+
+          <section className="flex min-w-0 flex-col gap-4">
+            {selection.kind === "overview" ? (
+              <GedOverviewPanel
+                overview={overview}
+                loading={overviewLoading}
+                isSuperAdmin={isSuperAdmin}
+                onSelect={select}
+                onOpen={(f) => setSheet(foundToDocument(f))}
+              />
+            ) : (
+              <>
+                <nav className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+                  {crumbs.map((crumb, i) => (
+                    <span key={i} className="flex items-center gap-1">
+                      {i > 0 && <ChevronRight className="size-3.5" />}
+                      {crumb.selection && i < crumbs.length - 1 ? (
+                        <button type="button" onClick={() => select(crumb.selection!)} className="hover:text-foreground hover:underline">
+                          {crumb.label}
+                        </button>
+                      ) : (
+                        <span className={cn(i === crumbs.length - 1 && "font-semibold text-foreground")}>{crumb.label}</span>
+                      )}
+                    </span>
+                  ))}
+                </nav>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <h2 className="truncate p-0 text-xl font-bold">{title}</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {findQuery
+                        ? foundLoading
+                          ? "Recherche en cours…"
+                          : `${foundTotal} document${foundTotal > 1 ? "s" : ""}${foundTotal > found.length ? ` · ${found.length} affichés` : ""}`
+                        : `${tableDocuments.length} document${tableDocuments.length > 1 ? "s" : ""}`}
+                    </p>
+                  </div>
+                  {importTarget && (
+                    <Button className={PRIMARY_CTA_CLASS} onClick={() => setImporting(true)}>
+                      <Upload />
+                      Importer
+                    </Button>
+                  )}
+                </div>
+                {selection.kind === "search" && selection.query.trim().length < 2 ? (
+                  <p className="text-sm text-muted-foreground">Saisissez au moins deux caractères.</p>
+                ) : (
+                  <GedDocumentTable
+                    key={JSON.stringify(selection)}
+                    documents={tableDocuments}
+                    mode={mode}
+                    isSuperAdmin={isSuperAdmin}
+                    loading={findQuery ? foundLoading : scopeLoading}
+                    pathOf={findQuery ? pathOf : undefined}
+                    excerptOf={
+                      selection.kind === "search"
+                        ? (d) => {
+                            const found = foundByKey.get(d.key)
+                            return found?.excerpt ? { text: found.excerpt, words: found.excerptWords ?? [] } : undefined
+                          }
+                        : undefined
+                    }
+                    highlight={selection.kind === "search" ? selection.query : ""}
+                    onAction={(action, documents) => void handleAction(action, documents)}
+                  />
+                )}
+              </>
+            )}
+          </section>
         </CardContent>
       </Card>
 
-      {!selectedLot ? (
-        <p className="rounded-xl border border-dashed border-input p-8 text-center text-sm text-muted-foreground">
-          {residenceFilter
-            ? "Choisissez un lot pour voir ses documents."
-            : "Choisissez une résidence puis un lot pour voir ses documents."}
-        </p>
-      ) : (
-        <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
-          <Table>
-            <TableHeader className="bg-muted/40">
-              <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Catégorie</TableHead>
-                <TableHead>Destinataires</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="bg-white">
-              {filteredLotDocuments.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="font-medium">{d.name || "Sans nom"}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{d.category || "—"}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {d.recipientUids.map((uid) => (
-                        <Badge key={uid} variant="secondary">
-                          {recipientLabels.get(uid) ?? uid}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{formatDate(d.timeStamp)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        render={<a href={d.documentPathRecto} target="_blank" rel="noreferrer" />}
-                      >
-                        <FileText />
-                        Voir
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => setDeleting(d)}>
-                        <Trash2 />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!lotsLoading && filteredLotDocuments.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    {lotDocuments.length === 0 ? "Aucun document pour ce lot." : "Aucun résultat pour ces filtres."}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+      {sheet && (
+        <GedDocumentSheet
+          key={sheet.key}
+          document={sheet}
+          residenceName={sheetResidence}
+          attachedTo={attachedTo(sheet)}
+          isSuperAdmin={isSuperAdmin}
+          onClose={() => setSheet(null)}
+          onChanged={refresh}
+          onPurge={(d) => setConfirmation({ action: "purge", documents: [d] })}
+        />
       )}
 
-      <LotDocumentFormDialog
-        open={creating}
-        onOpenChange={setCreating}
+      <GedImportDialog
+        open={importing}
+        onOpenChange={setImporting}
+        target={importTarget}
+        title={title}
         lot={selectedLot}
-        onSubmit={async (input) => {
-          if (!selectedLot) return
-          await createLotDocument(selectedLot.residenceId, selectedLot.id, input)
-          toast.success("Document ajouté")
-          setCreating(false)
-        }}
+        isSuperAdmin={isSuperAdmin}
+        onImported={refresh}
       />
 
-      <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
+      <Dialog open={!!confirmation} onOpenChange={(open) => !open && setConfirmation(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader className="pb-4">
-            <DialogTitle>Supprimer ce document ?</DialogTitle>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmation?.action === "purge"
+                ? "Supprimer définitivement ?"
+                : confirmation?.action === "share"
+                  ? "Partager ?"
+                  : "Ne plus partager ?"}
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            "{deleting?.name}" sera définitivement supprimé pour tous ses destinataires.
-          </p>
+          <p className="text-sm text-muted-foreground">{confirmText}</p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)}>
+            <Button variant="outline" onClick={() => setConfirmation(null)}>
               Annuler
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Supprimer
+            <Button
+              variant={confirmation?.action === "purge" ? "destructive" : "default"}
+              className={confirmation?.action === "purge" ? undefined : PRIMARY_CTA_CLASS}
+              disabled={working}
+              onClick={() => void confirm()}
+            >
+              {confirmation?.action === "purge" ? "Supprimer" : "Confirmer"}
             </Button>
           </DialogFooter>
         </DialogContent>
