@@ -20,6 +20,7 @@ import {
   type LotDocumentInput,
 } from "@/types/document"
 import type { LotWithResidence } from "@/hooks/useAllLots"
+import { lotDisplayLabel } from "@/types/lot"
 
 const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png"
 
@@ -109,7 +110,7 @@ export function LotDocumentFormDialog({
         <form onSubmit={handleSubmit} className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4">
           <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
             <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">Document</span>
-            <DialogTitle>Ajouter un document de lot {lot ? `— ${lot.refLot || lot.lot}` : ""}</DialogTitle>
+            <DialogTitle>Ajouter un document de lot {lot ? `— ${lotDisplayLabel(lot)}` : ""}</DialogTitle>
           </DialogHeader>
 
           <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">

@@ -9,7 +9,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore"
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage"
-import { db, storage } from "@/firebase"
+import { auth, db, storage } from "@/firebase"
 import type { LotDocument, LotDocumentInput } from "@/types/document"
 
 function toDateOrNull(value: unknown): Date | null {
@@ -82,15 +82,22 @@ export function subscribeToLotDocuments(
 // n'apporte rien. Seule la petite copie Firestore est dupliquée (comme le
 // fait l'app), pour rester lisible par elle sans aucun changement de son
 // côté.
+// Métadonnées « recipients » et « uploader » : storage.rules ne laisse lire et
+// supprimer le fichier qu'à ses destinataires et à son expéditeur (jamais à un
+// occupant arrivé après coup), et cleanup_lot_document_file (functions_python)
+// ne le supprime qu'une fois qu'aucun destinataire ne le garde.
 async function uploadLotDocumentFile(
   residenceId: string,
   lotId: string,
-  file: File
+  file: File,
+  recipientUids: string[]
 ): Promise<{ url: string; extension: string }> {
   const extension = file.name.includes(".") ? (file.name.split(".").pop() ?? "").toLowerCase() : ""
   const path = `residences/${residenceId}/documents_lot/${lotId}/${crypto.randomUUID()}${extension ? `.${extension}` : ""}`
   const fileRef = ref(storage, path)
-  await uploadBytes(fileRef, file)
+  await uploadBytes(fileRef, file, {
+    customMetadata: { recipients: recipientUids.join(","), uploader: auth.currentUser?.uid ?? "" },
+  })
   return { url: await getDownloadURL(fileRef), extension }
 }
 
@@ -98,7 +105,7 @@ export async function createLotDocument(residenceId: string, lotId: string, inpu
   if (input.recipientUids.length === 0) {
     throw new Error("Aucun destinataire sélectionné")
   }
-  const { url, extension } = await uploadLotDocumentFile(residenceId, lotId, input.file)
+  const { url, extension } = await uploadLotDocumentFile(residenceId, lotId, input.file, input.recipientUids)
   const sharedId = doc(userLotDocumentsCollection(input.recipientUids[0], lotId)).id
   const data = {
     name: input.name,

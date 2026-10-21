@@ -26,6 +26,7 @@ import { useAllLots, type LotWithResidence } from "@/hooks/useAllLots"
 import { createResidenceDocument, deleteResidenceDocument, setResidenceDocumentAdminOnly } from "@/lib/residenceDocuments"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { createLotDocument, deleteLotDocument, subscribeToLotDocuments } from "@/lib/lotDocuments"
+import { lotDisplayLabel } from "@/types/lot"
 import { resolveUserLabels } from "@/lib/users"
 import { LOT_DOCUMENT_CATEGORIES, RESIDENCE_DOCUMENT_CATEGORIES } from "@/types/document"
 import { DateInput } from "@/components/DateInput"
@@ -368,10 +369,30 @@ function LotDocumentsSection() {
     return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]))
   }, [lots])
 
-  const lotsForResidence = useMemo(
-    () => lots.filter((l) => l.residenceId === residenceFilter).sort((a, b) => a.lot.localeCompare(b.lot)),
-    [lots, residenceFilter]
-  )
+  // Lots de la résidence groupés par bâtiment, en ordre naturel (« Bâtiment B »
+  // avant « Bâtiment D », « 2 » avant « 10 »), libellés « Réf. 126 — D03 ·
+  // Appartement » : la recherche trouve « D03 » comme « 126 ».
+  const lotGroups = useMemo(() => {
+    const natural = (a: string, b: string) => a.localeCompare(b, "fr", { numeric: true })
+    const byBuilding = new Map<string, LotWithResidence[]>()
+    for (const l of lots) {
+      if (l.residenceId !== residenceFilter) continue
+      byBuilding.set(l.batiment, [...(byBuilding.get(l.batiment) ?? []), l])
+    }
+    return [...byBuilding.entries()]
+      .sort(([a], [b]) => natural(a, b))
+      .map(([batiment, items]) => ({
+        label: batiment || "Sans bâtiment",
+        options: items
+          .sort((a, b) => natural(a.lot, b.lot) || natural(a.refLot, b.refLot))
+          .map((l) => ({ value: l.id, label: lotDisplayLabel(l) })),
+      }))
+  }, [lots, residenceFilter])
+
+  // Une seule résidence dans le périmètre (compte agence) : choisie d'office.
+  useEffect(() => {
+    if (!residenceFilter && residenceOptions.length === 1) setResidenceFilter(residenceOptions[0][0])
+  }, [residenceOptions, residenceFilter])
 
   const selectedLot: LotWithResidence | null = lots.find((l) => l.id === lotId) ?? null
   const recipientUids = useMemo(
@@ -441,15 +462,6 @@ function LotDocumentsSection() {
 
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3">
-          <div className="relative max-w-sm flex-1">
-            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Rechercher un document…"
-              value={lotSearch}
-              onChange={(e) => setLotSearch(e.target.value)}
-              className="pl-8"
-            />
-          </div>
           <SearchableSelect
             className="w-56"
             value={residenceFilter}
@@ -458,21 +470,24 @@ function LotDocumentsSection() {
             groups={[{ options: residenceOptions.map(([id, name]) => ({ value: id, label: name })) }]}
           />
           <SearchableSelect
-            className="w-56"
+            className="w-80"
             value={lotId}
             onChange={setLotId}
             disabled={!residenceFilter}
+            placeholder="Réf., numéro (D03)…"
             emptyLabel="Lot : Choisir…"
             noResultsLabel="Aucun lot."
-            groups={[
-              {
-                options: lotsForResidence.map((l) => ({
-                  value: l.id,
-                  label: `${l.refLot || l.lot}${l.batiment ? ` — ${l.batiment}` : ""}`,
-                })),
-              },
-            ]}
+            groups={lotGroups}
           />
+          <div className="relative max-w-sm min-w-48 flex-1">
+            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher un document…"
+              value={lotSearch}
+              onChange={(e) => setLotSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
           <SearchableSelect
             className="w-56"
             value={lotCategoryFilter}
@@ -508,7 +523,9 @@ function LotDocumentsSection() {
 
       {!selectedLot ? (
         <p className="rounded-xl border border-dashed border-input p-8 text-center text-sm text-muted-foreground">
-          Choisissez une résidence puis un lot pour voir ses documents.
+          {residenceFilter
+            ? "Choisissez un lot pour voir ses documents."
+            : "Choisissez une résidence puis un lot pour voir ses documents."}
         </p>
       ) : (
         <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
