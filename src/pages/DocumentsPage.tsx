@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { Eye, EyeOff, FileText, Plus, Search, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Eye, EyeOff, FileText, Plus, Search, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -57,6 +57,7 @@ function ResidenceDocumentsSection() {
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<ResidenceDocumentWithResidence | null>(null)
   const [sharing, setSharing] = useState<ResidenceDocumentWithResidence | null>(null)
+  const [expandedResidenceIds, setExpandedResidenceIds] = useState<Set<string>>(new Set())
   const { isSuperAdmin } = useIsSuperAdmin()
 
   const filteredDocuments = documents.filter((d) => {
@@ -66,6 +67,32 @@ function ResidenceDocumentsSection() {
     if (!search.trim()) return true
     return [d.name, d.category, d.residenceName].join(" ").toLowerCase().includes(search.toLowerCase())
   })
+
+  // Un groupe repliable par résidence (ordre alphabétique), documents du plus
+  // récent au plus ancien - même présentation que la page Communication.
+  // Dépliés d'office quand une résidence est choisie ou qu'une recherche est
+  // en cours.
+  const groups = [
+    ...filteredDocuments
+      .reduce((byResidence, d) => byResidence.set(d.residenceId, [...(byResidence.get(d.residenceId) ?? []), d]),
+        new Map<string, ResidenceDocumentWithResidence[]>())
+      .values(),
+  ]
+    .map((items) => items.sort((a, b) => (b.timeStamp?.getTime() ?? 0) - (a.timeStamp?.getTime() ?? 0)))
+    .sort((a, b) => a[0].residenceName.localeCompare(b[0].residenceName))
+  const forceExpanded = residenceFilter !== "all" || !!search.trim()
+
+  function toggleResidence(residenceId: string) {
+    setExpandedResidenceIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(residenceId)) {
+        next.delete(residenceId)
+      } else {
+        next.add(residenceId)
+      }
+      return next
+    })
+  }
 
   async function handleDelete() {
     if (!deleting) return
@@ -170,51 +197,89 @@ function ResidenceDocumentsSection() {
             </TableRow>
           </TableHeader>
           <TableBody className="bg-white">
-            {filteredDocuments.map((d) => (
-              <TableRow key={`${d.residenceId}-${d.id}`}>
-                <TableCell>{d.residenceName}</TableCell>
-                <TableCell className="font-medium">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {d.name || "Sans nom"}
-                    {d.adminOnly && (
-                      <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
-                        Non partagé
-                      </Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline">{d.category || "—"}</Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground">{formatDate(d.timeStamp)}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      render={<a href={d.documentPathRecto} target="_blank" rel="noreferrer" />}
-                    >
-                      <FileText />
-                      Voir
-                    </Button>
-                    {isSuperAdmin && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        title={d.adminOnly ? "Partager avec l'agence et les résidents" : "Masquer à l'agence et aux résidents"}
-                        onClick={() => (d.adminOnly ? setSharing(d) : setAdminOnly(d, true))}
-                      >
-                        {d.adminOnly ? <Eye /> : <EyeOff />}
-                        {d.adminOnly ? "Partager" : "Masquer"}
-                      </Button>
-                    )}
-                    <Button variant="outline" size="sm" onClick={() => setDeleting(d)}>
-                      <Trash2 />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+            {groups.map((items) => {
+              const residenceId = items[0].residenceId
+              const expanded = forceExpanded || expandedResidenceIds.has(residenceId)
+              const hiddenCount = items.filter((d) => d.adminOnly).length
+              return (
+                <Fragment key={residenceId}>
+                  <TableRow
+                    className="cursor-pointer bg-muted/30 hover:bg-muted/40"
+                    onClick={() => toggleResidence(residenceId)}
+                  >
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-1.5">
+                        {expanded ? (
+                          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                        )}
+                        {items[0].residenceName}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {items.length} document{items.length > 1 ? "s" : ""}
+                        {hiddenCount > 0 && (
+                          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
+                            {hiddenCount} non partagé{hiddenCount > 1 ? "s" : ""}
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell />
+                    <TableCell className="text-muted-foreground">{formatDate(items[0].timeStamp)}</TableCell>
+                    <TableCell />
+                  </TableRow>
+                  {expanded &&
+                    items.map((d) => (
+                      <TableRow key={`${d.residenceId}-${d.id}`} className="bg-muted/10">
+                        <TableCell />
+                        <TableCell className="font-medium">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {d.name || "Sans nom"}
+                            {d.adminOnly && (
+                              <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
+                                Non partagé
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{d.category || "—"}</Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{formatDate(d.timeStamp)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              render={<a href={d.documentPathRecto} target="_blank" rel="noreferrer" />}
+                            >
+                              <FileText />
+                              Voir
+                            </Button>
+                            {isSuperAdmin && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                title={d.adminOnly ? "Partager avec l'agence et les résidents" : "Masquer à l'agence et aux résidents"}
+                                onClick={() => (d.adminOnly ? setSharing(d) : setAdminOnly(d, true))}
+                              >
+                                {d.adminOnly ? <Eye /> : <EyeOff />}
+                                {d.adminOnly ? "Partager" : "Masquer"}
+                              </Button>
+                            )}
+                            <Button variant="outline" size="sm" onClick={() => setDeleting(d)}>
+                              <Trash2 />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </Fragment>
+              )
+            })}
             {!loading && filteredDocuments.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
