@@ -1,10 +1,12 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   onSnapshot,
   serverTimestamp,
   setDoc,
+  updateDoc,
   type DocumentData,
   type DocumentSnapshot,
   type Unsubscribe,
@@ -35,6 +37,7 @@ function toResidenceDocument(residenceId: string, d: DocumentSnapshot<DocumentDa
     documentPathRecto: (data.documentPathRecto as string) ?? "",
     extension: (data.extension as string) ?? "",
     timeStamp: toDateOrNull(data.timeStamp),
+    adminOnly: data.adminOnly === true,
   }
 }
 
@@ -76,6 +79,19 @@ export async function createResidenceDocument(residenceId: string, input: Reside
     extension,
     residenceId,
     timeStamp: serverTimestamp(),
+    ...(input.adminOnly ? { adminOnly: true } : {}),
+  })
+}
+
+// Partage d'un document (superAdmin) : adminOnly le cache à l'agence et ses
+// agents (filtre de useAllResidenceDocuments) et aux résidents (filtre de
+// firestore_docs_repository.dart côté app). Simple filtre d'affichage, pas
+// une règle : firestore.rules ne peut pas l'imposer sans faire échouer la
+// lecture de toute la collection par l'app publiée (requête sans filtre).
+// Partager retire le champ : le document redevient identique aux autres.
+export async function setResidenceDocumentAdminOnly(residenceId: string, documentId: string, adminOnly: boolean) {
+  await updateDoc(doc(documentsCollection(residenceId), documentId), {
+    adminOnly: adminOnly ? true : deleteField(),
   })
 }
 

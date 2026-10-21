@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { FileText, Plus, Search, Trash2 } from "lucide-react"
+import { Eye, EyeOff, FileText, Plus, Search, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,7 +23,8 @@ import {
   type ResidenceDocumentWithResidence,
 } from "@/hooks/useAllResidenceDocuments"
 import { useAllLots, type LotWithResidence } from "@/hooks/useAllLots"
-import { createResidenceDocument, deleteResidenceDocument } from "@/lib/residenceDocuments"
+import { createResidenceDocument, deleteResidenceDocument, setResidenceDocumentAdminOnly } from "@/lib/residenceDocuments"
+import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { createLotDocument, deleteLotDocument, subscribeToLotDocuments } from "@/lib/lotDocuments"
 import { resolveUserLabels } from "@/lib/users"
 import { LOT_DOCUMENT_CATEGORIES, RESIDENCE_DOCUMENT_CATEGORIES } from "@/types/document"
@@ -55,6 +56,8 @@ function ResidenceDocumentsSection() {
   const [dateTo, setDateTo] = useState("")
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<ResidenceDocumentWithResidence | null>(null)
+  const [sharing, setSharing] = useState<ResidenceDocumentWithResidence | null>(null)
+  const { isSuperAdmin } = useIsSuperAdmin()
 
   const filteredDocuments = documents.filter((d) => {
     if (residenceFilter !== "all" && d.residenceId !== residenceFilter) return false
@@ -72,6 +75,18 @@ function ResidenceDocumentsSection() {
       setDeleting(null)
     } catch (err) {
       toast.error("Échec de la suppression : " + (err as Error).message)
+    }
+  }
+
+  // Partager expose le document à l'agence et aux résidents : confirmé ;
+  // le masquer de nouveau est immédiat.
+  async function setAdminOnly(d: ResidenceDocumentWithResidence, adminOnly: boolean) {
+    try {
+      await setResidenceDocumentAdminOnly(d.residenceId, d.id, adminOnly)
+      toast.success(adminOnly ? "Document masqué à l'agence et aux résidents" : "Document partagé")
+      setSharing(null)
+    } catch (err) {
+      toast.error("Échec de la modification : " + (err as Error).message)
     }
   }
 
@@ -158,7 +173,16 @@ function ResidenceDocumentsSection() {
             {filteredDocuments.map((d) => (
               <TableRow key={`${d.residenceId}-${d.id}`}>
                 <TableCell>{d.residenceName}</TableCell>
-                <TableCell className="font-medium">{d.name || "Sans nom"}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {d.name || "Sans nom"}
+                    {d.adminOnly && (
+                      <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
+                        Non partagé
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <Badge variant="outline">{d.category || "—"}</Badge>
                 </TableCell>
@@ -173,6 +197,17 @@ function ResidenceDocumentsSection() {
                       <FileText />
                       Voir
                     </Button>
+                    {isSuperAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        title={d.adminOnly ? "Partager avec l'agence et les résidents" : "Masquer à l'agence et aux résidents"}
+                        onClick={() => (d.adminOnly ? setSharing(d) : setAdminOnly(d, true))}
+                      >
+                        {d.adminOnly ? <Eye /> : <EyeOff />}
+                        {d.adminOnly ? "Partager" : "Masquer"}
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" onClick={() => setDeleting(d)}>
                       <Trash2 />
                     </Button>
@@ -198,12 +233,34 @@ function ResidenceDocumentsSection() {
         onOpenChange={setCreating}
         residences={residences}
         initialResidenceId={residenceFilter}
+        canHide={isSuperAdmin}
         onSubmit={async (residenceId, input) => {
           await createResidenceDocument(residenceId, input)
-          toast.success("Document ajouté")
+          toast.success(input.adminOnly ? "Document ajouté, non partagé" : "Document ajouté")
           setCreating(false)
         }}
       />
+
+      <Dialog open={!!sharing} onOpenChange={(open) => !open && setSharing(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="pb-4">
+            <DialogTitle>Partager ce document ?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            "{sharing?.name}" deviendra visible de l'agence de {sharing?.residenceName} et des résidents dans
+            l'application.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSharing(null)}>
+              Annuler
+            </Button>
+            <Button className={PRIMARY_CTA_CLASS} onClick={() => sharing && setAdminOnly(sharing, false)}>
+              <Eye />
+              Partager
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
         <DialogContent className="sm:max-w-md">

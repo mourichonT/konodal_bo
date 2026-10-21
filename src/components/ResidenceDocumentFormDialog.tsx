@@ -24,18 +24,22 @@ export function ResidenceDocumentFormDialog({
   onOpenChange,
   residences,
   initialResidenceId,
+  canHide = false,
   onSubmit,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   residences: Residence[]
   initialResidenceId?: string
+  // superAdmin : case « Ne pas partager » (adminOnly), cochée par défaut.
+  canHide?: boolean
   onSubmit: (residenceId: string, input: ResidenceDocumentInput) => Promise<void>
 }) {
   const [residenceId, setResidenceId] = useState("")
   const [category, setCategory] = useState<string>(RESIDENCE_DOCUMENT_CATEGORIES[0])
   const [name, setName] = useState("")
   const [file, setFile] = useState<File | null>(null)
+  const [adminOnly, setAdminOnly] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -44,6 +48,7 @@ export function ResidenceDocumentFormDialog({
       setCategory(RESIDENCE_DOCUMENT_CATEGORIES[0])
       setName("")
       setFile(null)
+      setAdminOnly(true)
     }
   }, [open, initialResidenceId])
 
@@ -65,7 +70,7 @@ export function ResidenceDocumentFormDialog({
     }
     setSubmitting(true)
     try {
-      await onSubmit(residenceId, { name: name.trim(), category, file })
+      await onSubmit(residenceId, { name: name.trim(), category, file, adminOnly: canHide && adminOnly })
     } catch (err) {
       toast.error("Échec de l'enregistrement : " + (err as Error).message)
     } finally {
@@ -154,6 +159,20 @@ export function ResidenceDocumentFormDialog({
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
             </div>
+
+            {canHide && (
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 shrink-0 rounded border-input"
+                  checked={adminOnly}
+                  onChange={(e) => setAdminOnly(e.target.checked)}
+                />
+                <span className="leading-snug">
+                  Ne pas partager : visible du seul superAdmin, ni de l'agence ni des résidents
+                </span>
+              </label>
+            )}
           </div>
 
           <DialogFooter>

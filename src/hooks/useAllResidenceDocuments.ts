@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useScopedResidences } from "@/hooks/useScopedResidenceIds"
 import { subscribeToResidenceDocuments } from "@/lib/residenceDocuments"
 import type { ResidenceDocument } from "@/types/document"
@@ -14,6 +15,7 @@ export function useAllResidenceDocuments(
   onError: (message: string) => void) {
   const [byResidence, setByResidence] = useState<Record<string, ResidenceDocument[]>>({})
   const { residences, loading } = useScopedResidences()
+  const { isSuperAdmin } = useIsSuperAdmin()
   const scopedResidences = residences
 
   useEffect(() => {
@@ -34,11 +36,14 @@ export function useAllResidenceDocuments(
     [residences]
   )
 
+  // Documents non partagés (adminOnly) : superAdmin seulement ; cachés aussi
+  // tant que le rôle n'est pas connu.
   const documents: ResidenceDocumentWithResidence[] = useMemo(() => {
     return Object.values(byResidence)
       .flat()
+      .filter((d) => isSuperAdmin || !d.adminOnly)
       .map((d) => ({ ...d, residenceName: residenceNameById.get(d.residenceId) ?? d.residenceId }))
-  }, [byResidence, residenceNameById])
+  }, [byResidence, residenceNameById, isSuperAdmin])
 
   return { documents, residences, loading }
 }

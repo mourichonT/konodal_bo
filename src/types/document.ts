@@ -23,12 +23,17 @@ export type ResidenceDocument = {
   documentPathRecto: string
   extension: string
   timeStamp: Date | null
+  // Document non partagé (champ Firestore `adminOnly`, absent = partagé
+  // comme avant) : affiché au seul superAdmin, ni à l'agence ou ses agents
+  // (BO), ni aux résidents (app). Nodo y garde accès.
+  adminOnly: boolean
 }
 
 export type ResidenceDocumentInput = {
   name: string
   category: string
   file: File
+  adminOnly?: boolean
 }
 
 // Catégories de documents de lot - propres au BO. L'app mobile utilise
