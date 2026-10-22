@@ -39,6 +39,31 @@ export type UserEmail = {
   redacted: boolean
   // Destinataire(s) ou expéditeur affiché(s).
   counterpart: string
+  // Filtre des mails au syndic (nodo_mail.py) : message au syndic lu par
+  // Nodo - en cours d'analyse, traité par Nodo (retenu), transmis par Nodo
+  // ou par le résident après la réponse de Nodo. null sinon.
+  nodo: NodoMailState | null
+}
+
+export type NodoMailState = {
+  state: "pending" | "answered" | "passed" | "forwarded"
+  answer: string
+  reason: string
+}
+
+function nodoMailState(d: DocumentData): NodoMailState | null {
+  const nodo = (d.nodo as Record<string, unknown> | undefined) ?? {}
+  const state: NodoMailState["state"] | null =
+    d.status === "nodo_pending"
+      ? "pending"
+      : d.status === "nodo_answered"
+        ? "answered"
+        : nodo.forwardedByResidentAt
+          ? "forwarded"
+          : nodo.decision === "forward"
+            ? "passed"
+            : null
+  return state ? { state, answer: String(nodo.answer ?? ""), reason: String(nodo.reason ?? "") } : null
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -78,6 +103,7 @@ function fromLog(snap: QueryDocumentSnapshot<DocumentData>): UserEmail {
     sentBy: d.sentBy ?? null,
     redacted: d.redacted === true,
     counterpart: (inbound ? d.from : d.to) ?? "",
+    nodo: null,
   }
 }
 
@@ -117,6 +143,7 @@ function fromResidenceMail(residenceId: string, uid: string, snap: QueryDocument
     sentBy: null,
     redacted: false,
     counterpart: d.from ?? to,
+    nodo: nodoMailState(d),
   }
 }
 

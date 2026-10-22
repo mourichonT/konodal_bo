@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
+  ArrowLeft,
   Briefcase,
   Check,
   CreditCard,
@@ -39,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import { FilterKpiCard } from "@/components/FilterKpiCard";
 import { NodoQuotaSummary } from "@/components/nodo/NodoQuotaSummary";
+import { NodoMailFilterSection } from "@/components/NodoMailFilterSection";
 import { PRIMARY_CTA_CLASS } from "@/lib/utils";
 import {
   createGerance,
@@ -47,6 +49,7 @@ import {
   revokeSuccessMessage,
   REVOKE_CONFIRM_MESSAGE,
   setDeptAccountUid,
+  subscribeToGerance,
   subscribeToGerances,
   updateGerance,
   updateGeranceAddress,
@@ -85,11 +88,15 @@ const serviceTypes: ServiceType[] = ["serviceSyndic", "geranceLocative"];
 // l'ajout de cette limite).
 const AGENCY_NAME_MAX_LENGTH = 20;
 
+// siret/responsableLegal compris : sans eux, enregistrer la fiche effaçait
+// ces deux champs (updateGerance les réécrit vides).
 function geranceToInput(gerance: Gerance): GeranceInput {
   return {
     name: gerance.name,
     address: gerance.address,
     services: gerance.services,
+    siret: gerance.siret,
+    responsableLegal: gerance.responsableLegal,
   };
 }
 
@@ -108,11 +115,6 @@ function matchesSearch(gerance: Gerance, search: string): boolean {
 export default function AgencesPage() {
   const [allGerances, setAllGerances] = useState<Gerance[]>([]);
   const [loading, setLoading] = useState(true);
-  // ID plutôt qu'un snapshot Gerance : le statut "compte actif" affiché dans
-  // le dialog (posé par inviteAgencyAccount) doit rester à jour en direct
-  // pendant que le dialog reste ouvert, pas figé sur l'état au moment du
-  // clic "Modifier".
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState<ServiceType | null>(null);
@@ -149,11 +151,6 @@ export default function AgencesPage() {
       return allGerances.filter((g) => g.id === ownGeranceId);
     return [];
   }, [allGerances, isSuperAdmin, isAgence, isAgent, ownGeranceId]);
-
-  const editingGerance = useMemo(
-    () => gerances.find((g) => g.id === editingId) ?? null,
-    [gerances, editingId],
-  );
 
   const filteredGerances = useMemo(
     () =>
@@ -309,7 +306,8 @@ export default function AgencesPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setEditingId(gerance.id)}
+                            nativeButton={false}
+                            render={<Link to={`/agences/${gerance.id}`} />}
                           >
                             <Pencil />
                             Modifier
@@ -347,23 +345,122 @@ export default function AgencesPage() {
           />
         </>
       )}
+    </div>
+  );
+}
 
-      {/* Dialog d'édition partagé entre les deux vues (répertoire Superadmin
-          et fiche unique Agence) - setEditingId est déclenché depuis l'une
-          ou l'autre selon le rôle connecté. */}
-      <GeranceFormDialog
-        open={editingId !== null}
-        onOpenChange={(open) => !open && setEditingId(null)}
-        title="Modifier l'agence"
-        initial={editingGerance ? geranceToInput(editingGerance) : undefined}
-        gerance={editingGerance}
-        onSubmit={async (input) => {
-          if (!editingGerance) return;
-          await updateGerance(editingGerance.id, input);
-          toast.success("Agence mise à jour");
-          setEditingId(null);
-        }}
-      />
+// Fiche d'une agence pour le superAdmin (/agences/:id), sur le modèle des
+// fiches résidence et utilisateur : « Modifier » du répertoire y mène, plus
+// de modale. Même formulaire que la création (GeranceForm), avec à côté les
+// licences, la consommation de Nodo et l'option « Nodo répond aux
+// copropriétaires ». Le compte agence garde sa propre page (OwnAgencyPage).
+export function AgenceDetailPage() {
+  const { id = "" } = useParams<{ id: string }>();
+  const [gerance, setGerance] = useState<Gerance | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    return subscribeToGerance(
+      id,
+      (data) => {
+        setGerance(data);
+        setLoading(false);
+      },
+      (error) => {
+        toast.error("Impossible de charger l'agence : " + error.message);
+        setLoading(false);
+      },
+    );
+  }, [id]);
+
+  // Copie de travail figée au chargement de CETTE agence : les instantanés
+  // suivants (compte invité, agent ajouté) mettent à jour les statuts mais
+  // n'écrasent pas une saisie en cours.
+  const [initial, setInitial] = useState<GeranceInput | undefined>();
+  useEffect(() => {
+    setInitial(undefined);
+  }, [id]);
+  useEffect(() => {
+    if (gerance && gerance.id === id && !initial) setInitial(geranceToInput(gerance));
+  }, [gerance, id, initial]);
+
+  const activeServices = gerance
+    ? serviceTypes.filter((type) => gerance.services[type])
+    : [];
+
+  return (
+    <div className="-mt-[20px] flex flex-col gap-5">
+      <Link
+        to="/agences"
+        className="flex w-fit items-center gap-1.5 text-[13px] font-semibold text-[oklch(50%_0.01_150)] hover:text-foreground"
+      >
+        <ArrowLeft className="size-3.5" />
+        Agences
+      </Link>
+
+      {!gerance && (
+        <div className="flex flex-col gap-2">
+          <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
+            {loading ? "…" : "Agence introuvable"}
+          </h1>
+          {!loading && (
+            <p className="text-muted-foreground">
+              Cette agence n'existe pas ou a été supprimée.
+            </p>
+          )}
+        </div>
+      )}
+
+      {gerance && (
+        <>
+          <div className="flex flex-wrap items-center gap-5 rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-[24px_28px] shadow-[0_14px_34px_-24px_oklch(20%_0_0/0.14)]">
+            <div className="flex size-16 shrink-0 items-center justify-center rounded-[20px] bg-[oklch(93%_0.05_150)]">
+              <Briefcase className="size-7 text-[oklch(32%_0.09_155)]" />
+            </div>
+            <div className="min-w-[240px] flex-1">
+              <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
+                {gerance.name || "Agence"}
+              </h1>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                {[
+                  gerance.address.street,
+                  [gerance.address.zipCode, gerance.address.city].join(" "),
+                ]
+                  .filter((part) => part.trim())
+                  .join(" — ") || "Adresse non renseignée"}
+                {activeServices.map((type) => (
+                  <Badge key={type} variant="secondary">
+                    {serviceTypeLabels[type]}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-[24px_28px]">
+              {initial && (
+                <GeranceForm
+                  key={gerance.id}
+                  initial={initial}
+                  gerance={gerance}
+                  className="flex flex-col gap-4"
+                  onSubmit={async (input) => {
+                    await updateGerance(gerance.id, input);
+                    toast.success("Agence mise à jour");
+                  }}
+                />
+              )}
+            </div>
+            <aside className="flex flex-col gap-4">
+              <BillingSummary gerance={gerance} />
+              <NodoQuotaSummary geranceId={gerance.id} />
+              <NodoMailFilterSection geranceId={gerance.id} />
+            </aside>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -436,17 +533,58 @@ function BillingSummary({ gerance }: { gerance: Gerance }) {
   );
 }
 
+// Création d'une agence (répertoire Superadmin) : seul usage restant de la
+// modale, la modification se fait sur la fiche /agences/:id.
 function GeranceFormDialog({
   open,
   onOpenChange,
   title,
-  initial,
-  gerance,
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  onSubmit: (input: GeranceInput) => Promise<void>;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <GeranceForm
+          resetKey={open}
+          onSubmit={onSubmit}
+          onCancel={() => onOpenChange(false)}
+          className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4"
+          bodyClassName="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]"
+          header={
+            <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
+              <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">
+                Agence
+              </span>
+              <DialogTitle>{title}</DialogTitle>
+            </DialogHeader>
+          }
+          renderFooter={(buttons) => <DialogFooter>{buttons}</DialogFooter>}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Formulaire complet d'une agence (identité, services, comptes, agents) :
+// dans la modale de création et sur la fiche /agences/:id.
+function GeranceForm({
+  initial,
+  gerance,
+  onSubmit,
+  onCancel,
+  resetKey,
+  header,
+  className,
+  bodyClassName = "flex flex-col gap-4",
+  renderFooter = (buttons) => (
+    <div className="flex justify-end gap-2 border-t pt-4">{buttons}</div>
+  ),
+}: {
   initial?: GeranceInput;
   // Objet Gerance PERSISTÉ (distinct de `initial`, la copie de travail
   // éditable) - fourni uniquement en édition, jamais en création (une
@@ -454,6 +592,14 @@ function GeranceFormDialog({
   // jusqu'à ServiceSection pour le statut "compte actif" par agent.
   gerance?: Gerance | null;
   onSubmit: (input: GeranceInput) => Promise<void>;
+  onCancel?: () => void;
+  // Les champs repartent de `initial` quand cette valeur change (ouverture
+  // de la modale) ; sur la fiche, le formulaire est remonté par sa clé.
+  resetKey?: unknown;
+  header?: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+  renderFooter?: (buttons: ReactNode) => ReactNode;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [street, setStreet] = useState(
@@ -484,18 +630,17 @@ function GeranceFormDialog({
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      setName(initial?.name ?? "");
-      setStreet(initial?.address.street ?? emptyAddress.street);
-      setZipCode(initial?.address.zipCode ?? emptyAddress.zipCode);
-      setCity(initial?.address.city ?? emptyAddress.city);
-      setSiret(initial?.siret ?? "");
-      setResponsableLegal(initial?.responsableLegal ?? "");
-      setServices(initial?.services ?? {});
-      setCompanyQuery("");
-      setCompanyResults([]);
-    }
-  }, [open, initial]);
+    setName(initial?.name ?? "");
+    setStreet(initial?.address.street ?? emptyAddress.street);
+    setZipCode(initial?.address.zipCode ?? emptyAddress.zipCode);
+    setCity(initial?.address.city ?? emptyAddress.city);
+    setSiret(initial?.siret ?? "");
+    setResponsableLegal(initial?.responsableLegal ?? "");
+    setServices(initial?.services ?? {});
+    setCompanyQuery("");
+    setCompanyResults([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- remise à zéro à l'ouverture seulement
+  }, [resetKey]);
 
   async function handleSearchCompany() {
     if (!companyQuery.trim()) return;
@@ -561,193 +706,178 @@ function GeranceFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <form
-          onSubmit={handleSubmit}
-          className="flex max-h-[calc(100vh-3rem)] min-w-0 flex-col gap-4"
-        >
-          <DialogHeader className="border-b border-[oklch(95%_0.003_100)] pb-4">
-            <span className="text-[11.5px] font-bold tracking-wide text-primary uppercase">
-              Agence
+    <form onSubmit={handleSubmit} className={className}>
+      {header}
+
+      <div className={bodyClassName}>
+        <div className="flex flex-col gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-[oklch(78%_0.07_155)] bg-[oklch(98%_0.008_155)] p-[18px_20px]">
+          <Label htmlFor="ger-company-search" className="font-bold">
+            Rechercher l'entreprise{" "}
+            <span className="font-medium text-muted-foreground">
+              (SIREN, SIRET ou nom)
             </span>
-            <DialogTitle>{title}</DialogTitle>
-          </DialogHeader>
-
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden pr-4 pl-[5px]">
-            {gerance && <BillingSummary gerance={gerance} />}
-            {gerance && <NodoQuotaSummary geranceId={gerance.id} />}
-
-            <div className="flex flex-col gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-[oklch(78%_0.07_155)] bg-[oklch(98%_0.008_155)] p-[18px_20px]">
-              <Label htmlFor="ger-company-search" className="font-bold">
-                Rechercher l'entreprise{" "}
-                <span className="font-medium text-muted-foreground">
-                  (SIREN, SIRET ou nom)
-                </span>
-              </Label>
-              <div className="flex flex-wrap gap-2.5">
-                <Input
-                  id="ger-company-search"
-                  placeholder="Rechercher (nom, SIRET, SIREN)…"
-                  className="max-w-xs"
-                  value={companyQuery}
-                  onChange={(e) => setCompanyQuery(e.target.value)}
-                  onKeyDown={(e) =>
-                    e.key === "Enter" &&
-                    (e.preventDefault(), handleSearchCompany())
-                  }
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleSearchCompany}
-                  disabled={searching}
-                  className="border-0 bg-[oklch(24%_0.03_155)] text-white hover:bg-[oklch(30%_0.04_155)]"
-                >
-                  <Search />
-                  Rechercher
-                </Button>
-              </div>
-              {companyResults.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  {companyResults.map((result) => (
-                    <div
-                      key={result.siret || result.siren}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 p-2 text-sm"
-                    >
-                      <div>
-                        <span className="font-medium">{result.name}</span>
-                        <span className="text-muted-foreground">
-                          {" — "}
-                          {[
-                            result.address.street,
-                            [result.address.zipCode, result.address.city].join(
-                              " ",
-                            ),
-                          ]
-                            .filter(Boolean)
-                            .join(" — ") || "—"}
-                          {result.responsableLegal
-                            ? ` · ${result.responsableLegal}`
-                            : ""}
-                        </span>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => handleApplyCompanyResult(result)}
-                      >
-                        Utiliser ces informations
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className="m-0 text-xs leading-relaxed text-[oklch(48%_0.06_155)]">
-                Préremplit le nom, l'adresse, le SIRET et le responsable légal
-                ci-dessous - à vérifier avant d'enregistrer, ou à
-                saisir/corriger manuellement sans passer par la recherche.
-              </p>
-            </div>
-
-            <div className="mt-[20px] flex flex-col gap-1.5">
-              <Label htmlFor="ger-name">Nom de l'agence</Label>
-              <Input
-                id="ger-name"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ger-street">Adresse</Label>
-              <AddressAutocompleteInput
-                id="ger-street"
-                required
-                value={street}
-                onChange={setStreet}
-                onSelect={(a) => {
-                  setStreet(a.street);
-                  setZipCode(a.zipCode);
-                  setCity(a.city);
-                }}
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ger-zip">Code postal</Label>
-                <ZipCodeCityInput
-                  id="ger-zip"
-                  required
-                  value={zipCode}
-                  onChange={setZipCode}
-                  onCityResolved={setCity}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ger-city">Ville</Label>
-                <Input
-                  id="ger-city"
-                  required
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ger-siret">SIRET / SIREN</Label>
-                <Input
-                  id="ger-siret"
-                  placeholder="123 456 789 00012"
-                  value={siret}
-                  onChange={(e) => setSiret(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ger-responsable">Responsable légal</Label>
-                <Input
-                  id="ger-responsable"
-                  value={responsableLegal}
-                  onChange={(e) => setResponsableLegal(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              {serviceTypes.map((type) => (
-                <ServiceSection
-                  key={type}
-                  type={type}
-                  dept={services[type]}
-                  gerance={gerance}
-                  onToggle={(enabled) => toggleService(type, enabled)}
-                  onChange={(dept) => updateDept(type, dept)}
-                />
-              ))}
-            </div>
-          </div>
-
-          <DialogFooter>
+          </Label>
+          <div className="flex flex-wrap gap-2.5">
+            <Input
+              id="ger-company-search"
+              placeholder="Rechercher (nom, SIRET, SIREN)…"
+              className="max-w-xs"
+              value={companyQuery}
+              onChange={(e) => setCompanyQuery(e.target.value)}
+              onKeyDown={(e) =>
+                e.key === "Enter" &&
+                (e.preventDefault(), handleSearchCompany())
+              }
+            />
             <Button
               type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
+              size="sm"
+              onClick={handleSearchCompany}
+              disabled={searching}
+              className="border-0 bg-[oklch(24%_0.03_155)] text-white hover:bg-[oklch(30%_0.04_155)]"
             >
+              <Search />
+              Rechercher
+            </Button>
+          </div>
+          {companyResults.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {companyResults.map((result) => (
+                <div
+                  key={result.siret || result.siren}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 p-2 text-sm"
+                >
+                  <div>
+                    <span className="font-medium">{result.name}</span>
+                    <span className="text-muted-foreground">
+                      {" — "}
+                      {[
+                        result.address.street,
+                        [result.address.zipCode, result.address.city].join(
+                          " ",
+                        ),
+                      ]
+                        .filter(Boolean)
+                        .join(" — ") || "—"}
+                      {result.responsableLegal
+                        ? ` · ${result.responsableLegal}`
+                        : ""}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => handleApplyCompanyResult(result)}
+                  >
+                    Utiliser ces informations
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="m-0 text-xs leading-relaxed text-[oklch(48%_0.06_155)]">
+            Préremplit le nom, l'adresse, le SIRET et le responsable légal
+            ci-dessous - à vérifier avant d'enregistrer, ou à
+            saisir/corriger manuellement sans passer par la recherche.
+          </p>
+        </div>
+
+        <div className="mt-[20px] flex flex-col gap-1.5">
+          <Label htmlFor="ger-name">Nom de l'agence</Label>
+          <Input
+            id="ger-name"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ger-street">Adresse</Label>
+          <AddressAutocompleteInput
+            id="ger-street"
+            required
+            value={street}
+            onChange={setStreet}
+            onSelect={(a) => {
+              setStreet(a.street);
+              setZipCode(a.zipCode);
+              setCity(a.city);
+            }}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ger-zip">Code postal</Label>
+            <ZipCodeCityInput
+              id="ger-zip"
+              required
+              value={zipCode}
+              onChange={setZipCode}
+              onCityResolved={setCity}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ger-city">Ville</Label>
+            <Input
+              id="ger-city"
+              required
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ger-siret">SIRET / SIREN</Label>
+            <Input
+              id="ger-siret"
+              placeholder="123 456 789 00012"
+              value={siret}
+              onChange={(e) => setSiret(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ger-responsable">Responsable légal</Label>
+            <Input
+              id="ger-responsable"
+              value={responsableLegal}
+              onChange={(e) => setResponsableLegal(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          {serviceTypes.map((type) => (
+            <ServiceSection
+              key={type}
+              type={type}
+              dept={services[type]}
+              gerance={gerance}
+              onToggle={(enabled) => toggleService(type, enabled)}
+              onChange={(dept) => updateDept(type, dept)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {renderFooter(
+        <>
+          {onCancel && (
+            <Button type="button" variant="outline" onClick={onCancel}>
               Annuler
             </Button>
-            <Button
-              type="submit"
-              disabled={submitting}
-              className={PRIMARY_CTA_CLASS}
-            >
-              <Save />
-              Enregistrer
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          )}
+          <Button
+            type="submit"
+            disabled={submitting}
+            className={PRIMARY_CTA_CLASS}
+          >
+            <Save />
+            Enregistrer
+          </Button>
+        </>,
+      )}
+    </form>
   );
 }
 
@@ -1291,6 +1421,8 @@ function OwnAgencyPage({
         <>
           <AgencyInfoCard gerance={gerance} canEdit={canEdit} />
           <AgencyBillingCard gerance={gerance} canEdit={canEdit} />
+          {/* Option de l'agence, cachée aux agents (NodoMailFilterSection). */}
+          <NodoMailFilterSection geranceId={gerance.id} />
           {serviceTypes
             .filter((type) => gerance.services[type])
             .map((type) => (

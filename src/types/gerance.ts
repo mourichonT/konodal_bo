@@ -48,6 +48,11 @@ export type Gerance = {
   // l'annuaire Superadmin : une agence/agent ne doit voir/gérer que le
   // rattachement par résidence, jamais par gérance entière.
   contactRefs?: Record<string, boolean>
+  // « Nodo répond aux copropriétaires » : option de l'agence pour toutes les
+  // résidences dont elle est le syndic, réglée par le compte agence ou un
+  // superAdmin (set_nodo_mail_filter, functions_python/nodo_mail.py),
+  // jamais en direct (firestore.rules) ; lue par NodoMailFilterSection.
+  nodoMailFilter?: { enabled?: boolean; updatedBy?: string }
 }
 
 export const emptyAgencyDept: AgencyDept = {
