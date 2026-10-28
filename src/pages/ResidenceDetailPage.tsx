@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, ChevronDown, Eye, GripVertical, Home, Info, MapPin, MoreVertical, Plus, Search, Settings2, ShieldOff, Trash2, Upload, UserPlus, Vote as VoteIcon, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Eye, GripVertical, Home, Info, MapPin, MoreVertical, Plus, Receipt, Search, Settings2, ShieldOff, Trash2, Upload, UserPlus, Vote as VoteIcon, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -70,6 +70,7 @@ import {
 } from "@/lib/lots"
 import { DeleteResidenceSection } from "@/components/DeleteResidenceSection"
 import { CsAvanceSection } from "@/components/CsAvanceSection"
+import { ResidenceBillingTab } from "@/components/residence-billing/ResidenceBillingTab"
 import { LotImportDialog } from "@/components/LotImportDialog"
 import { VoteFormDialog } from "@/components/VoteFormDialog"
 import { saveResidenceAccessPoint, setStructureAccessPoint, subscribeToResidenceAccessPoint } from "@/lib/accessPoints"
@@ -104,6 +105,8 @@ const residenceTabs = [
   { key: "configuration", label: "Configuration", icon: Settings2 },
   { key: "lots", label: "Configuration des lots", icon: Home },
   { key: "votes", label: "Votes & assemblées générales", icon: VoteIcon },
+  // Option CS avancé (abonnement, remises, factures) : superAdmin seulement.
+  { key: "facturation", label: "Facturation", icon: Receipt },
 ] as const
 type ResidenceTabKey = (typeof residenceTabs)[number]["key"]
 
@@ -162,7 +165,7 @@ export default function ResidenceDetailPage() {
       {residence && (
         <>
           <div className="flex w-full items-center gap-1 overflow-x-auto rounded-2xl bg-[oklch(93%_0.005_100)] p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {residenceTabs.map((tab) => (
+            {residenceTabs.filter((tab) => tab.key !== "facturation" || isSuperAdmin).map((tab) => (
               <button
                 key={tab.key}
                 type="button"
@@ -184,7 +187,8 @@ export default function ResidenceDetailPage() {
             <div className="flex flex-col gap-5">
               <InfoSection residence={residence} />
               <CsMembersSection residenceId={id} residence={residence} />
-              <CsAvanceSection residenceId={id} />
+              {/* Konodal : tout est dans l'onglet Facturation. */}
+              {!isSuperAdmin && <CsAvanceSection residenceId={id} />}
               <CharterStatusSection residenceId={id} />
               {isSuperAdmin && <DeleteResidenceSection residence={residence} />}
             </div>
@@ -200,6 +204,8 @@ export default function ResidenceDetailPage() {
           {activeTab === "lots" && <LotsSection residenceId={id} structures={structures} />}
 
           {activeTab === "votes" && <VotesSection residenceId={id} />}
+
+          {activeTab === "facturation" && isSuperAdmin && <ResidenceBillingTab residenceId={id} residence={residence} />}
         </>
       )}
     </div>
