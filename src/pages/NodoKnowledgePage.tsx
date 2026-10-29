@@ -770,12 +770,12 @@ function AddSourceDialog({
   // Sans fichier déjà dans la base (même nom), comme les liens.
   const zip = useMemo(() => {
     if (!isZip || zipRead?.file !== file) return null
-    if (!zipRead.content) return { readable: false, entries: [], existing: 0, ignored: [] }
-    const { entries, ignored } = zipRead.content
+    if (!zipRead.content) return { readable: false, files: [], existing: 0, ignored: [] }
+    const { files, ignored } = zipRead.content
     return {
       readable: true,
-      entries: entries.filter((e) => !existingFileNames.has(e.file.name)),
-      existing: entries.filter((e) => existingFileNames.has(e.file.name)).length,
+      files: files.filter((f) => !existingFileNames.has(f.name)),
+      existing: files.filter((f) => existingFileNames.has(f.name)).length,
       ignored,
     }
   }, [isZip, zipRead, file, existingFileNames])
@@ -851,9 +851,9 @@ function AddSourceDialog({
   async function handleZip() {
     if (!zip) return toast.error("Lecture de l'archive en cours")
     if (!zip.readable) return toast.error("Archive ZIP illisible")
-    if (zip.entries.length === 0) return toast.error("Aucun nouveau fichier à ajouter")
-    await addEach(zip.entries, "fichier", (entry) =>
-      addKnowledgeSource({ kind: "file", title: entry.title, category, file: entry.file })
+    if (zip.files.length === 0) return toast.error("Aucun nouveau fichier à ajouter")
+    await addEach(zip.files, "fichier", (zipFile) =>
+      addKnowledgeSource({ kind: "file", title: "", category: "Autre", file: zipFile, autoMeta: true })
     )
   }
 
@@ -928,7 +928,7 @@ function AddSourceDialog({
                       ? "Lecture de l'archive…"
                       : !zip.readable
                         ? "Archive ZIP illisible"
-                        : `${zip.entries.length} nouveau(x) fichier(s), une source chacun`}
+                        : `${zip.files.length} nouveau(x) fichier(s), une source chacun : titre et catégorie déduits de chaque document`}
                     {zip?.readable && zip.existing > 0 ? ` · ${zip.existing} déjà dans la base, ignoré(s)` : ""}
                     {zip?.readable && zip.ignored.length > 0
                       ? ` · ${zip.ignored.length} ignoré(s), autre format ou plus de 15 Mo : ` +
@@ -998,21 +998,23 @@ function AddSourceDialog({
               </div>
             )}
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="kb-category">Catégorie</Label>
-              <select
-                id="kb-category"
-                className={FIELD_CLASS}
-                value={category}
-                onChange={(e) => setCategory(e.target.value as KnowledgeCategory)}
-              >
-                {KNOWLEDGE_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!isZip && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="kb-category">Catégorie</Label>
+                <select
+                  id="kb-category"
+                  className={FIELD_CLASS}
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as KnowledgeCategory)}
+                >
+                  {KNOWLEDGE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {kind === "text" && (
               <div className="flex flex-col gap-1.5">

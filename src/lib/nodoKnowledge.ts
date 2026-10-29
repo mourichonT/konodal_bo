@@ -10,7 +10,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
-import { strFromU8, unzipSync } from "fflate"
+import { unzipSync } from "fflate"
 import { auth, db, functions } from "@/firebase"
 
 // Base de connaissances de Nodo (articles, procédures, textes de référence),
@@ -93,15 +93,13 @@ export function fileExtension(name: string) {
   return name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : ""
 }
 
-export type KnowledgeZipEntry = { file: File; title: string }
-export type KnowledgeZipContent = { entries: KnowledgeZipEntry[]; ignored: string[] }
+export type KnowledgeZipContent = { files: File[]; ignored: string[] }
 
 // Archive ZIP du dialogue d'ajout, ouverte dans le navigateur : une source
 // « fichier » par document lisible, envoyée par nodo_kb_add_source comme un
-// fichier choisi seul. Dossiers aplatis ; fichiers cachés et __MACOSX passés
-// sous silence ; autre format ou plus de 15 Mo : ignoré (listé). Titre d'un
-// Markdown : son titre « # » de première ligne, sinon le nom du fichier
-// (choisi par le serveur).
+// fichier choisi seul, avec autoMeta (titre et catégorie déduits du texte
+// par nodo_kb_process). Dossiers aplatis ; fichiers cachés et __MACOSX
+// passés sous silence ; autre format ou plus de 15 Mo : ignoré (listé).
 export async function readKnowledgeZip(archive: File): Promise<KnowledgeZipContent> {
   const ignored: string[] = []
   const files = unzipSync(new Uint8Array(await archive.arrayBuffer()), {
@@ -113,13 +111,12 @@ export async function readKnowledgeZip(archive: File): Promise<KnowledgeZipConte
       return readable
     },
   })
-  const entries = Object.entries(files).map(([name, bytes]) => {
-    const file = new File([bytes], name.split(/[\\/]/).pop()!)
-    const heading = fileExtension(file.name) === "md" ? /^﻿?#\s+(.+)/.exec(strFromU8(bytes.subarray(0, 1000))) : null
-    return { file, title: heading?.[1].trim() ?? "" }
-  })
-  entries.sort((a, b) => a.file.name.localeCompare(b.file.name, "fr"))
-  return { entries, ignored }
+  return {
+    files: Object.entries(files)
+      .map(([name, bytes]) => new File([bytes], name.split(/[\\/]/).pop()!))
+      .sort((a, b) => a.name.localeCompare(b.name, "fr")),
+    ignored,
+  }
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -132,7 +129,9 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export type KnowledgeSourceInput =
-  | { kind: "file"; title: string; category: KnowledgeCategory; file: File }
+  // autoMeta : titre et catégorie déduits du texte à l'indexation (fichiers
+  // d'un ZIP) ; title et category sont alors ignorés.
+  | { kind: "file"; title: string; category: KnowledgeCategory; file: File; autoMeta?: boolean }
   // allowWeb : ajoute aussi le site du lien aux sites web autorisés.
   | { kind: "url"; title: string; category: KnowledgeCategory; url: string; allowWeb?: boolean }
   | { kind: "text"; title: string; category: KnowledgeCategory; text: string }
@@ -143,7 +142,8 @@ export async function addKnowledgeSource(input: KnowledgeSourceInput): Promise<s
   })
   const base = { kind: input.kind, title: input.title, category: input.category }
   if (input.kind === "file") {
-    return (await call({ ...base, fileName: input.file.name, contentBase64: await fileToBase64(input.file) })).data.id
+    const contentBase64 = await fileToBase64(input.file)
+    return (await call({ ...base, fileName: input.file.name, contentBase64, autoMeta: !!input.autoMeta })).data.id
   }
   if (input.kind === "url") {
     return (await call({ ...base, url: input.url, allowWeb: !!input.allowWeb })).data.id
