@@ -10,6 +10,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
+import { strFromU8, unzipSync } from "fflate"
 import { auth, db, functions } from "@/firebase"
 
 // Base de connaissances de Nodo (articles, procédures, textes de référence),
@@ -85,6 +86,41 @@ export function subscribeToKnowledgeSources(
 // Limite côté serveur : 15 Mo (KB_MAX_FILE_BYTES). Le fichier transite en
 // base64 dans l'appel : pas de règle Storage à ouvrir côté client.
 export const KNOWLEDGE_MAX_FILE_BYTES = 15 * 1024 * 1024
+// Formats lus par nodo_kb_process (_extract_text).
+export const KNOWLEDGE_FILE_EXTENSIONS = ["pdf", "docx", "xlsx", "html", "htm", "txt", "md", "csv"]
+
+export function fileExtension(name: string) {
+  return name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : ""
+}
+
+export type KnowledgeZipEntry = { file: File; title: string }
+export type KnowledgeZipContent = { entries: KnowledgeZipEntry[]; ignored: string[] }
+
+// Archive ZIP du dialogue d'ajout, ouverte dans le navigateur : une source
+// « fichier » par document lisible, envoyée par nodo_kb_add_source comme un
+// fichier choisi seul. Dossiers aplatis ; fichiers cachés et __MACOSX passés
+// sous silence ; autre format ou plus de 15 Mo : ignoré (listé). Titre d'un
+// Markdown : son titre « # » de première ligne, sinon le nom du fichier
+// (choisi par le serveur).
+export async function readKnowledgeZip(archive: File): Promise<KnowledgeZipContent> {
+  const ignored: string[] = []
+  const files = unzipSync(new Uint8Array(await archive.arrayBuffer()), {
+    filter: ({ name, originalSize }) => {
+      const base = name.split(/[\\/]/).pop() ?? ""
+      if (!base || base.startsWith(".") || name.startsWith("__MACOSX/")) return false
+      const readable = KNOWLEDGE_FILE_EXTENSIONS.includes(fileExtension(base)) && originalSize <= KNOWLEDGE_MAX_FILE_BYTES
+      if (!readable) ignored.push(base)
+      return readable
+    },
+  })
+  const entries = Object.entries(files).map(([name, bytes]) => {
+    const file = new File([bytes], name.split(/[\\/]/).pop()!)
+    const heading = fileExtension(file.name) === "md" ? /^﻿?#\s+(.+)/.exec(strFromU8(bytes.subarray(0, 1000))) : null
+    return { file, title: heading?.[1].trim() ?? "" }
+  })
+  entries.sort((a, b) => a.file.name.localeCompare(b.file.name, "fr"))
+  return { entries, ignored }
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

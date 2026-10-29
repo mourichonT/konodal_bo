@@ -32,9 +32,12 @@ import {
   addWebDomain,
   detectWebDomain,
   deleteKnowledgeSource,
+  fileExtension,
   KNOWLEDGE_CATEGORIES,
+  KNOWLEDGE_FILE_EXTENSIONS,
   KNOWLEDGE_MAX_FILE_BYTES,
   listWebDomains,
+  readKnowledgeZip,
   rejectKnowledgeProposal,
   removeWebDomain,
   subscribeToKnowledgeProposals,
@@ -43,6 +46,7 @@ import {
   type KnowledgeKind,
   type KnowledgeProposal,
   type KnowledgeSource,
+  type KnowledgeZipContent,
   type WebDomainOrigin,
   type WebFamily,
   type WebSearchMode,
@@ -65,9 +69,11 @@ const ADD_MODES: { key: AddMode; label: string; icon: typeof FileText }[] = [
   { key: "bulk", label: "Plusieurs liens", icon: ListPlus },
   { key: "text", ...KIND_META.text },
 ]
-// Pause entre deux ajouts : chaque lien déclenche une indexation (vecteurs
-// OVH) et un téléchargement sur le site source.
+// Pause entre deux ajouts (liens ou fichiers d'un ZIP) : chaque source
+// déclenche une indexation (vecteurs OVH), et un lien un téléchargement sur
+// le site source.
 const BULK_DELAY_MS = 1500
+const FILE_ACCEPT = [...KNOWLEDGE_FILE_EXTENSIONS, "zip"].map((ext) => `.${ext}`).join(",")
 
 type BulkEntry = { url: string; category: KnowledgeCategory | null; title: string }
 
@@ -537,6 +543,10 @@ export default function NodoKnowledgePage() {
     () => new Set(sources.map((s) => s.url).filter((u): u is string => !!u)),
     [sources]
   )
+  const existingFileNames = useMemo(
+    () => new Set(sources.filter((s) => s.kind === "file" && s.fileName).map((s) => s.fileName!)),
+    [sources]
+  )
 
   async function handleRemove() {
     if (!removing) return
@@ -693,6 +703,7 @@ export default function NodoKnowledgePage() {
         open={adding}
         onOpenChange={setAdding}
         existingUrls={existingUrls}
+        existingFileNames={existingFileNames}
       />
 
       <Dialog open={!!removing} onOpenChange={(open) => !open && setRemoving(null)}>
@@ -721,10 +732,12 @@ function AddSourceDialog({
   open,
   onOpenChange,
   existingUrls,
+  existingFileNames,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   existingUrls: Set<string>
+  existingFileNames: Set<string>
 }) {
   const [kind, setKind] = useState<AddMode>("file")
   const [bulkUrls, setBulkUrls] = useState("")
@@ -737,6 +750,35 @@ function AddSourceDialog({
   const [text, setText] = useState("")
   const [allowWeb, setAllowWeb] = useState(false)
   const [saving, setSaving] = useState(false)
+  // Contenu du ZIP choisi (content null : archive illisible) ; tant qu'il
+  // ne correspond pas au fichier courant, la lecture est en cours.
+  const [zipRead, setZipRead] = useState<{ file: File; content: KnowledgeZipContent | null } | null>(null)
+  const isZip = kind === "file" && !!file && fileExtension(file.name) === "zip"
+
+  useEffect(() => {
+    if (!file || fileExtension(file.name) !== "zip") return
+    let cancelled = false
+    readKnowledgeZip(file).then(
+      (content) => !cancelled && setZipRead({ file, content }),
+      () => !cancelled && setZipRead({ file, content: null })
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [file])
+
+  // Sans fichier déjà dans la base (même nom), comme les liens.
+  const zip = useMemo(() => {
+    if (!isZip || zipRead?.file !== file) return null
+    if (!zipRead.content) return { readable: false, entries: [], existing: 0, ignored: [] }
+    const { entries, ignored } = zipRead.content
+    return {
+      readable: true,
+      entries: entries.filter((e) => !existingFileNames.has(e.file.name)),
+      existing: entries.filter((e) => existingFileNames.has(e.file.name)).length,
+      ignored,
+    }
+  }, [isZip, zipRead, file, existingFileNames])
 
   useEffect(() => {
     if (!open) return
@@ -772,36 +814,53 @@ function AddSourceDialog({
     }
   }
 
-  async function handleBulk() {
-    const { entries } = parsedBulk
-    if (entries.length === 0) return toast.error("Aucun nouveau lien à ajouter")
+  // Sources ajoutées une à une, avec une pause entre deux ajouts.
+  async function addEach<T>(items: T[], noun: string, add: (item: T) => Promise<unknown>) {
     setSaving(true)
     let failed = 0
-    for (const [index, entry] of entries.entries()) {
-      setProgress({ done: index, total: entries.length })
+    for (const [index, item] of items.entries()) {
+      setProgress({ done: index, total: items.length })
       try {
-        await addKnowledgeSource({
-          kind: "url",
-          title: entry.title,
-          category: entry.category ?? category,
-          url: entry.url,
-          allowWeb,
-        })
+        await add(item)
       } catch {
         failed += 1
       }
-      if (index < entries.length - 1) await new Promise((resolve) => setTimeout(resolve, BULK_DELAY_MS))
+      if (index < items.length - 1) await new Promise((resolve) => setTimeout(resolve, BULK_DELAY_MS))
     }
     setSaving(false)
     setProgress(null)
-    if (failed) toast.error(`${entries.length - failed} lien(s) ajouté(s), ${failed} refusé(s)`)
-    else toast.success(`${entries.length} lien(s) ajouté(s) : indexation en cours`)
+    if (failed) toast.error(`${items.length - failed} ${noun}(s) ajouté(s), ${failed} refusé(s)`)
+    else toast.success(`${items.length} ${noun}(s) ajouté(s) : indexation en cours`)
     onOpenChange(false)
+  }
+
+  async function handleBulk() {
+    const { entries } = parsedBulk
+    if (entries.length === 0) return toast.error("Aucun nouveau lien à ajouter")
+    await addEach(entries, "lien", (entry) =>
+      addKnowledgeSource({
+        kind: "url",
+        title: entry.title,
+        category: entry.category ?? category,
+        url: entry.url,
+        allowWeb,
+      })
+    )
+  }
+
+  async function handleZip() {
+    if (!zip) return toast.error("Lecture de l'archive en cours")
+    if (!zip.readable) return toast.error("Archive ZIP illisible")
+    if (zip.entries.length === 0) return toast.error("Aucun nouveau fichier à ajouter")
+    await addEach(zip.entries, "fichier", (entry) =>
+      addKnowledgeSource({ kind: "file", title: entry.title, category, file: entry.file })
+    )
   }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (kind === "bulk") return handleBulk()
+    if (isZip) return handleZip()
     if (kind === "file" && !file) return toast.error("Choisissez un fichier")
     if (kind === "file" && file && file.size > KNOWLEDGE_MAX_FILE_BYTES) return toast.error("Fichier trop volumineux (15 Mo maximum)")
     if (kind === "url" && !/^https?:\/\//i.test(url.trim())) return toast.error("Saisissez une adresse http(s)")
@@ -853,13 +912,32 @@ function AddSourceDialog({
 
             {kind === "file" && (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="kb-file">Fichier (PDF, Word, Excel, HTML, texte - 15 Mo max)</Label>
+                <Label htmlFor="kb-file">
+                  Fichier (PDF, Word, Excel, HTML, texte, Markdown - 15 Mo max) ou ZIP de plusieurs fichiers
+                </Label>
                 <Input
                   id="kb-file"
                   type="file"
-                  accept=".pdf,.docx,.xlsx,.html,.htm,.txt,.md,.csv"
+                  accept={FILE_ACCEPT}
+                  disabled={saving}
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
+                {isZip && (
+                  <span className={cn("text-xs", zip && !zip.readable ? "text-red-700" : "text-muted-foreground")}>
+                    {!zip
+                      ? "Lecture de l'archive…"
+                      : !zip.readable
+                        ? "Archive ZIP illisible"
+                        : `${zip.entries.length} nouveau(x) fichier(s), une source chacun`}
+                    {zip?.readable && zip.existing > 0 ? ` · ${zip.existing} déjà dans la base, ignoré(s)` : ""}
+                    {zip?.readable && zip.ignored.length > 0
+                      ? ` · ${zip.ignored.length} ignoré(s), autre format ou plus de 15 Mo : ` +
+                        zip.ignored.slice(0, 5).join(", ") +
+                        (zip.ignored.length > 5 ? "…" : "")
+                      : ""}
+                    {progress ? ` · ajout ${progress.done + 1} / ${progress.total}…` : ""}
+                  </span>
+                )}
               </div>
             )}
             {kind === "url" && (
@@ -911,7 +989,7 @@ function AddSourceDialog({
               </div>
             )}
 
-            {kind !== "bulk" && (
+            {kind !== "bulk" && !isZip && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="kb-title">
                   Titre{kind === "text" ? "" : " (facultatif : nom du fichier ou titre de la page sinon)"}
