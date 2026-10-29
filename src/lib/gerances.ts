@@ -7,6 +7,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
   updateDoc,
   type Unsubscribe,
 } from "firebase/firestore"
@@ -165,7 +166,11 @@ export type AgencyAccountRole = "agence" | "agent"
 // L'activation réelle n'a lieu qu'à la confirmation du paiement Stripe (côté
 // serveur, cf. commentaire sur invite_agency_account) - pending: false quand
 // le compte a été activé immédiatement (siège déjà couvert).
-export type InviteAgencyAccountResult = { uid: string; pending: false } | { pending: true }
+// licenceAdded : licence ajoutée à l'abonnement par cette invitation (aucune
+// si une licence disponible a été prise).
+export type InviteAgencyAccountResult =
+  | { uid: string; pending: false; licenceAdded: "service" | "agent" | null }
+  | { pending: true }
 
 export async function inviteAgencyAccount(
   geranceId: string,
@@ -184,9 +189,9 @@ export async function inviteAgencyAccount(
   return result.data
 }
 
-// Révocation = suppression de la licence (revoke_agency_account) : siège
-// Stripe décompté (abonnement résilié en fin de période si c'était le
-// dernier), adresse du service libérée, et compte supprimé - sauf s'il sert
+// Révocation (revoke_agency_account) : la licence du compte est libérée (elle
+// reste achetée et disponible, seul « Retirer » réduit l'abonnement),
+// l'adresse du service est libérée, et le compte supprimé - sauf s'il sert
 // encore ailleurs (agent d'une autre gérance, compte résident) :
 // accountDeleted indique lequel des deux.
 export async function revokeAgencyAccount(
@@ -202,11 +207,99 @@ export async function revokeAgencyAccount(
   return { accountDeleted: !!data.accountDeleted }
 }
 
+// Équipe de l'agence (get_agency_team) : adresse et dernière connexion de
+// chaque compte, lues dans Firebase Auth. Jamais connecté = invitation pas
+// encore acceptée.
+export type AgencyTeamMember = {
+  uid: string
+  email: string | null
+  createdAt: Date | null
+  lastSignInAt: Date | null
+}
+
+export async function getAgencyTeam(geranceId: string): Promise<Record<string, AgencyTeamMember>> {
+  const call = httpsCallable<
+    { geranceId: string },
+    { members: { uid: string; email: string | null; createdAt: number | null; lastSignInAt: number | null }[] }
+  >(functions, "get_agency_team")
+  const { data } = await call({ geranceId })
+  return Object.fromEntries(
+    data.members.map((m) => [
+      m.uid,
+      {
+        uid: m.uid,
+        email: m.email,
+        createdAt: m.createdAt ? new Date(m.createdAt) : null,
+        lastSignInAt: m.lastSignInAt ? new Date(m.lastSignInAt) : null,
+      },
+    ])
+  )
+}
+
+// Nouvel email d'invitation (lien de mot de passe) à un compte jamais connecté.
+export async function resendAgencyInvite(geranceId: string, uid: string): Promise<void> {
+  const call = httpsCallable<{ geranceId: string; uid: string }, { success: boolean }>(
+    functions,
+    "resend_agency_invite"
+  )
+  await call({ geranceId, uid })
+}
+
+// « Libérer la licence » (licensed: false) : l'agent reste dans l'équipe sans
+// aucun accès. « Attribuer une licence » (true) : licence disponible, sinon
+// une de plus au prorata (licenceAdded). licence_billing.set_agent_licence.
+export async function setAgentLicence(
+  geranceId: string,
+  uid: string,
+  licensed: boolean
+): Promise<{ licenceAdded: boolean }> {
+  const call = httpsCallable<
+    { geranceId: string; uid: string; licensed: boolean; requestId: string },
+    { licensed: boolean; licenceAdded?: boolean }
+  >(functions, "set_agent_licence")
+  const { data } = await call({ geranceId, uid, licensed, requestId: crypto.randomUUID() })
+  return { licenceAdded: !!data.licenceAdded }
+}
+
+// Bilan renvoyé par admin_delete_gerance (functions_python/main.py) : en
+// dryRun, sert à la fenêtre de confirmation. attachedResidences non vide =
+// suppression refusée (résidence, bâtiment ou lot encore rattaché).
+export type GeranceDeletionSummary = {
+  name: string
+  attachedResidences: { id: string; name: string; residence: boolean; structures: number; lots: number }[]
+  accountsDeleted: number
+  accountsKept: number
+  contacts: number
+  pendingInvitations: number
+  subscriptionStatus: string | null
+  subscriptionActive: boolean
+  deleted?: boolean
+}
+
+// Suppression complète d'une agence (superAdmin) : abonnement Stripe résilié
+// immédiatement, comptes agence/agents supprimés comme à la révocation (sauf
+// s'ils servent ailleurs), contacts et invitations nettoyés, puis gerances/{id}
+// et ses sous-collections. Côté serveur (Admin SDK, Stripe). Refusée tant
+// qu'une résidence, un bâtiment ou un lot pointe vers l'agence, et si
+// confirmName n'est pas exactement son nom.
+export async function deleteGerance(
+  geranceId: string,
+  options: { dryRun: true } | { confirmName: string }
+): Promise<GeranceDeletionSummary> {
+  const call = httpsCallable<
+    { geranceId: string; dryRun?: boolean; confirmName?: string },
+    GeranceDeletionSummary
+  >(functions, "admin_delete_gerance", { timeout: 300_000 })
+  return (await call({ geranceId, ...options })).data
+}
+
 export const REVOKE_CONFIRM_MESSAGE =
-  "Révoquer cet accès supprime la licence : le compte est supprimé définitivement (sauf s'il sert ailleurs) et le siège n'est plus facturé. Continuer ?"
+  "Révoquer cet accès supprime le compte définitivement (sauf s'il sert ailleurs). Sa licence redevient disponible pour un autre compte et reste facturée tant qu'elle n'est pas retirée (carte Abonnement). Continuer ?"
 
 export function revokeSuccessMessage({ accountDeleted }: { accountDeleted: boolean }): string {
-  return accountDeleted ? "Licence supprimée et compte supprimé" : "Licence supprimée (compte conservé, utilisé ailleurs)"
+  return accountDeleted
+    ? "Accès révoqué et compte supprimé : la licence est disponible"
+    : "Accès révoqué (compte conservé, utilisé ailleurs) : la licence est disponible"
 }
 
 // Compte BO lié à l'adresse générique du service (pas d'agent nommé - cas
@@ -222,6 +315,15 @@ export async function setDeptAccountUid(gerance: Gerance, serviceType: ServiceTy
 
 // Édition ciblée du contact d'un service (mail/téléphone), même logique que
 // updateGeranceAddress - fiche Agence directement modifiable, sans dialog.
+// « Réponses dans l'application » (page Messages) : réglage de l'agence,
+// écrit directement par le compte agence (firestore.rules l'autorise sur sa
+// fiche) ou un superAdmin ; reply_to_resident_mail le revérifie.
+export async function setInAppReplies(geranceId: string, enabled: boolean, uid: string) {
+  await updateDoc(doc(db, "gerances", geranceId), {
+    inAppReplies: { enabled, updatedBy: uid, updatedAt: serverTimestamp() },
+  })
+}
+
 // Rattachement contact <-> gérance (annuaire Superadmin uniquement, cf.
 // Gerance.contactRefs) - même pattern qu'un toggle = une écriture ciblée que
 // setContactResidenceLink (lib/contacts.ts), pas un set complet d'un tableau.

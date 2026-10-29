@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Sparkles } from "lucide-react"
 import { doc, onSnapshot } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
-import { Button } from "@/components/ui/button"
+import { NodoIcon } from "@/components/nodo/NodoIcon"
+import { Switch } from "@/components/ui/switch"
 import { useAccountRole } from "@/hooks/useAccountRole"
-import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
+import { cn, ICON_TILE_CLASS, ICON_TILE_ON_CLASS, PANEL_CARD_CLASS } from "@/lib/utils"
 
-type FilterPayload = { geranceId: string; enabled: boolean }
+type FilterPayload = { geranceId: string; enabled?: boolean; copyAnswers?: boolean }
 
 // « Nodo répond aux copropriétaires » (filtre des mails au syndic,
 // functions_python/nodo_mail.py) : option de l'agence, valable pour toutes
@@ -24,6 +24,8 @@ export function NodoMailFilterSection({ geranceId }: { geranceId: string }) {
   const [saving, setSaving] = useState(false)
   const [available, setAvailable] = useState(false)
   const [enabled, setEnabled] = useState(false)
+  // Copie par mail à l'agence des réponses de Nodo aux résidents.
+  const [copyAnswers, setCopyAnswers] = useState(false)
   const [isSyndic, setIsSyndic] = useState(false)
   const isOwnAgence = isAgence && geranceId === ownGeranceId
 
@@ -43,6 +45,7 @@ export function NodoMailFilterSection({ geranceId }: { geranceId: string }) {
         doc(db, "gerances", geranceId),
         (snap) => {
           setEnabled(snap.data()?.nodoMailFilter?.enabled === true)
+          setCopyAnswers(snap.data()?.nodoMailFilter?.copyAnswers === true)
           setIsSyndic(!!snap.data()?.services?.serviceSyndic)
         },
         () => setIsSyndic(false)
@@ -53,14 +56,14 @@ export function NodoMailFilterSection({ geranceId }: { geranceId: string }) {
   if (!isSyndic) return null
   if (!isSuperAdmin && !(isOwnAgence && (available || enabled))) return null
 
-  async function toggle() {
+  async function save(change: Omit<FilterPayload, "geranceId">, success: string) {
     setSaving(true)
     try {
-      await httpsCallable<FilterPayload, { enabled: boolean }>(functions, "set_nodo_mail_filter")({
-        geranceId,
-        enabled: !enabled,
-      })
-      toast.success(enabled ? "Nodo ne répond plus aux résidents" : "Nodo répond aux résidents de vos résidences")
+      await httpsCallable<FilterPayload, { enabled: boolean; copyAnswers: boolean }>(
+        functions,
+        "set_nodo_mail_filter"
+      )({ geranceId, ...change })
+      toast.success(success)
     } catch (err) {
       toast.error("Réglage impossible : " + (err instanceof Error ? err.message : String(err)))
     } finally {
@@ -68,41 +71,80 @@ export function NodoMailFilterSection({ geranceId }: { geranceId: string }) {
     }
   }
 
+  const toggle = () =>
+    save(
+      { enabled: !enabled },
+      enabled ? "Nodo ne répond plus aux résidents" : "Nodo répond aux résidents de vos résidences"
+    )
+  const toggleCopy = () =>
+    save(
+      { copyAnswers: !copyAnswers },
+      copyAnswers ? "Vous ne recevrez plus les réponses de Nodo" : "Vous recevrez par mail les réponses de Nodo"
+    )
+
+  const rowClass = "border-t border-[oklch(94%_0.004_100)] px-[22px] py-3"
+
+  // Maquette « Agence Gestion Compte Konodal » : Nodo, ce qu'il traite seul,
+  // ce qu'il transmet, état et action.
   return (
-    <div className="flex flex-col gap-2.5 rounded-2xl bg-[oklch(97%_0.006_155)] p-[14px_18px] text-[12.5px]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <span className="flex items-center gap-2 font-bold text-[oklch(30%_0.01_150)]">
-            <Sparkles className="size-4 text-primary" />
-            Nodo répond aux copropriétaires
-          </span>
-          <span className="max-w-[560px] leading-normal text-muted-foreground">
-            Pour toutes les résidences dont l'agence est le syndic. Quand un résident écrit au syndic depuis
-            l'application, Nodo lit son message. S'il peut répondre à toute la demande (règle, fonctionnement de la
-            copropriété, documents et publications de la résidence), il répond à la place du syndic et le message
-            n'est pas envoyé ; le résident peut toujours le transmettre. Une demande (travaux, accord, ordre du jour…)
-            ou le moindre doute : le message part au syndic comme aujourd'hui. Les messages traités par Nodo restent
-            visibles dans les échanges mails de chaque résident.
-          </span>
+    <div className={cn(PANEL_CARD_CLASS, "overflow-hidden p-0 text-[12.5px]")}>
+      <div className="flex items-start gap-3 px-[22px] pt-[18px] pb-3">
+        <div className={cn(ICON_TILE_CLASS, ICON_TILE_ON_CLASS)}>
+          <NodoIcon className="size-[18px]" color="oklch(32% 0.09 155)" />
         </div>
-        <Button
-          type="button"
+        <div className="min-w-0 flex-1">
+          <span
+            id={`nodo-mail-filter-${geranceId}`}
+            className="block text-[15px] leading-snug font-extrabold text-[oklch(22%_0.01_150)]"
+          >
+            Nodo
+          </span>
+          <span className="text-[12px] text-muted-foreground">Assistant IA</span>
+        </div>
+        <Switch
+          checked={enabled}
           disabled={saving || (!enabled && !available)}
-          className={cn("h-9 shrink-0 rounded-[10px] px-4 text-[13px] font-bold", !enabled && PRIMARY_CTA_CLASS)}
-          variant={enabled ? "outline" : "default"}
-          onClick={toggle}
-        >
-          {enabled ? "Désactiver" : "Activer"}
-        </Button>
+          onCheckedChange={toggle}
+          aria-labelledby={`nodo-mail-filter-${geranceId}`}
+          className="mt-[7px]"
+        />
       </div>
-      <span className={cn("font-bold", enabled ? "text-[oklch(42%_0.08_155)]" : "text-[oklch(52%_0.01_150)]")}>
-        {enabled ? "Activé pour toutes les résidences de l'agence" : "Désactivé"}
-      </span>
+      <p className="m-0 px-[22px] pb-3.5 text-[13px] leading-normal text-[oklch(35%_0.01_150)]">
+        Répond à vos copropriétaires à votre place quand ils écrivent au syndic depuis l'application, et vous transmet
+        ce qui demande votre avis.
+      </p>
+      <div className={rowClass}>
+        <div className="font-bold text-[oklch(22%_0.01_150)]">Répond seul</div>
+        <div className="text-muted-foreground">Règlement, documents, publications.</div>
+      </div>
+      <div className={rowClass}>
+        <div className="font-bold text-[oklch(22%_0.01_150)]">Vous transmet</div>
+        <div className="text-muted-foreground">Travaux, accords, ordre du jour, tout message urgent, doute.</div>
+      </div>
+      {/* Copie par mail des réponses de Nodo (sans effet tant qu'il ne répond pas). */}
+      <div className={cn(rowClass, "flex items-start gap-3")}>
+        <div className="min-w-0 flex-1">
+          <div id={`nodo-copy-answers-${geranceId}`} className="font-bold text-[oklch(22%_0.01_150)]">
+            Recevoir ses réponses par mail
+          </div>
+          <div className="text-muted-foreground">
+            Une copie de chaque réponse de Nodo à un résident, dans votre boîte mail, avec son message.
+          </div>
+        </div>
+        <Switch
+          checked={copyAnswers}
+          disabled={saving || !enabled}
+          onCheckedChange={toggleCopy}
+          aria-labelledby={`nodo-copy-answers-${geranceId}`}
+          className="mt-0.5"
+        />
+      </div>
       {!available && (
-        <span className="text-muted-foreground">
-          Pas encore ouvert : à activer quand la version de l'application qui affiche les réponses de Nodo sera
-          publiée{isSuperAdmin && " (config/app.nodoMailFilterAvailable)"}.
-        </span>
+        <p className="m-0 px-[22px] pb-3 text-muted-foreground">
+          À activer quand la version de l'application qui affiche les réponses de Nodo sera publiée
+          {isSuperAdmin && " (config/app.nodoMailFilterAvailable)"}. Les messages traités restent visibles dans les
+          échanges.
+        </p>
       )}
     </div>
   )

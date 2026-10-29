@@ -1,4 +1,5 @@
 import { appBaseUrl } from "@/lib/utils"
+import type { ServiceType } from "@/types/gerance"
 // Endpoints publics (aucune authentification Firebase) consommés par
 // OfferPage.tsx - même pattern que SharedInterventionPage/sinistres.ts
 // (@https_fn.on_request, appelés en fetch brut plutôt qu'en httpsCallable),
@@ -6,12 +7,21 @@ import { appBaseUrl } from "@/lib/utils"
 // codée en dur.
 const FUNCTIONS_BASE = `https://europe-west9-${import.meta.env.VITE_FIREBASE_PROJECT_ID}.cloudfunctions.net`
 
+// Licences (functions_python/licence_billing.py) : une licence service par
+// service souscrit (celui de l'invitation est imposé, l'autre proposé s'il est
+// activé sur la fiche de l'agence) et un stock de licences agent.
+export type OfferService = { type: ServiceType; label: string; required: boolean }
+
 export type Offer = {
   geranceName: string | null
+  serviceType: ServiceType | null
   serviceLabel: string | null
   roleLabel: string
-  existingSeatCount: number
-  pricePerSeatCents: number | null
+  services: OfferService[]
+  minAgents: number
+  maxAgents: number
+  servicePriceCents: number | null
+  agentPriceCents: number | null
   priceCurrency: string | null
   // Essai gratuit appliqué au paiement (0 = aucun). Optionnel tant que
   // get_offer n'est pas redéployée partout.
@@ -39,11 +49,14 @@ export async function getOffer(token: string): Promise<Offer> {
   return parseJsonOrThrow<Offer>(response, "Ce lien n'est plus valide ou a expiré.")
 }
 
-export async function createOfferCheckoutSession(token: string, quantity: number): Promise<{ url: string }> {
+export async function createOfferCheckoutSession(
+  token: string,
+  licences: { services: ServiceType[]; agents: number }
+): Promise<{ url: string }> {
   const response = await fetch(`${FUNCTIONS_BASE}/create_offer_checkout_session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, quantity, origin: appBaseUrl() }),
+    body: JSON.stringify({ token, ...licences, origin: appBaseUrl() }),
   })
   return parseJsonOrThrow<{ url: string }>(response, "Échec de l'ouverture du paiement.")
 }

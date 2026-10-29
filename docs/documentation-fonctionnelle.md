@@ -212,13 +212,14 @@ Le contenu de cette page dépend du rôle connecté.
 ### 9.1 Vue Super Admin — Répertoire des agences (`/agences`)
 Indicateurs cliquables (professionnels, syndics, gérances locatives), recherche, et table listant chaque agence avec ses services actifs et son contact principal.
 
-**Création/édition d'une agence** : recherche par SIRET/SIREN/nom pour pré-remplir automatiquement les informations légales de la société, puis activation des services (Syndic et/ou Gérance locative — désactivable uniquement si aucun compte actif n'y est rattaché), email et téléphone par service, statut du compte (invité/actif/révoqué), et gestion des agents nommés (invitation, révocation — chaque invitation ajoute un siège facturé). Un résumé de la licence (statut, sièges achetés/attribués/disponibles) est affiché.
+**Création/édition d'une agence** : recherche par SIRET/SIREN/nom pour pré-remplir automatiquement les informations légales de la société, puis activation des services (Syndic et/ou Gérance locative — désactivable uniquement si aucun compte actif n'y est rattaché), email et téléphone par service, statut du compte (invité/actif/révoqué), et gestion des agents nommés (invitation, révocation). Facturation par licences : une **licence service** (19,90 € HT/mois) par service souscrit, 2 au maximum, portée par le compte du service ; des **licences agent** (9,90 € HT/mois) achetées en stock, une par agent nommé. Inviter un agent prend une licence disponible ou en ajoute une au prorata (avec confirmation) ; révoquer un compte libère sa licence, qui reste achetée jusqu'à « Retirer ». Pas d'agent sur un service non souscrit, et aucun agent sans abonnement actif. La carte « Abonnement » affiche les licences service (attribuée, non attribuée, non souscrite) et agent (achetées, attribuées, disponibles), avec Ajouter / Retirer et l'accès au portail de paiement.
 
-### 9.2 Vue Agence/Agent — Ma fiche agence
-Chaque compte Agence ne voit et ne modifie que sa propre fiche (jamais l'annuaire complet) :
-- Informations générales (modifiables par l'Agence uniquement, lecture seule pour l'Agent)
-- Rappel de l'abonnement, avec accès à la facturation (réservé à l'Agence)
-- Une carte par service actif avec téléphone modifiable et gestion des agents nommés
+### 9.2 Vue Agence/Agent — Page Agence (onglets Général, Équipe, Abonnement)
+Chaque compte Agence ne voit et ne modifie que sa propre fiche (jamais l'annuaire complet) ; un Agent la consulte sans rien modifier et n'a pas l'onglet Abonnement.
+- **Général** : informations de l'agence (« Modifier » les rend éditables), une carte par service avec son compte, son téléphone, son prix et la liste de ses agents (licence attribuée, invitation envoyée avec « Renvoyer », sans licence), l'invitation d'un agent en ligne (licences libres restantes ou ajout d'une licence au prorata, avec confirmation), un service non souscrit en carte « Ajouter » (invite le compte du service et ajoute sa licence), la carte Nodo et le résumé de l'abonnement.
+- **Réponses dans l'application** (carte de l'onglet Général, compte agence ; aussi sur la fiche agence du Super Admin) : active ou coupe la réponse aux résidents depuis la page Messages. Activée par défaut.
+- **Équipe** : agents, licences agent utilisées sur achetées, montant mensuel des licences agent, puis les mêmes cartes de service. La fiche d'un agent permet de **libérer sa licence** (il reste dans l'équipe, sans aucun accès au backoffice, et la licence redevient libre), de lui **attribuer une licence** (une licence libre, sinon une de plus au prorata) ou de le supprimer.
+- **Abonnement** : voir la section 12.
 
 ---
 
@@ -245,11 +246,24 @@ Sélection en cascade résidence puis lot. Catégories propres au lot (appel de 
 
 ---
 
-## 12. Facturation (`/facturation`)
+## 11 bis. Messages (`/messages`)
 
-Réservée aux comptes **Agence** (un Agent n'y a pas accès).
+Boîte de réception sur trois colonnes, à la manière d'Outlook : les résidences à gauche (comme dans les Documents, avec leur nombre de messages), la liste des mails au milieu, le mail ouvert à droite. Elle réunit les messages écrits par les résidents à leur syndic depuis l'application et les réponses du syndic rapatriées de sa boîte mail, pour toutes les résidences du périmètre du compte.
+- **Boîte de réception** : tous les messages, filtrables (des résidents, du syndic, échecs d'envoi) et cherchables (résident, lot, mot du message).
+- **Onglet Nodo** : les messages lus par Nodo quand l'agence a activé « Nodo répond aux copropriétaires » : répondus par Nodo (non envoyés au syndic), transmis par Nodo au syndic, retransmis par le résident après la réponse de Nodo, analyse en cours ; avec le nombre de chacun et la part des messages auxquels Nodo a répondu.
+- **Tri et urgence** (quand Nodo lit les messages) : catégorie (travaux et équipements, sinistre, charges et paiements, assemblée générale, nuisances et voisinage, administratif et documents, autre) et urgence (fuite, incendie, gaz, ascenseur, sécurité…). Un message urgent n'a jamais de réponse automatique : il part au syndic avec « [URGENT] » dans l'objet, porte une pastille rouge et reste en tête de la liste tant qu'il n'est pas ouvert. Filtre « Urgents » et menu « Catégorie ».
+- **Non lus** : chaque nouveau message de résident est signalé (pastille du menu « Messages », compteur par résidence, message en gras) jusqu'à ce qu'un compte de l'agence l'ouvre.
+- **Lecture** : le message, la réponse de Nodo et sa raison, puis tout l'échange avec ce résident pour ce lot, et un lien vers la fiche du résident.
+- **Nouveau message** (compte agence et agents du service Syndic) : le syndic écrit le premier à un propriétaire (résidence, propriétaire et lot, objet, message) ; le message ouvre une conversation dans l'onglet « Mon syndic » de son application, il est notifié et peut y répondre. Copie à l'adresse du compte qui écrit (Cc), invisible pour le résident. Les locataires ne sont pas proposés : ils n'ont pas d'onglet « Mon syndic » dans l'application.
+- **Répondre** (compte agence et agents du service Syndic) : la réponse s'affiche dans l'application du résident, qui reçoit une notification ; une copie part dans la boîte mail du syndic, rangée dans le fil du message du résident (le résident ne la voit pas). Si l'agence répond à cette copie depuis sa boîte mail, sa réponse revient aussi dans l'application. L'administrateur Konodal consulte sans répondre. Le résident est aussi notifié quand le syndic lui répond par mail.
 
-Affiche le statut d'abonnement (essai, actif, paiement en retard, annulé, impayé), le nombre de sièges souscrits, le prix par licence, le total facturé, la date de renouvellement, la liste des comptes facturés (agents + agence), le moyen de paiement enregistré et l'historique des factures. Un bouton permet de s'abonner ou de gérer l'abonnement existant via le portail de paiement en ligne.
+---
+
+## 12. Facturation (onglet Abonnement de la page Agence)
+
+Réservée aux comptes **Agence** (un Agent n'y a pas accès). L'ancienne adresse `/facturation` y mène.
+
+Affiche les lignes de l'abonnement (licence de chaque service souscrit, licences agent avec − / + : une licence libre peut être retirée, une licence ajoutée ; le changement et son montant sont confirmés avant l'envoi), l'estimation mensuelle, les factures (date, numéro, montant HT, statut, PDF), la période d'essai (jours restants) et le moyen de paiement. La carte bancaire est saisie dans la page, dans les champs sécurisés de Stripe : Konodal ne voit jamais le numéro ; une seule carte, remplaçable ou supprimable. Sans abonnement, l'agence choisit ses services et son stock de licences agent avant le paiement en ligne ; le portail de paiement Stripe reste accessible pour résilier ou modifier l'adresse de facturation.
 
 ---
 
@@ -285,13 +299,13 @@ Consultable depuis la fiche détail, exportable en PDF : temps de campagne conso
 Lien envoyé par email à un prestataire lors de l'envoi d'une intervention, sans nécessiter de compte. Le prestataire peut consulter l'intervention (et le détail du sinistre lié le cas échéant), la reprogrammer à une nouvelle date (ce qui génère un nouveau lien et marque l'ancienne intervention comme reportée), ou déposer un compte-rendu (titre, description, photo obligatoire). Le lien devient inutilisable une fois le compte-rendu soumis.
 
 ### 14.2 Offre commerciale (`/offre/:token`)
-Page envoyée par email lors de l'invitation d'un agent nécessitant un paiement de licence. Affiche la gérance concernée, le service, le prix, un sélecteur du nombre de licences et redirige vers le paiement en ligne. Après paiement, un lien de définition de mot de passe est généré pour créer le compte.
+Page envoyée par email lors de l'invitation du compte d'un service quand l'agence n'a pas encore d'abonnement. Affiche la gérance concernée, la licence service de l'invitation (imposée) et l'autre service s'il est activé, un sélecteur de licences agent, les deux prix et le total, puis redirige vers le paiement en ligne. Après paiement, un lien de définition de mot de passe est généré pour créer le compte.
 
 ---
 
 ## 15. Navigation
 
-La barre latérale donne accès à : Tableau de bord, Sinistres (Kanban/Liste), Interventions (Calendrier/Liste), Communication, Résidences, Utilisateurs (avec pastille indiquant le nombre de comptes en attente), Agences (masquée pour les Agents), Contacts, Documents, et Publicités (Super Admin uniquement). Le menu du compte, en bas de la barre latérale, donne accès au Profil, à la Facturation (Agence uniquement) et à la déconnexion.
+La barre latérale donne accès à : Tableau de bord, Sinistres (Kanban/Liste), Interventions (Calendrier/Liste), Communication, Messages, Résidences, Utilisateurs (avec pastille indiquant le nombre de comptes en attente), Agences (masquée pour les Agents), Contacts, Documents, et Publicités (Super Admin uniquement). Le menu du compte, en bas de la barre latérale, donne accès au Profil, à la Facturation (onglet Abonnement de la page Agence, Agence uniquement) et à la déconnexion.
 
 ---
 

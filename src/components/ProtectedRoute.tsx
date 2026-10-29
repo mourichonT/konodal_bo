@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 // liste complète des résidents/agences avant ce garde-fou).
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading: authLoading, logout } = useAuth()
-  const { isSuperAdmin, isAgence, isAgent, loading: roleLoading } = useAccountRole()
+  const { isSuperAdmin, isAgence, isAgent, geranceId, loading: roleLoading } = useAccountRole()
 
   if (authLoading || (user && roleLoading)) {
     return (
@@ -33,6 +33,22 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
         <p className="text-sm font-medium">Ce compte n'a pas accès au backoffice.</p>
         <p className="max-w-sm text-sm text-muted-foreground">
           Connecte-toi avec un compte administrateur, agence ou agent.
+        </p>
+        <Button variant="outline" onClick={() => logout()}>
+          Se déconnecter
+        </Button>
+      </div>
+    )
+  }
+
+  // Compte agence/agent qui n'est plus dans aucune agence : licence libérée
+  // par l'agence (« Libérer la licence ») ou accès retiré.
+  if (!isSuperAdmin && !geranceId) {
+    return (
+      <div className="flex min-h-svh flex-col items-center justify-center gap-3 p-4 text-center">
+        <p className="text-sm font-medium">Votre accès au backoffice est suspendu.</p>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          Aucune licence ne vous est attribuée pour l'instant : contactez votre agence.
         </p>
         <Button variant="outline" onClick={() => logout()}>
           Se déconnecter

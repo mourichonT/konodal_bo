@@ -13,12 +13,14 @@ export function ZipCodeCityInput({
   onChange,
   onCityResolved,
   required,
+  className,
 }: {
   id: string
   value: string
   onChange: (value: string) => void
   onCityResolved: (city: string) => void
   required?: boolean
+  className?: string
 }) {
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [open, setOpen] = useState(false)
@@ -63,6 +65,7 @@ export function ZipCodeCityInput({
       <Input
         id={id}
         required={required}
+        className={className}
         autoComplete="off"
         value={value}
         onChange={(e) => handleChange(e.target.value)}

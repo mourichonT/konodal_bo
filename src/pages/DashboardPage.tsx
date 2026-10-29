@@ -635,7 +635,8 @@ export default function DashboardPage() {
 
       {/* Onglet Financier (licences Stripe, toutes agences) réservé au
           Super Admin - une agence/un agent ne voit que sa propre
-          facturation (/facturation) : pas de barre d'onglets pour eux.
+          facturation (onglet Abonnement de la page Agence) : pas de barre
+          d'onglets pour eux.
           Même barre que ResidenceDetailPage. */}
       {isSuperAdmin && (
         <div className="flex w-full items-center gap-1 overflow-x-auto rounded-2xl bg-[oklch(93%_0.005_100)] p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

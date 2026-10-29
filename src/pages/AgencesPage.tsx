@@ -1,25 +1,31 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   Briefcase,
-  Check,
-  CreditCard,
+  ChevronLeft,
   Home,
   Landmark,
   Mail,
   Pencil,
+  Phone,
   Plus,
   Save,
   Search,
   ShieldOff,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput";
 import { ZipCodeCityInput } from "@/components/ZipCodeCityInput";
 import {
@@ -41,7 +47,33 @@ import {
 import { FilterKpiCard } from "@/components/FilterKpiCard";
 import { NodoQuotaSummary } from "@/components/nodo/NodoQuotaSummary";
 import { NodoMailFilterSection } from "@/components/NodoMailFilterSection";
-import { PRIMARY_CTA_CLASS } from "@/lib/utils";
+import { InAppRepliesSection } from "@/components/InAppRepliesSection";
+import { DeleteAgencySection } from "@/components/DeleteAgencySection";
+import { LicencesCard } from "@/components/LicencesCard";
+import { AccountControl } from "@/components/agency/AccountControl";
+import {
+  FIELD_CLASS,
+  IconInput,
+  serviceIcons,
+} from "@/components/agency/agencyUi";
+import { OwnAgencyPage } from "@/components/agency/OwnAgencyPage";
+import { useGeranceBilling } from "@/hooks/useGeranceBilling";
+import {
+  DEFAULT_AGENT_PRICE_CENTS,
+  formatCents,
+  isBillingActive,
+  isLegacyBilling,
+  licenceUsage,
+} from "@/lib/licences";
+import { Switch } from "@/components/ui/switch";
+import {
+  cn,
+  ICON_TILE_CLASS,
+  ICON_TILE_OFF_CLASS,
+  ICON_TILE_ON_CLASS,
+  PANEL_CARD_CLASS,
+  PRIMARY_CTA_CLASS,
+} from "@/lib/utils";
 import {
   createGerance,
   inviteAgencyAccount,
@@ -52,24 +84,16 @@ import {
   subscribeToGerance,
   subscribeToGerances,
   updateGerance,
-  updateGeranceAddress,
-  updateGeranceDeptContact,
-  updateGeranceName,
-  type AgencyAccountRole,
   type GeranceInput,
 } from "@/lib/gerances";
 import { resolveUsersByUids } from "@/lib/users";
-import { subscribeToGeranceBilling } from "@/lib/billing";
+import { subscribeToResidencesForGerance } from "@/lib/residences";
 import { searchCompanies, type CompanySearchResult } from "@/lib/companySearch";
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin";
 import { useAccountRole } from "@/hooks/useAccountRole";
 import { useAuth } from "@/lib/auth-context";
 import { emptyAddress } from "@/types/residence";
-import {
-  billingStatusBadgeClass,
-  billingStatusLabels,
-  type GeranceBilling,
-} from "@/types/billing";
+import { billingStatusLabels } from "@/types/billing";
 import {
   AGENT_UID_FIELD,
   emptyAgencyDept,
@@ -82,11 +106,11 @@ import type { KonodalUser } from "@/types/user";
 
 const serviceTypes: ServiceType[] = ["serviceSyndic", "geranceLocative"];
 
-// Nom affiché de l'agence : limite demandée explicitement, avec blocage à
-// l'enregistrement (pas seulement une troncature silencieuse via maxLength,
-// qui ne rattrape pas un nom déjà trop long chargé depuis Firestore avant
-// l'ajout de cette limite).
-const AGENCY_NAME_MAX_LENGTH = 20;
+// Phrase de chaque service (fiche agence du superAdmin).
+const serviceDescriptions: Record<ServiceType, string> = {
+  serviceSyndic: "L'agence gère des copropriétés sur Konodal.",
+  geranceLocative: "L'agence gère aussi des biens en location.",
+};
 
 // siret/responsableLegal compris : sans eux, enregistrer la fiche effaçait
 // ces deux champs (updateGerance les réécrit vides).
@@ -382,20 +406,47 @@ export function AgenceDetailPage() {
     setInitial(undefined);
   }, [id]);
   useEffect(() => {
-    if (gerance && gerance.id === id && !initial) setInitial(geranceToInput(gerance));
+    if (gerance && gerance.id === id && !initial)
+      setInitial(geranceToInput(gerance));
   }, [gerance, id, initial]);
 
   const activeServices = gerance
     ? serviceTypes.filter((type) => gerance.services[type])
     : [];
 
+  const billing = useGeranceBilling(id);
+
+  const [residenceCount, setResidenceCount] = useState<number | null>(null);
+  useEffect(() => {
+    setResidenceCount(null);
+    return subscribeToResidencesForGerance(
+      id,
+      (residences) => setResidenceCount(residences.length),
+      () => setResidenceCount(null),
+    );
+  }, [id]);
+
+  // Agents nommés : comptes des tableaux d'agents hors compte générique de
+  // chaque service (même filtre que NamedAgentsManager).
+  const agentCount = useMemo(() => {
+    if (!gerance) return 0;
+    const serviceUids = new Set(
+      serviceTypes.map((type) => gerance.services[type]?.uid).filter(Boolean),
+    );
+    return new Set(
+      serviceTypes
+        .flatMap((type) => gerance[AGENT_UID_FIELD[type]] ?? [])
+        .filter((uid) => !serviceUids.has(uid)),
+    ).size;
+  }, [gerance]);
+
   return (
     <div className="-mt-[20px] flex flex-col gap-5">
       <Link
         to="/agences"
-        className="flex w-fit items-center gap-1.5 text-[13px] font-semibold text-[oklch(50%_0.01_150)] hover:text-foreground"
+        className="flex w-fit items-center gap-1.5 text-[13px] font-semibold text-[oklch(42%_0.08_155)] hover:text-foreground"
       >
-        <ArrowLeft className="size-3.5" />
+        <ChevronLeft className="size-3.5" />
         Agences
       </Link>
 
@@ -414,121 +465,103 @@ export function AgenceDetailPage() {
 
       {gerance && (
         <>
-          <div className="flex flex-wrap items-center gap-5 rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-[24px_28px] shadow-[0_14px_34px_-24px_oklch(20%_0_0/0.14)]">
-            <div className="flex size-16 shrink-0 items-center justify-center rounded-[20px] bg-[oklch(93%_0.05_150)]">
-              <Briefcase className="size-7 text-[oklch(32%_0.09_155)]" />
-            </div>
-            <div className="min-w-[240px] flex-1">
-              <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
-                {gerance.name || "Agence"}
-              </h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                {[
-                  gerance.address.street,
-                  [gerance.address.zipCode, gerance.address.city].join(" "),
-                ]
-                  .filter((part) => part.trim())
-                  .join(" — ") || "Adresse non renseignée"}
-                {activeServices.map((type) => (
-                  <Badge key={type} variant="secondary">
-                    {serviceTypeLabels[type]}
-                  </Badge>
-                ))}
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-[22px_28px] shadow-[0_14px_34px_-24px_oklch(20%_0_0/0.14)]">
+            <div className="flex min-w-[240px] flex-1 items-center gap-4">
+              <div className="flex size-14 shrink-0 items-center justify-center rounded-[18px] bg-[oklch(93%_0.05_150)]">
+                <Briefcase className="size-6 text-[oklch(32%_0.09_155)]" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h1 className="text-[24px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
+                    {gerance.name || "Agence"}
+                  </h1>
+                  {activeServices.map((type) => (
+                    <span
+                      key={type}
+                      className="rounded-full bg-[oklch(93%_0.05_150)] px-2.5 py-0.5 text-[12px] font-bold text-[oklch(32%_0.09_155)]"
+                    >
+                      {serviceTypeLabels[type]}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
+            <dl className="m-0 flex gap-8">
+              <HeaderStat label="Résidences" value={residenceCount ?? "…"} />
+              <HeaderStat label="Agents" value={agentCount} />
+              <HeaderStat
+                label="Abonnement"
+                value={
+                  billing.status === "none"
+                    ? "Aucun"
+                    : billingStatusLabels[billing.status]
+                }
+                tone={
+                  billing.status === "active"
+                    ? "positive"
+                    : billing.status === "none"
+                      ? "muted"
+                      : "default"
+                }
+              />
+            </dl>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-[24px_28px]">
-              {initial && (
-                <GeranceForm
-                  key={gerance.id}
-                  initial={initial}
-                  gerance={gerance}
-                  className="flex flex-col gap-4"
-                  onSubmit={async (input) => {
-                    await updateGerance(gerance.id, input);
-                    toast.success("Agence mise à jour");
-                  }}
-                />
-              )}
-            </div>
-            <aside className="flex flex-col gap-4">
-              <BillingSummary gerance={gerance} />
-              <NodoQuotaSummary geranceId={gerance.id} />
-              <NodoMailFilterSection geranceId={gerance.id} />
-            </aside>
-          </div>
+          {initial && (
+            <GeranceForm
+              key={gerance.id}
+              variant="page"
+              initial={initial}
+              gerance={gerance}
+              onSubmit={async (input) => {
+                await updateGerance(gerance.id, input);
+                setInitial(input);
+                toast.success("Agence mise à jour");
+              }}
+              aside={
+                <>
+                  <LicencesCard gerance={gerance} billing={billing} />
+                  <NodoQuotaSummary geranceId={gerance.id} />
+                  <NodoMailFilterSection geranceId={gerance.id} />
+                  <InAppRepliesSection gerance={gerance} />
+                  <DeleteAgencySection gerance={gerance} />
+                </>
+              }
+            />
+          )}
         </>
       )}
     </div>
   );
 }
 
-// Résumé licences visible par le Superadmin dans la modale d'édition -
-// jusqu'ici seule AgencyBillingCard (page dédiée de l'agence elle-même,
-// /facturation) montrait le nombre de sièges, aucune visibilité admin sur ce
-// que l'agence a réellement acheté vs. combien de comptes elle a déjà
-// distribués. `assignedCount` réplique la déduplication serveur
-// (_deduped_seat_uids, functions_python/main.py) : un même uid peut figurer
-// dans les deux tableaux de service, compté une seule fois.
-function BillingSummary({ gerance }: { gerance: Gerance }) {
-  const [billing, setBilling] = useState<GeranceBilling>({
-    status: "none",
-    seatCount: 0,
-    currentPeriodEnd: null,
-  });
-
-  useEffect(() => {
-    return subscribeToGeranceBilling(gerance.id, setBilling, () => {});
-  }, [gerance.id]);
-
-  const assignedCount = useMemo(
-    () =>
-      new Set([
-        ...(gerance.serviceSyndicAgentUids ?? []),
-        ...(gerance.geranceLocativeAgentUids ?? []),
-      ]).size,
-    [gerance],
-  );
-  const available = billing.seatCount - assignedCount;
-
+// Chiffre de l'en-tête de la fiche agence (Résidences, Agents, Abonnement).
+function HeaderStat({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: "default" | "positive" | "muted";
+}) {
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-[oklch(97%_0.006_155)] p-[14px_18px] text-[12.5px]">
-      <Badge
-        variant="outline"
-        className={`gap-1.5 rounded-full font-bold ${billingStatusBadgeClass[billing.status]}`}
+    <div className="flex flex-col gap-1">
+      <dt className="text-[11px] font-bold tracking-wide text-[oklch(48%_0.01_150)] uppercase">
+        {label}
+      </dt>
+      <dd
+        className={cn(
+          "m-0 text-[20px] leading-none font-extrabold",
+          tone === "positive"
+            ? "text-[oklch(42%_0.09_155)]"
+            : tone === "muted"
+              ? "text-[oklch(55%_0.01_150)]"
+              : "text-[oklch(22%_0.01_150)]",
+        )}
       >
-        <span className="size-[6px] rounded-full bg-current" />
-        {billingStatusLabels[billing.status]}
-      </Badge>
-      {billing.status === "none" ? (
-        <span className="text-muted-foreground">
-          Aucune licence achetée pour l'instant
-        </span>
-      ) : (
-        <>
-          <div aria-hidden className="h-4 w-px bg-[oklch(88%_0.01_150)]" />
-          <span className="font-semibold text-muted-foreground">
-            Licences achetées{" "}
-            <strong className="font-bold text-foreground">
-              {billing.seatCount}
-            </strong>
-          </span>
-          <span className="font-semibold text-muted-foreground">
-            Attribuées{" "}
-            <strong className="font-bold text-foreground">
-              {assignedCount}
-            </strong>
-          </span>
-          <span className="font-semibold text-muted-foreground">
-            Disponibles{" "}
-            <strong className="font-bold text-foreground">
-              {Math.max(available, 0)}
-            </strong>
-          </span>
-        </>
-      )}
+        {value}
+      </dd>
     </div>
   );
 }
@@ -571,7 +604,9 @@ function GeranceFormDialog({
 }
 
 // Formulaire complet d'une agence (identité, services, comptes, agents) :
-// dans la modale de création et sur la fiche /agences/:id.
+// dans la modale de création, et sur la fiche /agences/:id (variant "page" :
+// cartes, colonne de droite `aside` hors du <form>, Annuler/Enregistrer dans
+// la carte Identité).
 function GeranceForm({
   initial,
   gerance,
@@ -584,6 +619,8 @@ function GeranceForm({
   renderFooter = (buttons) => (
     <div className="flex justify-end gap-2 border-t pt-4">{buttons}</div>
   ),
+  variant = "dialog",
+  aside,
 }: {
   initial?: GeranceInput;
   // Objet Gerance PERSISTÉ (distinct de `initial`, la copie de travail
@@ -600,6 +637,10 @@ function GeranceForm({
   className?: string;
   bodyClassName?: string;
   renderFooter?: (buttons: ReactNode) => ReactNode;
+  variant?: "dialog" | "page";
+  // Colonne de droite (variant "page") : hors du <form>, ses champs (plafond
+  // Nodo...) et ses fenêtres ne soumettent jamais la fiche.
+  aside?: ReactNode;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [street, setStreet] = useState(
@@ -629,7 +670,7 @@ function GeranceForm({
   );
   const [searching, setSearching] = useState(false);
 
-  useEffect(() => {
+  function resetFields() {
     setName(initial?.name ?? "");
     setStreet(initial?.address.street ?? emptyAddress.street);
     setZipCode(initial?.address.zipCode ?? emptyAddress.zipCode);
@@ -639,6 +680,10 @@ function GeranceForm({
     setServices(initial?.services ?? {});
     setCompanyQuery("");
     setCompanyResults([]);
+  }
+
+  useEffect(() => {
+    resetFields();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- remise à zéro à l'ouverture seulement
   }, [resetKey]);
 
@@ -705,38 +750,34 @@ function GeranceForm({
     }
   }
 
-  return (
-    <form onSubmit={handleSubmit} className={className}>
-      {header}
-
-      <div className={bodyClassName}>
-        <div className="flex flex-col gap-2.5 rounded-[18px] border-[1.5px] border-dashed border-[oklch(78%_0.07_155)] bg-[oklch(98%_0.008_155)] p-[18px_20px]">
-          <Label htmlFor="ger-company-search" className="font-bold">
-            Rechercher l'entreprise{" "}
-            <span className="font-medium text-muted-foreground">
-              (SIREN, SIRET ou nom)
-            </span>
-          </Label>
-          <div className="flex flex-wrap gap-2.5">
-            <Input
-              id="ger-company-search"
-              placeholder="Rechercher (nom, SIRET, SIREN)…"
-              className="max-w-xs"
-              value={companyQuery}
-              onChange={(e) => setCompanyQuery(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === "Enter" &&
-                (e.preventDefault(), handleSearchCompany())
-              }
-            />
+  // Recherche d'entreprise : à la création seulement (modale) - la fiche
+  // d'une agence existante n'en a plus besoin (maquette).
+  const identityFields = (
+    <>
+      {variant === "dialog" && (
+        <div className="flex flex-col gap-2.5 rounded-[16px] border-[1.5px] border-dashed border-[oklch(80%_0.06_155)] bg-[oklch(97.5%_0.012_155)] p-3">
+          <div className="flex gap-2.5">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="ger-company-search"
+                aria-label="Rechercher l'entreprise (SIREN, SIRET ou nom)"
+                placeholder="Préremplir depuis SIREN, SIRET ou nom d'entreprise…"
+                className="h-10 rounded-[10px] bg-white pl-9"
+                value={companyQuery}
+                onChange={(e) => setCompanyQuery(e.target.value)}
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  (e.preventDefault(), handleSearchCompany())
+                }
+              />
+            </div>
             <Button
               type="button"
-              size="sm"
               onClick={handleSearchCompany}
               disabled={searching}
-              className="border-0 bg-[oklch(24%_0.03_155)] text-white hover:bg-[oklch(30%_0.04_155)]"
+              className="h-10 rounded-[10px] border-0 bg-[oklch(30%_0.06_155)] px-4 font-bold text-white hover:bg-[oklch(35%_0.07_155)]"
             >
-              <Search />
               Rechercher
             </Button>
           </div>
@@ -745,7 +786,7 @@ function GeranceForm({
               {companyResults.map((result) => (
                 <div
                   key={result.siret || result.siren}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 p-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] bg-white p-2.5 text-sm"
                 >
                   <div>
                     <span className="font-medium">{result.name}</span>
@@ -753,9 +794,7 @@ function GeranceForm({
                       {" — "}
                       {[
                         result.address.street,
-                        [result.address.zipCode, result.address.city].join(
-                          " ",
-                        ),
+                        [result.address.zipCode, result.address.city].join(" "),
                       ]
                         .filter(Boolean)
                         .join(" — ") || "—"}
@@ -775,89 +814,142 @@ function GeranceForm({
               ))}
             </div>
           )}
-          <p className="m-0 text-xs leading-relaxed text-[oklch(48%_0.06_155)]">
-            Préremplit le nom, l'adresse, le SIRET et le responsable légal
-            ci-dessous - à vérifier avant d'enregistrer, ou à
-            saisir/corriger manuellement sans passer par la recherche.
-          </p>
         </div>
+      )}
 
-        <div className="mt-[20px] flex flex-col gap-1.5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="ger-name">Nom de l'agence</Label>
           <Input
             id="ger-name"
             required
+            className={FIELD_CLASS}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="ger-street">Adresse</Label>
-          <AddressAutocompleteInput
-            id="ger-street"
-            required
-            value={street}
-            onChange={setStreet}
-            onSelect={(a) => {
-              setStreet(a.street);
-              setZipCode(a.zipCode);
-              setCity(a.city);
-            }}
+          <Label htmlFor="ger-responsable">Responsable légal</Label>
+          <Input
+            id="ger-responsable"
+            className={FIELD_CLASS}
+            value={responsableLegal}
+            onChange={(e) => setResponsableLegal(e.target.value)}
           />
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ger-zip">Code postal</Label>
-            <ZipCodeCityInput
-              id="ger-zip"
-              required
-              value={zipCode}
-              onChange={setZipCode}
-              onCityResolved={setCity}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ger-city">Ville</Label>
-            <Input
-              id="ger-city"
-              required
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-            />
-          </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ger-street">Adresse</Label>
+        <AddressAutocompleteInput
+          id="ger-street"
+          required
+          className={FIELD_CLASS}
+          value={street}
+          onChange={setStreet}
+          onSelect={(a) => {
+            setStreet(a.street);
+            setZipCode(a.zipCode);
+            setCity(a.city);
+          }}
+        />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ger-zip">Code postal</Label>
+          <ZipCodeCityInput
+            id="ger-zip"
+            required
+            className={FIELD_CLASS}
+            value={zipCode}
+            onChange={setZipCode}
+            onCityResolved={setCity}
+          />
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ger-siret">SIRET / SIREN</Label>
-            <Input
-              id="ger-siret"
-              placeholder="123 456 789 00012"
-              value={siret}
-              onChange={(e) => setSiret(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ger-responsable">Responsable légal</Label>
-            <Input
-              id="ger-responsable"
-              value={responsableLegal}
-              onChange={(e) => setResponsableLegal(e.target.value)}
-            />
-          </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ger-city">Ville</Label>
+          <Input
+            id="ger-city"
+            required
+            className={FIELD_CLASS}
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          />
         </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ger-siret">SIRET / SIREN</Label>
+        <Input
+          id="ger-siret"
+          placeholder="123 456 789 00012"
+          className={FIELD_CLASS}
+          value={siret}
+          onChange={(e) => setSiret(e.target.value)}
+        />
+      </div>
+    </>
+  );
 
-        <div className="flex flex-col gap-3">
-          {serviceTypes.map((type) => (
-            <ServiceSection
-              key={type}
-              type={type}
-              dept={services[type]}
-              gerance={gerance}
-              onToggle={(enabled) => toggleService(type, enabled)}
-              onChange={(dept) => updateDept(type, dept)}
-            />
-          ))}
+  const serviceSections = serviceTypes.map((type) => (
+    <ServiceSection
+      key={type}
+      type={type}
+      dept={services[type]}
+      gerance={gerance}
+      onToggle={(enabled) => toggleService(type, enabled)}
+      onChange={(dept) => updateDept(type, dept)}
+    />
+  ));
+
+  if (variant === "page") {
+    return (
+      <>
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-5">
+            <section className={cn(PANEL_CARD_CLASS, "flex flex-col gap-4")}>
+              <h2 className="p-0 font-sans text-[15px] font-bold text-[oklch(22%_0.01_150)]">
+                Identité de l'agence
+              </h2>
+              {identityFields}
+              {/* Pas de bandeau collant (demande de l'utilisateur) : boutons
+                    dans la carte Identité, ils enregistrent toute la fiche. */}
+              <div className="flex justify-end gap-2.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-[12px] bg-white px-4 font-semibold"
+                  onClick={resetFields}
+                  disabled={submitting}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={submitting}
+                  className={cn(
+                    PRIMARY_CTA_CLASS,
+                    "h-10 rounded-[12px] px-5 font-bold",
+                  )}
+                >
+                  <Save />
+                  Enregistrer
+                </Button>
+              </div>
+            </section>
+            {serviceSections}
+          </form>
+          <aside className="flex flex-col gap-4">{aside}</aside>
         </div>
+      </>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className={className}>
+      {header}
+
+      <div className={bodyClassName}>
+        {identityFields}
+        <div className="flex flex-col gap-3">{serviceSections}</div>
       </div>
 
       {renderFooter(
@@ -911,32 +1003,61 @@ function ServiceSection({
     !!persistedDept.uid &&
     !!gerance?.[uidField]?.includes(persistedDept.uid);
 
+  const ServiceIcon = serviceIcons[type];
+  const titleId = `${type}-service-title`;
+  // Licence service souscrite : la retirer d'abord (carte Abonnement), sinon
+  // le service disparaîtrait de la fiche en restant facturé.
+  const billing = useGeranceBilling(gerance?.id);
+  const subscribed = billing.serviceLicences.includes(type);
+  const switchLocked = enabled && (deptHasActiveAccount || subscribed);
+
   return (
-    <div className="rounded-[18px] border border-[oklch(93%_0.005_100)] p-[18px_20px]">
-      <label
-        className="flex items-center gap-2.5 text-[13.5px] font-bold text-[oklch(24%_0.01_150)]"
-        title={
-          enabled && deptHasActiveAccount
-            ? "Révoquez l'accès de tous les comptes de ce service avant de le désactiver"
-            : undefined
-        }
-      >
-        <input
-          type="checkbox"
-          className="size-[17px] rounded border-input accent-primary"
-          checked={enabled}
-          disabled={enabled && deptHasActiveAccount}
-          onChange={(e) => onToggle(e.target.checked)}
-        />
-        {serviceTypeLabels[type]}
-      </label>
+    <div className={cn(PANEL_CARD_CLASS, "flex flex-col gap-4")}>
+      <div className="flex items-center gap-3">
+        <div
+          className={cn(
+            ICON_TILE_CLASS,
+            enabled ? ICON_TILE_ON_CLASS : ICON_TILE_OFF_CLASS,
+          )}
+        >
+          <ServiceIcon />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span
+            id={titleId}
+            className="text-[15px] font-bold text-[oklch(22%_0.01_150)]"
+          >
+            {serviceTypeLabels[type]}
+          </span>
+          <span className="text-[12.5px] text-muted-foreground">
+            {serviceDescriptions[type]}
+          </span>
+        </div>
+        <span
+          title={
+            enabled && deptHasActiveAccount
+              ? "Révoquez l'accès de tous les comptes de ce service avant de le désactiver"
+              : enabled && subscribed
+                ? "Retirez d'abord la licence service de ce service (carte Abonnement)"
+                : undefined
+          }
+        >
+          <Switch
+            aria-labelledby={titleId}
+            checked={enabled}
+            disabled={switchLocked}
+            onCheckedChange={onToggle}
+          />
+        </span>
+      </div>
 
       {dept && (
-        <div className="mt-4 flex flex-col gap-4">
+        <div className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${type}-mail`}>Email du service</Label>
-              <Input
+              <IconInput
+                icon={Mail}
                 id={`${type}-mail`}
                 type="email"
                 value={dept.mail}
@@ -964,7 +1085,8 @@ function ServiceSection({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${type}-phone`}>Téléphone</Label>
-              <Input
+              <IconInput
+                icon={Phone}
                 id={`${type}-phone`}
                 value={dept.phone}
                 onChange={(e) => onChange({ ...dept, phone: e.target.value })}
@@ -989,7 +1111,9 @@ function ServiceSection({
             )}
 
           {gerance ? (
-            <NamedAgentsManager gerance={gerance} type={type} />
+            <div className="border-t border-[oklch(94%_0.004_100)] pt-4">
+              <NamedAgentsManager gerance={gerance} type={type} />
+            </div>
           ) : (
             <p className="text-xs text-muted-foreground">
               Enregistrez d'abord l'agence pour pouvoir inviter des agents.
@@ -997,156 +1121,6 @@ function ServiceSection({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-// Statut/actions du compte BO lié à CETTE adresse mail (une adresse mail =
-// une licence) - réutilisé pour un agent nommé (mail=agent.mail,
-// persistedUid=agent.uid) ET pour l'adresse générique d'un service sans
-// agent nommé (mail=dept.mail, persistedUid=dept.uid) : même mécanique,
-// seule la façon de reporter l'uid une fois l'invitation acceptée diffère
-// (onLinkUid). L'appelant est responsable de vérifier que `mail` est déjà
-// PERSISTÉ (pas juste une saisie locale pas encore enregistrée) avant de
-// monter ce composant.
-function AccountControl({
-  gerance,
-  serviceType,
-  mail,
-  role,
-  persistedUid,
-  onLinkUid,
-}: {
-  gerance: Gerance;
-  serviceType: ServiceType;
-  mail: string;
-  // Déterminé par l'appelant selon le contexte (adresse générique du
-  // service = "agence", agent nommé listé dessous = "agent") - jamais un
-  // choix libre : à cette étape précise, le rôle est déjà connu.
-  role: AgencyAccountRole;
-  persistedUid?: string;
-  onLinkUid: (uid: string) => Promise<void>;
-}) {
-  const { isSuperAdmin } = useIsSuperAdmin();
-  // Une Agence gère ses propres agents (inviter/révoquer) sans passer par un
-  // superAdmin - Agent reste en lecture seule sur cette action (cf. matrice
-  // de droits). Portée déjà garantie côté client : `gerances` (AgencesPage)
-  // ne contient QUE la gérance de l'agence connectée, donc ce composant ne
-  // peut jamais monter sur la fiche d'une autre agence. Côté serveur,
-  // _require_superadmin_or_own_agence revérifie la même appartenance.
-  const { isAgence } = useAccountRole();
-  const { user } = useAuth();
-  const [submitting, setSubmitting] = useState(false);
-
-  if (!isSuperAdmin && !isAgence) return null;
-
-  const uidField = AGENT_UID_FIELD[serviceType];
-  const isActive =
-    !!persistedUid && !!gerance[uidField]?.includes(persistedUid);
-  const isRevoked = !!persistedUid && !isActive;
-  // Une Agence gérant sa propre fiche peut tomber sur SON PROPRE compte
-  // (adresse générique du service, ou elle-même listée comme agent) - se
-  // révoquer soi-même couperait immédiatement l'accès en cours d'usage,
-  // sans façon de se réinviter derrière (il faudrait déjà être déconnecté
-  // pour redemander l'accès à un superAdmin). Bouton masqué dans ce cas
-  // précis, pas juste désactivé côté serveur : un superAdmin, lui, n'est
-  // jamais concerné (il ne peut pas être le compte agence/agent affiché ici).
-  const isSelf = !!persistedUid && persistedUid === user?.uid;
-
-  async function handleInvite() {
-    setSubmitting(true);
-    try {
-      const result = await inviteAgencyAccount(
-        gerance.id,
-        serviceType,
-        mail,
-        role,
-      );
-      if (result.pending) {
-        // Rien à lier : aucun compte n'a été créé (pas d'abonnement actif),
-        // seul un email commercial est parti - lier un uid inexistant
-        // afficherait à tort "Compte actif" avant tout paiement.
-        toast.success(
-          `Email envoyé à ${mail} — l'accès sera activé après paiement des licences`,
-        );
-      } else {
-        await onLinkUid(result.uid);
-        toast.success(`Invitation envoyée à ${mail}`);
-      }
-    } catch (err) {
-      toast.error("Échec de l'invitation : " + (err as Error).message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleRevoke() {
-    if (!persistedUid) return;
-    if (!confirm(REVOKE_CONFIRM_MESSAGE)) return;
-    setSubmitting(true);
-    try {
-      toast.success(
-        revokeSuccessMessage(
-          await revokeAgencyAccount(gerance.id, serviceType, persistedUid),
-        ),
-      );
-    } catch (err) {
-      toast.error("Échec de la révocation : " + (err as Error).message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (isActive) {
-    return (
-      <div className="flex items-center gap-2 px-1">
-        <Badge
-          variant="outline"
-          className="border-transparent bg-emerald-100 text-emerald-800"
-        >
-          <Check />
-          Compte actif
-        </Badge>
-        {isSelf ? (
-          <span className="text-xs text-muted-foreground">
-            C'est votre compte
-          </span>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={submitting}
-            onClick={handleRevoke}
-          >
-            <ShieldOff />
-            Révoquer l'accès
-          </Button>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-2 px-1">
-      {isRevoked && (
-        <Badge
-          variant="outline"
-          className="border-transparent bg-red-100 text-red-800"
-        >
-          Accès révoqué
-        </Badge>
-      )}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={submitting}
-        onClick={handleInvite}
-      >
-        <Mail />
-        {isRevoked ? "Réinviter" : "Inviter"}
-      </Button>
     </div>
   );
 }
@@ -1181,6 +1155,17 @@ function NamedAgentsManager({
   const [newAgentEmail, setNewAgentEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const billing = useGeranceBilling(gerance.id);
+  const usage = licenceUsage(gerance, billing);
+  // Même règle que invite_agency_account : abonnement en cours et service
+  // souscrit, sinon l'invitation d'un agent est refusée.
+  const inviteBlocker = !isBillingActive(billing)
+    ? "L'agence n'a pas d'abonnement actif : invitez d'abord le compte du service."
+    : isLegacyBilling(billing)
+      ? "Abonnement de l'ancienne formule : migration des licences requise."
+      : !usage.subscribed.includes(type)
+        ? `Le service ${serviceTypeLabels[type]} n'est pas souscrit : ajoutez d'abord sa licence service (carte Abonnement).`
+        : null;
 
   useEffect(() => {
     if (agentUids.length === 0) {
@@ -1217,7 +1202,9 @@ function NamedAgentsManager({
       toast.success(
         result.pending
           ? `Email envoyé à ${email} — l'accès sera activé après paiement des licences`
-          : `Invitation envoyée à ${email}`,
+          : result.licenceAdded === "agent"
+            ? `Invitation envoyée à ${email} — licence agent ajoutée`
+            : `Invitation envoyée à ${email}`,
       );
     } catch (err) {
       toast.error("Échec de l'invitation : " + (err as Error).message);
@@ -1250,14 +1237,24 @@ function NamedAgentsManager({
 
   return (
     <div className="flex flex-col gap-2.5">
-      <Label className="font-bold">Agents</Label>
+      <div className="flex items-center gap-2">
+        <span className="text-[14px] font-bold text-[oklch(22%_0.01_150)]">
+          Agents
+        </span>
+        <span className="rounded-full bg-[oklch(95%_0.004_100)] px-2 py-px text-[11.5px] font-bold text-muted-foreground">
+          {agentUids.length}
+        </span>
+      </div>
       {loadingProfiles ? (
-        <p className="rounded-xl bg-[oklch(97%_0.005_100)] p-3 text-[12.5px] font-semibold text-muted-foreground">
+        <p className="m-0 rounded-[12px] border border-dashed border-[oklch(90%_0.005_100)] bg-[oklch(97%_0.004_100)] p-3 text-[12.5px] text-muted-foreground">
           Chargement…
         </p>
       ) : profiles.length === 0 && orphanUids.length === 0 ? (
-        <p className="rounded-xl bg-[oklch(97%_0.005_100)] p-3 text-[12.5px] font-semibold text-muted-foreground">
-          Aucun agent pour ce service.
+        <p className="m-0 flex items-center gap-2.5 rounded-[12px] border border-dashed border-[oklch(90%_0.005_100)] bg-[oklch(97%_0.004_100)] p-3 text-[12.5px] text-muted-foreground">
+          <Users className="size-4 shrink-0" />
+          {canEdit
+            ? "Aucun agent pour ce service. Invitez le premier ci-dessous."
+            : "Aucun agent pour ce service."}
         </p>
       ) : (
         <>
@@ -1323,22 +1320,37 @@ function NamedAgentsManager({
           })}
         </>
       )}
-      {canEdit && (
+      {canEdit && inviteBlocker && (
+        <p className="m-0 text-[12.5px] text-muted-foreground">
+          {inviteBlocker}
+        </p>
+      )}
+      {canEdit && !inviteBlocker && (
         <div className="flex gap-2.5">
-          <Input
+          <IconInput
+            icon={Mail}
+            className="flex-1"
+            aria-label="Email de l'agent à inviter"
             placeholder="Email de l'agent à inviter"
             type="email"
             value={newAgentEmail}
             onChange={(e) => setNewAgentEmail(e.target.value)}
+            // Entrée : même confirmation que le bouton, jamais la
+            // soumission de la fiche agence qui l'entoure.
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              if (newAgentEmail.trim() && !inviting) setConfirmOpen(true);
+            }}
           />
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            className="h-10 rounded-[10px] px-3.5 text-[13px] font-bold"
             onClick={() => setConfirmOpen(true)}
             disabled={inviting || !newAgentEmail.trim()}
           >
-            <Mail />
+            <Plus />
             Inviter
           </Button>
         </div>
@@ -1353,9 +1365,25 @@ function NamedAgentsManager({
             <DialogTitle>Confirmer l'invitation</DialogTitle>
           </DialogHeader>
           <DialogDescription>
-            Si <strong>{newAgentEmail.trim()}</strong> n'a pas déjà accès à
-            konodal, cette invitation ajoutera un nouveau siège facturé à votre
-            abonnement, au prorata et dès maintenant.
+            {usage.agents.available > 0 ? (
+              <>
+                <strong>{newAgentEmail.trim()}</strong> utilisera 1 des{" "}
+                {usage.agents.available} licence
+                {usage.agents.available > 1 ? "s" : ""} agent disponible
+                {usage.agents.available > 1 ? "s" : ""} : rien de plus à payer.
+              </>
+            ) : (
+              <>
+                Plus aucune licence agent disponible : inviter{" "}
+                <strong>{newAgentEmail.trim()}</strong> en ajoute une,{" "}
+                <strong>
+                  {formatCents(DEFAULT_AGENT_PRICE_CENTS)} HT/mois
+                </strong>
+                {billing.status === "trialing"
+                  ? ", gratuite jusqu'à la fin de l'essai."
+                  : ", au prorata dès maintenant."}
+              </>
+            )}
           </DialogDescription>
           <DialogFooter>
             <Button
@@ -1379,369 +1407,5 @@ function NamedAgentsManager({
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-// Page détaillée de l'agence à laquelle un compte Agence/Agent est
-// rattaché - même gabarit (titre + Cards empilées) que les autres pages
-// détail du BO (ResidenceDetailPage, SinistreDetailPage,
-// EvenementDetailPage), plutôt que la liste/répertoire pensée pour
-// Superadmin qui n'a pas de sens pour un compte scopé à une seule fiche.
-// canEdit=false (Agent) = pure consultation ; canEdit=true (Agence) = champs
-// directement modifiables sur la page (pas de bouton "Modifier"/dialog -
-// demande explicite : les infos doivent être visibles ET éditables tout de
-// suite, y compris inviter/révoquer/retirer un agent).
-function OwnAgencyPage({
-  gerance,
-  loading,
-  canEdit,
-}: {
-  gerance: Gerance | null;
-  loading: boolean;
-  canEdit: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3.5">
-        <div className="flex size-[46px] shrink-0 items-center justify-center rounded-[13px] bg-[oklch(93%_0.05_150)]">
-          <Home className="size-[21px] text-[oklch(38%_0.09_155)]" />
-        </div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
-          {gerance ? gerance.name : loading ? "…" : "Agence introuvable"}
-        </h1>
-      </div>
-
-      {!loading && !gerance && (
-        <p className="text-muted-foreground">
-          Aucune agence n'est rattachée à votre compte pour l'instant.
-        </p>
-      )}
-
-      {gerance && (
-        <>
-          <AgencyInfoCard gerance={gerance} canEdit={canEdit} />
-          <AgencyBillingCard gerance={gerance} canEdit={canEdit} />
-          {/* Option de l'agence, cachée aux agents (NodoMailFilterSection). */}
-          <NodoMailFilterSection geranceId={gerance.id} />
-          {serviceTypes
-            .filter((type) => gerance.services[type])
-            .map((type) => (
-              <AgencyServiceCard
-                key={type}
-                gerance={gerance}
-                type={type}
-                canEdit={canEdit}
-              />
-            ))}
-        </>
-      )}
-    </div>
-  );
-}
-
-function AgencyInfoCard({
-  gerance,
-  canEdit,
-}: {
-  gerance: Gerance;
-  canEdit: boolean;
-}) {
-  const [name, setName] = useState(gerance.name);
-  const [street, setStreet] = useState(gerance.address.street);
-  const [zipCode, setZipCode] = useState(gerance.address.zipCode);
-  const [city, setCity] = useState(gerance.address.city);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setName(gerance.name);
-    setStreet(gerance.address.street);
-    setZipCode(gerance.address.zipCode);
-    setCity(gerance.address.city);
-  }, [
-    gerance.id,
-    gerance.name,
-    gerance.address.street,
-    gerance.address.zipCode,
-    gerance.address.city,
-  ]);
-
-  async function handleSave() {
-    if (name.trim().length > AGENCY_NAME_MAX_LENGTH) {
-      toast.error(
-        `Le nom de l'agence ne peut pas dépasser ${AGENCY_NAME_MAX_LENGTH} caractères`,
-      );
-      return;
-    }
-    setSaving(true);
-    try {
-      await Promise.all([
-        updateGeranceName(gerance.id, name),
-        updateGeranceAddress(gerance.id, {
-          ...emptyAddress,
-          street,
-          zipCode,
-          city,
-        }),
-      ]);
-      toast.success("Informations mises à jour");
-    } catch (err) {
-      toast.error("Échec de l'enregistrement : " + (err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Card className="mb-5">
-      <CardHeader>
-        <CardTitle className="text-base">Informations</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {canEdit ? (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="agency-name">Nom de l'agence</Label>
-              <Input
-                id="agency-name"
-                required
-                maxLength={AGENCY_NAME_MAX_LENGTH}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              {name.length >= AGENCY_NAME_MAX_LENGTH && (
-                <p className="text-xs text-red-600">
-                  Limite de {AGENCY_NAME_MAX_LENGTH} caractères atteinte
-                </p>
-              )}
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <Label htmlFor="agency-street">Adresse</Label>
-                <AddressAutocompleteInput
-                  id="agency-street"
-                  value={street}
-                  onChange={setStreet}
-                  onSelect={(a) => {
-                    setStreet(a.street);
-                    setZipCode(a.zipCode);
-                    setCity(a.city);
-                  }}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="agency-zip">Code postal</Label>
-                <ZipCodeCityInput
-                  id="agency-zip"
-                  value={zipCode}
-                  onChange={setZipCode}
-                  onCityResolved={setCity}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="agency-city">Ville</Label>
-                <Input
-                  id="agency-city"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Button
-                className={`w-fit ${PRIMARY_CTA_CLASS}`}
-                size="sm"
-                onClick={handleSave}
-                disabled={saving || !name.trim()}
-              >
-                <Save />
-                Enregistrer
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1 text-sm">
-            <div>
-              <span className="text-muted-foreground">Nom : </span>
-              {name || "—"}
-            </div>
-            <div>
-              <span className="text-muted-foreground">Adresse : </span>
-              {[street, [zipCode, city].join(" ")]
-                .filter(Boolean)
-                .join(" — ") || "—"}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// Simple rappel de l'offre souscrite (statut + nombre de sièges actifs) -
-// toute la gestion (souscrire, changer de carte, factures) vit désormais
-// sur la page dédiée /facturation (BillingPage.tsx, menu Profil), pas ici.
-// Page /facturation réservée à l'agence (jamais un Agent, cf. Sidebar.tsx) :
-// le bouton d'accès n'est donc affiché que pour canEdit=true, un Agent ne
-// voit que le statut/nombre de sièges en lecture seule sur cette card.
-function AgencyBillingCard({
-  gerance,
-  canEdit,
-}: {
-  gerance: Gerance;
-  canEdit: boolean;
-}) {
-  const [billing, setBilling] = useState<GeranceBilling>({
-    status: "none",
-    seatCount: 0,
-    currentPeriodEnd: null,
-  });
-
-  useEffect(() => {
-    return subscribeToGeranceBilling(gerance.id, setBilling, (error) =>
-      toast.error("Impossible de charger l'abonnement : " + error.message),
-    );
-  }, [gerance.id]);
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Abonnement</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge
-            variant="outline"
-            className={billingStatusBadgeClass[billing.status]}
-          >
-            {billingStatusLabels[billing.status]}
-          </Badge>
-          {billing.status !== "none" && (
-            <span className="text-sm text-muted-foreground">
-              {billing.seatCount} siège{billing.seatCount > 1 ? "s" : ""} actif
-              {billing.seatCount > 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-        {canEdit && (
-          <Button
-            variant="outline"
-            size="sm"
-            render={<Link to="/facturation" />}
-          >
-            <CreditCard />
-            Voir la facturation
-          </Button>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function AgencyServiceCard({
-  gerance,
-  type,
-  canEdit,
-}: {
-  gerance: Gerance;
-  type: ServiceType;
-  canEdit: boolean;
-}) {
-  const dept = gerance.services[type];
-  const [phone, setPhone] = useState(dept?.phone ?? "");
-  const [savingContact, setSavingContact] = useState(false);
-
-  useEffect(() => {
-    setPhone(dept?.phone ?? "");
-  }, [gerance.id, type, dept?.phone]);
-
-  if (!dept) return null;
-  const currentDept = dept;
-
-  // Email du service jamais modifiable ici (contrairement au téléphone) :
-  // c'est l'identifiant de la licence (une adresse mail = un compte
-  // agence/agent invité via invite_agency_account) - le changer désynchro-
-  // niserait l'email affiché du compte Firebase Auth réellement rattaché
-  // (dept.uid), qui continuerait de pointer sur l'ancienne adresse.
-  async function handleSaveContact() {
-    setSavingContact(true);
-    try {
-      await updateGeranceDeptContact(gerance.id, type, {
-        mail: currentDept.mail,
-        phone,
-      });
-      toast.success("Service mis à jour");
-    } catch (err) {
-      toast.error("Échec de l'enregistrement : " + (err as Error).message);
-    } finally {
-      setSavingContact(false);
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{serviceTypeLabels[type]}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {canEdit ? (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="grid flex-1 gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor={`${type}-svc-mail`}>Email du service</Label>
-                <Input
-                  id={`${type}-svc-mail`}
-                  value={dept.mail}
-                  disabled
-                  title="Rattaché à une licence, non modifiable"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor={`${type}-svc-phone`}>Téléphone</Label>
-                <Input
-                  id={`${type}-svc-phone`}
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </div>
-            </div>
-            <Button
-              size="sm"
-              onClick={handleSaveContact}
-              disabled={savingContact}
-              className={PRIMARY_CTA_CLASS}
-            >
-              <Save />
-              Enregistrer
-            </Button>
-          </div>
-        ) : (
-          <div className="grid gap-4 text-sm sm:grid-cols-2">
-            <div>
-              <span className="text-muted-foreground">Email du service : </span>
-              {dept.mail || "—"}
-            </div>
-            <div>
-              <span className="text-muted-foreground">Téléphone : </span>
-              {dept.phone || "—"}
-            </div>
-          </div>
-        )}
-
-        {canEdit && dept.mail && (
-          <AccountControl
-            gerance={gerance}
-            serviceType={type}
-            mail={dept.mail}
-            role="agence"
-            persistedUid={dept.uid}
-            onLinkUid={(uid) => setDeptAccountUid(gerance, type, uid)}
-          />
-        )}
-
-        <div className="border-t pt-4">
-          <NamedAgentsManager gerance={gerance} type={type} />
-        </div>
-      </CardContent>
-    </Card>
   );
 }
