@@ -11,6 +11,7 @@ import {
   Briefcase,
   ChevronLeft,
   Home,
+  KeyRound,
   Landmark,
   Mail,
   Pencil,
@@ -19,6 +20,7 @@ import {
   Save,
   Search,
   ShieldOff,
+  Trash2,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -64,6 +66,7 @@ import {
   isBillingActive,
   isLegacyBilling,
   licenceUsage,
+  unlicensedAgentUids,
 } from "@/lib/licences";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -80,6 +83,7 @@ import {
   revokeAgencyAccount,
   revokeSuccessMessage,
   REVOKE_CONFIRM_MESSAGE,
+  setAgentLicence,
   setDeptAccountUid,
   subscribeToGerance,
   subscribeToGerances,
@@ -427,18 +431,20 @@ export function AgenceDetailPage() {
   }, [id]);
 
   // Agents nommés : comptes des tableaux d'agents hors compte générique de
-  // chaque service (même filtre que NamedAgentsManager).
+  // chaque service (même filtre que NamedAgentsManager), plus les agents
+  // sans licence, toujours dans l'équipe (comme TeamStats de l'agence).
   const agentCount = useMemo(() => {
     if (!gerance) return 0;
     const serviceUids = new Set(
       serviceTypes.map((type) => gerance.services[type]?.uid).filter(Boolean),
     );
-    return new Set(
-      serviceTypes
+    return new Set([
+      ...serviceTypes
         .flatMap((type) => gerance[AGENT_UID_FIELD[type]] ?? [])
         .filter((uid) => !serviceUids.has(uid)),
-    ).size;
-  }, [gerance]);
+      ...unlicensedAgentUids(billing),
+    ]).size;
+  }, [gerance, billing]);
 
   return (
     <div className="-mt-[20px] flex flex-col gap-5">
@@ -1125,9 +1131,10 @@ function ServiceSection({
   );
 }
 
-// Liste des agents nommés d'un service - un agent n'existe QUE via
-// serviceSyndicAgentUids/geranceLocativeAgentUids (compte déjà invité),
-// résolu en fiche complète via resolveUsersByUids. Partagé entre
+// Liste des agents nommés d'un service - un agent avec licence existe via
+// serviceSyndicAgentUids/geranceLocativeAgentUids (compte déjà invité), un
+// agent sans licence via billing/current.unlicensedAgents ; les deux résolus
+// en fiche complète via resolveUsersByUids. Partagé entre
 // ServiceSection (dialog Superadmin) et AgencyServiceCard (fiche Agence) :
 // même mécanique, seul le contexte d'appel diffère. Éditable par
 // superAdmin/agence, en lecture seule pour agent (même garde que
@@ -1167,14 +1174,39 @@ function NamedAgentsManager({
         ? `Le service ${serviceTypeLabels[type]} n'est pas souscrit : ajoutez d'abord sa licence service (carte Abonnement).`
         : null;
 
+  // Agents sans licence (« Libérer la licence ») : hors des tableaux, dans
+  // billing/current.unlicensedAgents. Listés pour leur rendre une licence ou
+  // les supprimer, par les callables de la vue Équipe de l'agence.
+  const unlicensedKey = unlicensedAgentUids(billing, type)
+    .filter((uid) => !agentUids.includes(uid))
+    .sort()
+    .join(",");
+  const unlicensedUids = useMemo(
+    () => (unlicensedKey ? unlicensedKey.split(",") : []),
+    [unlicensedKey],
+  );
+  const profileUids = useMemo(
+    () => [...agentUids, ...unlicensedUids],
+    [agentUids, unlicensedUids],
+  );
+  const [busyUid, setBusyUid] = useState<string | null>(null);
+  // Même règle que set_agent_licence (le serveur revérifie).
+  const assignBlocker = !isBillingActive(billing)
+    ? "Pas d'abonnement en cours"
+    : isLegacyBilling(billing)
+      ? "Abonnement de l'ancienne formule : migration des licences requise"
+      : !usage.subscribed.includes(type)
+        ? `Le service ${serviceTypeLabels[type]} n'est pas souscrit`
+        : null;
+
   useEffect(() => {
-    if (agentUids.length === 0) {
+    if (profileUids.length === 0) {
       setProfiles([]);
       return;
     }
     let cancelled = false;
     setLoadingProfiles(true);
-    resolveUsersByUids(agentUids)
+    resolveUsersByUids(profileUids)
       .then((users) => {
         if (!cancelled) setProfiles(users);
       })
@@ -1184,7 +1216,7 @@ function NamedAgentsManager({
     return () => {
       cancelled = true;
     };
-  }, [agentUids]);
+  }, [profileUids]);
 
   async function handleInvite() {
     const email = newAgentEmail.trim();
@@ -1223,15 +1255,38 @@ function NamedAgentsManager({
         : agentUids.filter((uid) => !profiles.some((p) => p.uid === uid)),
     [agentUids, profiles, loadingProfiles],
   );
+  const licensedProfiles = profiles.filter((p) => agentUids.includes(p.uid));
 
-  async function handleRevoke(uid: string) {
-    if (!confirm(REVOKE_CONFIRM_MESSAGE)) return;
+  async function handleRevoke(uid: string, message = REVOKE_CONFIRM_MESSAGE) {
+    if (!confirm(message)) return;
     try {
       toast.success(
         revokeSuccessMessage(await revokeAgencyAccount(gerance.id, type, uid)),
       );
     } catch (err) {
       toast.error("Échec de la révocation : " + (err as Error).message);
+    }
+  }
+
+  async function handleAssign(uid: string, email: string) {
+    const cost =
+      usage.agents.available > 0
+        ? `elle prend 1 des ${usage.agents.available} licence${usage.agents.available > 1 ? "s" : ""} agent disponible${usage.agents.available > 1 ? "s" : ""} : rien de plus à payer.`
+        : `plus aucune licence agent disponible, une licence est ajoutée : ${formatCents(DEFAULT_AGENT_PRICE_CENTS)} HT/mois${billing.status === "trialing" ? ", gratuite jusqu'à la fin de l'essai." : ", au prorata dès maintenant."}`;
+    if (!confirm(`Attribuer une licence à ${email} ? L'agent retrouve son accès ; ${cost}`))
+      return;
+    setBusyUid(uid);
+    try {
+      const result = await setAgentLicence(gerance.id, uid, true);
+      toast.success(
+        result.licenceAdded
+          ? "Licence attribuée — licence agent ajoutée"
+          : "Licence attribuée",
+      );
+    } catch (err) {
+      toast.error("Attribution impossible : " + (err as Error).message);
+    } finally {
+      setBusyUid(null);
     }
   }
 
@@ -1242,14 +1297,14 @@ function NamedAgentsManager({
           Agents
         </span>
         <span className="rounded-full bg-[oklch(95%_0.004_100)] px-2 py-px text-[11.5px] font-bold text-muted-foreground">
-          {agentUids.length}
+          {agentUids.length + unlicensedUids.length}
         </span>
       </div>
       {loadingProfiles ? (
         <p className="m-0 rounded-[12px] border border-dashed border-[oklch(90%_0.005_100)] bg-[oklch(97%_0.004_100)] p-3 text-[12.5px] text-muted-foreground">
           Chargement…
         </p>
-      ) : profiles.length === 0 && orphanUids.length === 0 ? (
+      ) : profileUids.length === 0 ? (
         <p className="m-0 flex items-center gap-2.5 rounded-[12px] border border-dashed border-[oklch(90%_0.005_100)] bg-[oklch(97%_0.004_100)] p-3 text-[12.5px] text-muted-foreground">
           <Users className="size-4 shrink-0" />
           {canEdit
@@ -1280,7 +1335,7 @@ function NamedAgentsManager({
               )}
             </div>
           ))}
-          {profiles.map((profile) => {
+          {licensedProfiles.map((profile) => {
             const isSelf = profile.uid === user?.uid;
             return (
               <div
@@ -1315,6 +1370,59 @@ function NamedAgentsManager({
                       Révoquer l'accès
                     </Button>
                   ))}
+              </div>
+            );
+          })}
+          {unlicensedUids.map((uid) => {
+            const profile = profiles.find((p) => p.uid === uid);
+            const email = profile?.email ?? `${uid.slice(0, 8)}…`;
+            return (
+              <div
+                key={uid}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 p-2.5"
+              >
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                  <span className="font-medium">
+                    {profile
+                      ? `${profile.name} ${profile.surname}`.trim() || profile.email
+                      : "Compte supprimé"}
+                  </span>
+                  <span className="text-muted-foreground">{`— ${email}`}</span>
+                  <span className="rounded-full bg-[oklch(94%_0.004_100)] px-2 py-px text-[11.5px] font-bold text-[oklch(45%_0.01_150)]">
+                    Sans licence · aucun accès
+                  </span>
+                </div>
+                {canEdit && (
+                  <div className="flex flex-wrap gap-2">
+                    <span title={assignBlocker ?? undefined}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!!assignBlocker || busyUid === uid}
+                        onClick={() => handleAssign(uid, email)}
+                      >
+                        <KeyRound />
+                        Attribuer une licence
+                      </Button>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={busyUid === uid}
+                      onClick={() =>
+                        handleRevoke(
+                          uid,
+                          `Retirer ${email} du service ${serviceTypeLabels[type]} ? S'il n'est dans aucun autre service, son compte est supprimé définitivement.`,
+                        )
+                      }
+                    >
+                      <Trash2 />
+                      Supprimer
+                    </Button>
+                  </div>
+                )}
               </div>
             );
           })}
