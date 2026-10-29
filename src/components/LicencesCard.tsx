@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { LicenceMigrationDialog } from "@/components/LicenceMigrationDialog"
+import { LicenceTrialDialog } from "@/components/LicenceTrialDialog"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { adjustLicences, createBillingPortalSession, type LicenceAction } from "@/lib/billing"
 import {
@@ -137,6 +138,18 @@ export function LicencesCard({
           {billingStatusLabels[billing.status]}
         </span>
       </div>
+
+      {trialing && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] bg-[oklch(97%_0.008_155)] p-2.5">
+          <span className="font-semibold text-[oklch(32%_0.09_155)]">
+            Essai gratuit
+            {billing.currentPeriodEnd ? ` jusqu'au ${billing.currentPeriodEnd.toLocaleDateString("fr-FR")}` : ""}
+          </span>
+          {isSuperAdmin && (
+            <LicenceTrialDialog geranceId={gerance.id} trialEnd={billing.currentPeriodEnd} className={LINK_CLASS} />
+          )}
+        </div>
+      )}
 
       {billing.cancelAtPeriodEnd && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] bg-amber-50 p-2.5 text-amber-900">

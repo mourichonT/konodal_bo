@@ -156,6 +156,16 @@ export async function migrateLicences(geranceId: string, dryRun: boolean): Promi
   return data.agencies[0] ?? null
 }
 
+// Fin de l'essai déplacée par un superAdmin (admin_set_licence_trial_end) :
+// "AAAA-MM-JJ", midi UTC, 2 ans au plus, sans prorata ; billing/current suit.
+export async function setLicenceTrialEnd(geranceId: string, trialEnd: string): Promise<void> {
+  const call = httpsCallable<{ geranceId: string; trialEnd: string }, { trialEnd: number; status: string }>(
+    functions,
+    "admin_set_licence_trial_end"
+  )
+  await call({ geranceId, trialEnd })
+}
+
 // Carte bancaire saisie dans l'onglet Abonnement (Stripe Elements,
 // licence_billing.py) : SetupIntent créé par le serveur et confirmé par le
 // navigateur, puis enregistré comme carte du client et de l'abonnement (la

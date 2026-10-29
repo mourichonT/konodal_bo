@@ -9,10 +9,15 @@ export function DateInput({
   value,
   onChange,
   className,
+  min,
+  max,
 }: {
   value: string
   onChange: (value: string) => void
   className?: string
+  // Bornes du calendrier natif ("AAAA-MM-JJ").
+  min?: string
+  max?: string
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -42,6 +47,8 @@ export function DateInput({
         ref={inputRef}
         type="date"
         value={value}
+        min={min}
+        max={max}
         onChange={(e) => onChange(e.target.value)}
         tabIndex={-1}
         className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
