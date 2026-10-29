@@ -718,12 +718,22 @@ function AlternateAddresses({ residence }: { residence: Residence }) {
   )
 }
 
+// Plage des niveaux d'une structure : du RDC au plus haut étage enregistré,
+// et jusqu'au sous-sol le plus profond. Un niveau de la plage absent de etage
+// est un niveau décoché, que la liste des étages ne propose pas (le RDC d'un
+// souterrain, par exemple).
+function levelNumber(level: string): number {
+  return parseInt(level.replace(/\D/g, ""), 10) || 0
+}
+
 function countAboveGround(etage: string[]): number {
-  return etage.filter((e) => e === "RDC" || e.startsWith("étage ")).length
+  const floors = etage.filter((e) => e.startsWith("étage ")).map(levelNumber)
+  if (floors.length > 0) return Math.max(...floors) + 1
+  return etage.includes("RDC") ? 1 : 0
 }
 
 function countUnderground(etage: string[]): number {
-  return etage.filter((e) => e.startsWith("Sous-sol")).length
+  return Math.max(0, ...etage.filter((e) => e.startsWith("Sous-sol")).map(levelNumber))
 }
 
 function buildEtage(floorCount: string, hasUnderground: boolean, undergroundCount: string): string[] {
@@ -851,14 +861,30 @@ function StructureCard({
   const [expanded, setExpanded] = useState(!structure)
   const [name, setName] = useState(structure?.name ?? "")
   const [type, setType] = useState(structure?.type ?? "")
-  const [floorCount, setFloorCount] = useState(String(countAboveGround(structure?.etage ?? [])))
+  // Plage du bâtiment : niveaux proposés + niveaux décochés (hiddenEtage),
+  // sinon un dernier étage ou un RDC décoché disparaîtrait de la carte.
+  const allLevels = [...(structure?.etage ?? []), ...(structure?.hiddenEtage ?? [])]
+  const [floorCount, setFloorCount] = useState(String(countAboveGround(allLevels)))
   const [hasUnderground, setHasUnderground] = useState(structure?.hasUnderground ?? false)
-  const [undergroundCount, setUndergroundCount] = useState(
-    String(countUnderground(structure?.etage ?? []))
-  )
+  const [undergroundCount, setUndergroundCount] = useState(String(countUnderground(allLevels)))
+  // Niveaux décochés : dans la plage du bâtiment, mais pas proposés dans la
+  // liste des étages (sinistres, interventions).
+  const [hiddenLevels, setHiddenLevels] = useState<string[]>(() => {
+    const etage = structure?.etage ?? []
+    return buildEtage(
+      String(countAboveGround(allLevels)),
+      structure?.hasUnderground ?? false,
+      String(countUnderground(allLevels))
+    ).filter((level) => !etage.includes(level))
+  })
+  const levels = buildEtage(floorCount, hasUnderground, undergroundCount)
   const [elements, setElements] = useState<string[]>(structure?.elements ?? [])
   const [customElement, setCustomElement] = useState("")
   const [saving, setSaving] = useState(false)
+
+  function toggleLevel(level: string) {
+    setHiddenLevels((prev) => (prev.includes(level) ? prev.filter((l) => l !== level) : [...prev, level]))
+  }
 
   function toggleElement(el: string) {
     setElements((prev) => (prev.includes(el) ? prev.filter((e) => e !== el) : [...prev, el]))
@@ -881,7 +907,8 @@ function StructureCard({
       const input: StructureInput = {
         name: name.trim(),
         type,
-        etage: buildEtage(floorCount, hasUnderground, undergroundCount),
+        etage: levels.filter((level) => !hiddenLevels.includes(level)),
+        hiddenEtage: levels.filter((level) => hiddenLevels.includes(level)),
         hasUnderground,
         elements,
       }
@@ -981,6 +1008,27 @@ function StructureCard({
                 />
               )}
             </div>
+            {levels.length > 0 && (
+              <div className="flex flex-col gap-2.5 sm:col-span-2">
+                <Label>Niveaux proposés dans la liste des étages</Label>
+                <div className="flex flex-wrap gap-x-5 gap-y-2.5">
+                  {levels.map((level) => (
+                    <label key={level} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="size-4 rounded border-input"
+                        checked={!hiddenLevels.includes(level)}
+                        onChange={() => toggleLevel(level)}
+                      />
+                      {level}
+                    </label>
+                  ))}
+                </div>
+                <p className="m-0 text-xs text-muted-foreground">
+                  Un niveau décoché n'est plus proposé (le RDC d'un souterrain, par exemple).
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-2.5">

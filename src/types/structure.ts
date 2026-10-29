@@ -40,6 +40,10 @@ export type StructureResidence = {
   type: string
   etage: string[]
   hasUnderground: boolean
+  // Niveaux décochés dans le BO (le RDC d'un souterrain, par exemple) : dans
+  // la plage du bâtiment, mais absents de `etage`, donc de la liste des
+  // étages. Gardés pour que la case reste à la réouverture. Inconnu de l'app.
+  hiddenEtage?: string[] | null
   // Moyen d'accès de ce bâtiment (digicode/badge/clé), affiché au
   // prestataire sur la page de partage d'une intervention - absent tant que
   // personne ne l'a renseigné, cf. types/accessPoint.ts.

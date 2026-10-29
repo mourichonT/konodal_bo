@@ -181,7 +181,7 @@ Quatre sections :
 
 **Conseil syndical** : liste des propriétaires éligibles (déduits des lots de la résidence) et des membres actuels du conseil. Invitation par email et retrait possibles, accessibles à tous les rôles ayant accès à la résidence.
 
-**Structures et bâtiments** : liste réordonnable des bâtiments/parties de la résidence (bâtiment, villa, souterrain, jardin, parking, garage, cave, partie commune, extérieur...), avec génération automatique des étages, gestion des sous-sols, et description des équipements présents.
+**Structures et bâtiments** : liste réordonnable des bâtiments/parties de la résidence (bâtiment, villa, souterrain, jardin, parking, garage, cave, partie commune, extérieur...), avec génération automatique des étages, gestion des sous-sols, et description des équipements présents. Une case à cocher par niveau (RDC, étages, sous-sols) choisit les niveaux proposés dans la liste des étages (sinistres, interventions) : un niveau décoché, comme le RDC d'un souterrain, n'est plus proposé. À l'import des lots, un bâtiment dont tous les lots sont sous le RDC (un souterrain) est créé sans RDC.
 
 **Lots** : tableau éditable directement (sauvegarde automatique) listant chaque lot avec son bâtiment, numéro, référence, type (appartement, parking, cave, local commercial...), et son éventuel rattachement à un lot principal (un parking rattaché à un appartement, par exemple — le rattachement recopie automatiquement le propriétaire/locataire du lot principal). Un lot déjà attribué à un propriétaire ne peut plus être supprimé. Deux lots ne peuvent pas partager la même référence, ni la même combinaison bâtiment/numéro. Un **import en masse** via fichier Excel/CSV est disponible, avec détection des doublons avant validation.
 
