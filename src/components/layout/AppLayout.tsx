@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Outlet, useLocation } from "react-router-dom"
 import { Menu } from "lucide-react"
 import logoGreen from "@/assets/logo_transparent-green.png"
@@ -8,6 +8,9 @@ import { Sidebar } from "./Sidebar"
 export function AppLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const location = useLocation()
+  // Seul conteneur qui défile : la Sidebar (md+) le suit quand le menu
+  // dépasse la fenêtre, plutôt que d'avoir sa propre barre de défilement.
+  const mainRef = useRef<HTMLElement>(null)
 
   // Referme le tiroir de navigation mobile a chaque changement de route -
   // sans ca, il resterait ouvert par-dessus la page suivante apres un clic
@@ -23,7 +26,7 @@ export function AppLayout() {
           simplement retiree du flux en dessous - remplacee par le tiroir
           ci-dessous. */}
       <div className="hidden md:contents">
-        <Sidebar />
+        <Sidebar pageRef={mainRef} />
       </div>
 
       {mobileNavOpen && (
@@ -52,7 +55,7 @@ export function AppLayout() {
           </button>
           <img src={logoGreen} alt="Konodal" className="h-5 w-auto" />
         </header>
-        <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-8">
+        <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-8">
           <Outlet />
         </main>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, type RefObject } from "react"
 import { Link, NavLink, useLocation } from "react-router-dom"
 import {
   LayoutDashboard,
@@ -28,6 +28,7 @@ import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount"
 import { usePendingRemovalRequestsCount } from "@/hooks/usePendingRemovalRequestsCount"
 import { usePendingContactsCount } from "@/hooks/usePendingContactsCount"
 import { usePendingResidenceRequestsCount } from "@/hooks/usePendingResidenceRequestsCount"
+import { useScrollWithPage } from "@/hooks/useScrollWithPage"
 import { usePendingKnowledgeProposalsCount } from "@/hooks/usePendingKnowledgeProposalsCount"
 import { subscribeToUser } from "@/lib/users"
 import { cn } from "@/lib/utils"
@@ -149,7 +150,13 @@ function NavBadge({ count }: { count: number }) {
   )
 }
 
-export function Sidebar() {
+// pageRef : conteneur qui défile (le <main> d'AppLayout), que le menu suit
+// quand il dépasse la fenêtre. Sans lui (tiroir mobile), le menu défile seul,
+// barre masquée.
+export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> } = {}) {
+  const asideRef = useRef<HTMLElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  useScrollWithPage(asideRef, contentRef, pageRef)
   const { user, logout } = useAuth()
   const { isSuperAdmin } = useIsSuperAdmin()
   const { isAgence, isAgent } = useAccountRole()
@@ -222,7 +229,11 @@ export function Sidebar() {
 
   return (
     <aside
-      className="relative flex h-full w-[226px] shrink-0 flex-col overflow-hidden text-sidebar-foreground"
+      ref={asideRef}
+      className={cn(
+        "relative flex h-full w-[226px] shrink-0 flex-col text-sidebar-foreground",
+        pageRef ? "overflow-clip" : "overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      )}
       style={{
         background:
           "linear-gradient(175deg, oklch(28% 0.045 155) 0%, oklch(38% 0.07 152) 60%, oklch(44% 0.085 148) 100%)",
@@ -240,179 +251,183 @@ export function Sidebar() {
         className="pointer-events-none absolute -bottom-6 left-1 w-[260px] max-w-none opacity-[0.08] select-none"
       />
 
-      <div className="relative flex items-center px-5 py-6">
-        <img src={logoHorizontal} alt="Konodal" className="h-[25.5px] w-auto" />
-        <EnvBadge />
-      </div>
+      {/* Colonne du menu : décalée par useScrollWithPage quand elle dépasse
+          la fenêtre, au moins aussi haute que la barre (compte en bas). */}
+      <div ref={contentRef} className="relative flex min-h-full shrink-0 flex-col">
+        <div className="relative flex items-center px-5 py-6">
+          <img src={logoHorizontal} alt="Konodal" className="h-[25.5px] w-auto" />
+          <EnvBadge />
+        </div>
 
-      <nav className="relative mt-[50px] flex flex-1 flex-col gap-0.5 px-3 py-1">
-        {allNavItems.map((item) => {
-          if (item.children) {
-            const isParentActive = location.pathname.startsWith(item.to)
-            // Section ajoutée après le premier rendu (sous-menu Résidences, dépendant
-            // du rôle chargé ensuite) : ouverte si son chemin est actif.
-            const isOpen = openSections[item.to] ?? location.pathname.startsWith(item.to)
-            return (
-              <div key={item.to} className="flex flex-col">
-                <div
-                  className={cn(
-                    "group flex items-center gap-3 rounded-xl py-[11px] pr-3 pl-3.5 text-sm font-semibold",
-                    isParentActive
-                      ? "bg-white/14 text-white"
-                      : "text-white/80 hover:bg-white/8 hover:text-white"
-                  )}
-                >
-                  <NavLink to={item.to} className="flex flex-1 items-center gap-3">
-                    <item.icon className="size-4.5" />
-                    {item.label}
-                    {(() => {
-                      const total = item.children.reduce((sum, child) => sum + (childBadgeCount[child.to] ?? 0), 0)
-                      return !isOpen && total > 0 ? <NavBadge count={total} /> : null
-                    })()}
-                  </NavLink>
-                  <button
-                    type="button"
-                    aria-label={isOpen ? "Réduire" : "Développer"}
-                    onClick={() => toggleSection(item.to)}
-                    className="shrink-0 cursor-pointer"
+        <nav className="relative mt-[34px] flex flex-1 flex-col gap-0.5 px-3 py-1">
+          {allNavItems.map((item) => {
+            if (item.children) {
+              const isParentActive = location.pathname.startsWith(item.to)
+              // Section ajoutée après le premier rendu (sous-menu Résidences, dépendant
+              // du rôle chargé ensuite) : ouverte si son chemin est actif.
+              const isOpen = openSections[item.to] ?? location.pathname.startsWith(item.to)
+              return (
+                <div key={item.to} className="flex flex-col">
+                  <div
+                    className={cn(
+                      "group flex items-center gap-3 rounded-xl py-[11px] pr-3 pl-3.5 text-sm font-semibold",
+                      isParentActive
+                        ? "bg-white/14 text-white"
+                        : "text-white/80 hover:bg-white/8 hover:text-white"
+                    )}
                   >
-                    <ChevronDown className={cn("size-4 transition-transform", isOpen && "rotate-180")} />
-                  </button>
-                </div>
-                {isOpen && (
-                  <div className="flex flex-col gap-1 py-2 pl-8">
-                    {item.children.map((child) => (
-                      <NavLink
-                        key={child.to}
-                        to={child.to}
-                        end={child.end}
-                        title={child.label}
-                        className={({ isActive }) =>
-                          cn(
-                            "flex min-w-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm",
-                            isActive
-                              ? "font-medium text-white"
-                              : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
-                          )
-                        }
-                      >
-                        {({ isActive }) => (
-                          <>
-                            <span
-                              aria-hidden
-                              className={cn(
-                                "size-1.5 shrink-0 rounded-full bg-white",
-                                isActive ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            <span className="truncate">{child.label}</span>
-                            {(childBadgeCount[child.to] ?? 0) > 0 && <NavBadge count={childBadgeCount[child.to]} />}
-                          </>
-                        )}
-                      </NavLink>
-                    ))}
+                    <NavLink to={item.to} className="flex flex-1 items-center gap-3">
+                      <item.icon className="size-4.5" />
+                      {item.label}
+                      {(() => {
+                        const total = item.children.reduce((sum, child) => sum + (childBadgeCount[child.to] ?? 0), 0)
+                        return !isOpen && total > 0 ? <NavBadge count={total} /> : null
+                      })()}
+                    </NavLink>
+                    <button
+                      type="button"
+                      aria-label={isOpen ? "Réduire" : "Développer"}
+                      onClick={() => toggleSection(item.to)}
+                      className="shrink-0 cursor-pointer"
+                    >
+                      <ChevronDown className={cn("size-4 transition-transform", isOpen && "rotate-180")} />
+                    </button>
                   </div>
+                  {isOpen && (
+                    <div className="flex flex-col gap-1 py-2 pl-8">
+                      {item.children.map((child) => (
+                        <NavLink
+                          key={child.to}
+                          to={child.to}
+                          end={child.end}
+                          title={child.label}
+                          className={({ isActive }) =>
+                            cn(
+                              "flex min-w-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm",
+                              isActive
+                                ? "font-medium text-white"
+                                : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                            )
+                          }
+                        >
+                          {({ isActive }) => (
+                            <>
+                              <span
+                                aria-hidden
+                                className={cn(
+                                  "size-1.5 shrink-0 rounded-full bg-white",
+                                  isActive ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <span className="truncate">{child.label}</span>
+                              {(childBadgeCount[child.to] ?? 0) > 0 && <NavBadge count={childBadgeCount[child.to]} />}
+                            </>
+                          )}
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            const { to, label, icon: Icon, end } = item
+            return (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-3 rounded-xl py-[11px] pr-3 pl-3.5 text-sm font-semibold",
+                    isActive ? "bg-white/14 text-white" : "text-white/80 hover:bg-white/8 hover:text-white"
+                  )
+                }
+              >
+                <Icon className="size-4.5" />
+                {label}
+                {to === "/residents" && pendingUsersCount > 0 && <NavBadge count={pendingUsersCount} />}
+                {to === "/messages" && unreadMessagesCount > 0 && <NavBadge count={unreadMessagesCount} />}
+                {to === "/contacts" && pendingContactsCount > 0 && <NavBadge count={pendingContactsCount} />}
+              </NavLink>
+            )
+          })}
+        </nav>
+
+        <div className="relative m-3.5 rounded-[14px] bg-white/8">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={cn(
+                "flex w-full items-center gap-2.5 rounded-[14px] px-2.5 py-2.5 text-left text-sm transition-colors hover:bg-white/6",
+                "outline-none focus-visible:bg-white/6"
+              )}
+            >
+              <div className="flex size-[34px] shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-[oklch(90%_0.03_145)] text-xs font-extrabold text-[oklch(35%_0.07_155)]">
+                {profilePic ? (
+                  <img src={profilePic} alt="" className="size-full object-cover" />
+                ) : (
+                  initialsFor(user?.displayName, user?.email)
                 )}
               </div>
-            )
-          }
-
-          const { to, label, icon: Icon, end } = item
-          return (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 rounded-xl py-[11px] pr-3 pl-3.5 text-sm font-semibold",
-                  isActive ? "bg-white/14 text-white" : "text-white/80 hover:bg-white/8 hover:text-white"
-                )
-              }
-            >
-              <Icon className="size-4.5" />
-              {label}
-              {to === "/residents" && pendingUsersCount > 0 && <NavBadge count={pendingUsersCount} />}
-              {to === "/messages" && unreadMessagesCount > 0 && <NavBadge count={unreadMessagesCount} />}
-              {to === "/contacts" && pendingContactsCount > 0 && <NavBadge count={pendingContactsCount} />}
-            </NavLink>
-          )
-        })}
-      </nav>
-
-      <div className="relative m-3.5 rounded-[14px] bg-white/8">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className={cn(
-              "flex w-full items-center gap-2.5 rounded-[14px] px-2.5 py-2.5 text-left text-sm transition-colors hover:bg-white/6",
-              "outline-none focus-visible:bg-white/6"
-            )}
-          >
-            <div className="flex size-[34px] shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-[oklch(90%_0.03_145)] text-xs font-extrabold text-[oklch(35%_0.07_155)]">
-              {profilePic ? (
-                <img src={profilePic} alt="" className="size-full object-cover" />
-              ) : (
-                initialsFor(user?.displayName, user?.email)
-              )}
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col leading-tight">
-              <span className="truncate font-semibold text-white">
-                {user?.displayName || user?.email || "Compte"}
-              </span>
-              {user?.displayName && (
-                <span className="truncate text-xs text-white/70">{user.email}</span>
-              )}
-            </div>
-            <ChevronsUpDown className="size-3.5 shrink-0 text-white/60" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            side="top"
-            align="start"
-            sideOffset={8}
-            className="rounded-2xl border border-[oklch(94%_0.005_100)] p-0 shadow-[0_20px_44px_-12px_oklch(20%_0.02_150/0.35)]"
-          >
-            <div className="border-b border-[oklch(95%_0.003_100)] px-3.5 py-2.5">
-              <div className="truncate text-[12.5px] font-bold text-[oklch(24%_0.01_150)]">
-                {user?.displayName || user?.email || "Compte"}
+              <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                <span className="truncate font-semibold text-white">
+                  {user?.displayName || user?.email || "Compte"}
+                </span>
+                {user?.displayName && (
+                  <span className="truncate text-xs text-white/70">{user.email}</span>
+                )}
               </div>
-              {user?.displayName && (
-                <div className="truncate text-[11px] text-[oklch(55%_0.01_150)]">{user.email}</div>
-              )}
-            </div>
-            <div className="flex flex-col gap-0.5 p-1.5">
-              <DropdownMenuItem
-                render={<Link to="/profil" />}
-                className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13px] font-semibold"
-              >
-                <UserCircle />
-                Profil
-              </DropdownMenuItem>
-              {/* Facturation propre à l'agence de ce compte (onglet
-                  Abonnement de la page Agence) - réservée à l'agence
-                  elle-même, jamais à un simple Agent (action sensible :
-                  paiement, moyen de paiement, résiliation - même logique que
-                  les autres actions réservées à l'agence dans ce BO) ni à
-                  Super Admin (pas de gérance propre). */}
-              {isAgence && (
+              <ChevronsUpDown className="size-3.5 shrink-0 text-white/60" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="top"
+              align="start"
+              sideOffset={8}
+              className="rounded-2xl border border-[oklch(94%_0.005_100)] p-0 shadow-[0_20px_44px_-12px_oklch(20%_0.02_150/0.35)]"
+            >
+              <div className="border-b border-[oklch(95%_0.003_100)] px-3.5 py-2.5">
+                <div className="truncate text-[12.5px] font-bold text-[oklch(24%_0.01_150)]">
+                  {user?.displayName || user?.email || "Compte"}
+                </div>
+                {user?.displayName && (
+                  <div className="truncate text-[11px] text-[oklch(55%_0.01_150)]">{user.email}</div>
+                )}
+              </div>
+              <div className="flex flex-col gap-0.5 p-1.5">
                 <DropdownMenuItem
-                  render={<Link to="/agences?onglet=abonnement" />}
+                  render={<Link to="/profil" />}
                   className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13px] font-semibold"
                 >
-                  <CreditCard />
-                  Facturation
+                  <UserCircle />
+                  Profil
                 </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() => logout()}
-                className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13px] font-semibold"
-              >
-                <LogOut />
-                Déconnexion
-              </DropdownMenuItem>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                {/* Facturation propre à l'agence de ce compte (onglet
+                    Abonnement de la page Agence) - réservée à l'agence
+                    elle-même, jamais à un simple Agent (action sensible :
+                    paiement, moyen de paiement, résiliation - même logique que
+                    les autres actions réservées à l'agence dans ce BO) ni à
+                    Super Admin (pas de gérance propre). */}
+                {isAgence && (
+                  <DropdownMenuItem
+                    render={<Link to="/agences?onglet=abonnement" />}
+                    className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13px] font-semibold"
+                  >
+                    <CreditCard />
+                    Facturation
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => logout()}
+                  className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13px] font-semibold"
+                >
+                  <LogOut />
+                  Déconnexion
+                </DropdownMenuItem>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </aside>
   )
