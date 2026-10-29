@@ -196,7 +196,9 @@ function LotImportDialogContent({
                     const floors = s.etage.filter((e) => e.startsWith("étage ")).length
                     const basements = s.etage.filter((e) => e.startsWith("Sous-sol")).length
                     if (s.etage.length === 0) return s.label
-                    const detail = [`RDC${floors ? ` + ${floors} étage${floors > 1 ? "s" : ""}` : ""}`]
+                    const detail = s.etage.includes("RDC")
+                      ? [`RDC${floors ? ` + ${floors} étage${floors > 1 ? "s" : ""}` : ""}`]
+                      : []
                     if (basements) detail.push(`${basements} sous-sol${basements > 1 ? "s" : ""}`)
                     return `${s.label} (${detail.join(", ")})`
                   })

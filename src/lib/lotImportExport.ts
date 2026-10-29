@@ -326,12 +326,13 @@ export function parseEtageLevel(raw: string): number | null | undefined {
 
 // Liste d'étages d'un bâtiment, même format que buildEtage (saisie manuelle
 // dans la configuration de la résidence) : du RDC à l'étage le plus haut,
-// puis les sous-sols.
+// puis les sous-sols. Sans lot au RDC ou au-dessus (un souterrain), pas de
+// RDC.
 function etagesFromLevels(levels: number[]): { etage: string[]; hasUnderground: boolean } {
   if (levels.length === 0) return { etage: [], hasUnderground: false }
   const max = Math.max(0, ...levels)
   const min = Math.min(0, ...levels)
-  const etage = ["RDC"]
+  const etage = levels.some((level) => level >= 0) ? ["RDC"] : []
   for (let i = 1; i <= max; i++) etage.push(`étage ${i}`)
   for (let i = 1; i <= -min; i++) etage.push(`Sous-sol -${i}`)
   return { etage, hasUnderground: min < 0 }

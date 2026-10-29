@@ -1,3 +1,5 @@
+import type { ServiceType } from "@/types/gerance"
+
 // Statuts d'un abonnement Stripe (gerances/{id}/billing/current) - miroir
 // direct de `subscription.status` côté Stripe, plus "none" (jamais souscrit,
 // document absent côté BO) qui n'existe pas comme valeur Stripe elle-même.
@@ -9,6 +11,8 @@ export const BILLING_STATUSES = [
   "canceled",
   "unpaid",
   "paused",
+  "incomplete",
+  "incomplete_expired",
 ] as const
 export type BillingStatus = (typeof BILLING_STATUSES)[number]
 
@@ -20,6 +24,8 @@ export const billingStatusLabels: Record<BillingStatus, string> = {
   canceled: "Annulé",
   unpaid: "Impayé",
   paused: "Suspendu",
+  incomplete: "Premier paiement en attente",
+  incomplete_expired: "Premier paiement expiré",
 }
 
 // Même pattern que statusBadgeClass (SinistresListPage.tsx) : un
@@ -32,26 +38,47 @@ export const billingStatusBadgeClass: Record<BillingStatus, string> = {
   canceled: "border-transparent bg-red-100 text-red-800",
   unpaid: "border-transparent bg-red-100 text-red-800",
   paused: "border-transparent bg-amber-100 text-amber-800",
+  incomplete: "border-transparent bg-amber-100 text-amber-800",
+  incomplete_expired: "border-transparent bg-red-100 text-red-800",
 }
+
+// Licences (functions_python/licence_billing.py, décision du 2026-10-22) :
+// licences service (une par service souscrit, 2 au maximum) et licences
+// agent (stock), deux lignes du même abonnement Stripe. "legacy" : ancienne
+// formule (un prix par siège) en attente de migration.
 
 export type GeranceBilling = {
   stripeCustomerId?: string
   stripeSubscriptionId?: string
-  stripeSubscriptionItemId?: string
   status: BillingStatus
+  // Total des licences (service + agent + ancienne formule).
   seatCount: number
+  serviceSeatCount: number
+  agentSeatCount: number
+  legacySeatCount: number
+  // Services souscrits (metadata de l'abonnement) et compte de chaque
+  // service, tenus par le serveur.
+  serviceLicences: ServiceType[]
+  serviceAccounts: Partial<Record<ServiceType, string>>
+  licenceModel: "v2" | "legacy" | null
+  licenceMismatch: boolean
+  // Agents sans licence (« Libérer la licence ») : hors des tableaux de la
+  // gérance, donc sans accès, mais toujours dans l'équipe avec leurs services.
+  unlicensedAgents: Record<string, ServiceType[]>
+  canceledByKonodal: boolean
   currentPeriodEnd: Date | null
   cancelAtPeriodEnd?: boolean
 }
 
 // Renvoyés par get_billing_overview (functions_python/main.py) - interrogés
-// en direct chez Stripe à l'ouverture de /facturation, jamais dénormalisés
-// en Firestore (contrairement à GeranceBilling ci-dessus).
+// en direct chez Stripe à l'ouverture de l'onglet Abonnement, jamais
+// dénormalisés en Firestore (contrairement à GeranceBilling ci-dessus).
 export type BillingPaymentMethod = {
   brand: string | null
   last4: string | null
   expMonth: number | null
   expYear: number | null
+  name: string | null
 }
 
 export const INVOICE_STATUSES = ["draft", "open", "paid", "uncollectible", "void"] as const
@@ -68,17 +95,40 @@ export const invoiceStatusLabels: Record<InvoiceStatus, string> = {
 export type BillingInvoice = {
   id: string
   date: Date | null
+  number: string | null
   totalCents: number
+  totalExcludingTaxCents: number | null
   currency: string
   status: InvoiceStatus
   hostedInvoiceUrl: string | null
+  invoicePdf: string | null
+}
+
+// Dernière facture encore à régler (get_billing_overview) : intentStatus
+// requires_action = authentification bancaire demandée, requires_payment_method
+// = prélèvement refusé (declineCode), processing = en cours.
+export type BillingPaymentIssue = {
+  amountDueCents: number
+  attemptCount: number
+  nextAttempt: Date | null
+  hostedInvoiceUrl: string | null
+  intentStatus: string | null
+  declineCode: string | null
+  errorMessage: string | null
 }
 
 export type BillingOverview = {
   paymentMethod: BillingPaymentMethod | null
   invoices: BillingInvoice[]
   customerEmail: string | null
-  pricePerSeatCents: number | null
+  trialStart: Date | null
+  trialEnd: Date | null
+  // Prochaine facture calculée par Stripe (remises et prorata compris), en
+  // centimes ; null sans facture à venir.
+  upcomingTotalCents: number | null
+  paymentIssue: BillingPaymentIssue | null
+  servicePriceCents: number | null
+  agentPriceCents: number | null
   priceCurrency: string | null
 }
 
@@ -102,12 +152,17 @@ export type LicenseKpiTotals = {
   openInvoicesCents: number
   openInvoicesCount: number
   revenue30dCents: number
+  // Licences attribuables (actif, essai, retard) par type.
+  serviceSeats: number
+  agentSeats: number
 }
 
 export type LicenseKpiMonth = {
   // "AAAA-MM"
   month: string
   seats: number
+  serviceSeats: number
+  agentSeats: number
   addedSeats: number
   removedSeats: number
   revenueCents: number
@@ -119,6 +174,8 @@ export type LicenseKpiAgency = {
   name: string
   status: BillingStatus
   seats: number
+  serviceSeats: number
+  agentSeats: number
   mrrCents: number
   currentPeriodEnd: Date | null
   cancelAtPeriodEnd: boolean
@@ -126,7 +183,8 @@ export type LicenseKpiAgency = {
 
 export type LicenseKpis = {
   currency: string
-  pricePerSeatCents: number | null
+  servicePriceCents: number | null
+  agentPriceCents: number | null
   totals: LicenseKpiTotals
   monthly: LicenseKpiMonth[]
   agencies: LicenseKpiAgency[]

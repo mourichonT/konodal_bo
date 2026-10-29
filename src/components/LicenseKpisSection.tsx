@@ -141,8 +141,12 @@ export function LicenseKpisSection() {
                 label="Licences actives"
                 icon={KeyRound}
                 value={count(t && t.activeSeats + t.pastDueSeats)}
-                sub={t ? `+ ${t.trialingSeats} en période d'essai` : undefined}
-                description="Sièges des abonnements actifs (ou en retard de paiement, l'accès n'étant pas coupé). Les sièges en période d'essai sont comptés à part."
+                sub={
+                  t
+                    ? `${t.serviceSeats} service · ${t.agentSeats} agent (essai compris) · + ${t.trialingSeats} en essai`
+                    : undefined
+                }
+                description="Licences des abonnements actifs (ou en retard de paiement, l'accès n'étant pas coupé). Les licences en période d'essai sont comptées à part ; le détail service / agent les inclut."
               />
               <LicenseTile
                 label="Agences abonnées"
@@ -156,15 +160,15 @@ export function LicenseKpisSection() {
                 icon={TrendingUp}
                 value={money(t?.mrrCents)}
                 sub={t ? `ARR ${formatAmount(t.arrCents, currency)}` : undefined}
-                description="Revenu mensuel récurrent : sièges facturés × prix du siège, hors périodes d'essai. ARR = MRR × 12."
+                description="Revenu mensuel récurrent : licences service et agent facturées × leur prix, hors périodes d'essai. ARR = MRR × 12."
               />
               <LicenseTile
                 label="Revenu moyen par agence"
                 icon={BadgeEuro}
                 value={money(t?.arpaCents)}
                 sub={
-                  kpis?.pricePerSeatCents != null
-                    ? `Prix du siège : ${formatAmount(kpis.pricePerSeatCents, currency)}`
+                  kpis?.servicePriceCents != null && kpis.agentPriceCents != null
+                    ? `Service ${formatAmount(kpis.servicePriceCents, currency)} · agent ${formatAmount(kpis.agentPriceCents, currency)}`
                     : undefined
                 }
                 description="MRR divisé par le nombre d'agences abonnées (ARPA)."
@@ -211,7 +215,15 @@ export function LicenseKpisSection() {
                         <XAxis dataKey="label" tickLine={false} axisLine={false} tick={axisTick} />
                         <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={axisTick} />
                         <Tooltip cursor={{ fill: "var(--muted)" }} contentStyle={chartTooltipStyle} />
-                        <Bar dataKey="seats" name="Licences" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+                        <Bar dataKey="serviceSeats" name="Service" stackId="licences" fill="var(--chart-2)" />
+                        <Bar
+                          dataKey="agentSeats"
+                          name="Agent"
+                          stackId="licences"
+                          fill="var(--chart-4)"
+                          radius={[4, 4, 0, 0]}
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -277,7 +289,8 @@ export function LicenseKpisSection() {
                           <TableRow>
                             <TableHead>Agence</TableHead>
                             <TableHead>Statut</TableHead>
-                            <TableHead className="text-right">Licences</TableHead>
+                            <TableHead className="text-right">Service</TableHead>
+                            <TableHead className="text-right">Agent</TableHead>
                             <TableHead className="text-right">MRR</TableHead>
                             <TableHead>Échéance</TableHead>
                           </TableRow>
@@ -298,7 +311,8 @@ export function LicenseKpisSection() {
                                   {billingStatusLabels[agency.status] ?? agency.status}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-right tabular-nums">{agency.seats}</TableCell>
+                              <TableCell className="text-right tabular-nums">{agency.serviceSeats}</TableCell>
+                              <TableCell className="text-right tabular-nums">{agency.agentSeats}</TableCell>
                               <TableCell className="text-right tabular-nums">
                                 {formatAmount(agency.mrrCents, currency)}
                               </TableCell>

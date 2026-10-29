@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom"
+import { Routes, Route, Navigate, useSearchParams } from "react-router-dom"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { RequireSuperAdmin } from "@/components/RequireSuperAdmin"
@@ -27,8 +27,8 @@ import AgencesPage, { AgenceDetailPage } from "@/pages/AgencesPage"
 import ContactsPage from "@/pages/ContactsPage"
 import ContactDetailPage from "@/pages/ContactDetailPage"
 import DocumentsPage from "@/pages/DocumentsPage"
+import MessagesPage from "@/pages/MessagesPage"
 import ProfilePage from "@/pages/ProfilePage"
-import BillingPage from "@/pages/BillingPage"
 import SharedInterventionPage from "@/pages/SharedInterventionPage"
 import OfferPage from "@/pages/OfferPage"
 import PublicitesPage from "@/pages/PublicitesPage"
@@ -38,6 +38,15 @@ import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
 import ResidenceRequestsPage from "@/pages/ResidenceRequestsPage"
 import ResidencesLayout from "@/pages/ResidencesLayout"
 import ResidenceRequestDetailPage from "@/pages/ResidenceRequestDetailPage"
+
+// Ancienne page Facturation : devenue l'onglet Abonnement de la page Agence.
+// Les retours Stripe (Checkout, portail) arrivent encore ici, avec ?checkout=.
+function BillingRedirect() {
+  const [searchParams] = useSearchParams()
+  const next = new URLSearchParams(searchParams)
+  next.set("onglet", "abonnement")
+  return <Navigate to={`/agences?${next}`} replace />
+}
 
 function App() {
   return (
@@ -113,8 +122,9 @@ function App() {
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="contacts/:id" element={<ContactDetailPage />} />
         <Route path="documents" element={<DocumentsPage />} />
+        <Route path="messages" element={<MessagesPage />} />
         <Route path="profil" element={<ProfilePage />} />
-        <Route path="facturation" element={<BillingPage />} />
+        <Route path="facturation" element={<BillingRedirect />} />
         <Route
           path="publicites"
           element={

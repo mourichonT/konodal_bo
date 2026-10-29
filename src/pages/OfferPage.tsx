@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
-import { CreditCard, KeyRound, Minus, Plus } from "lucide-react"
+import { Check, CreditCard, KeyRound, Minus, Plus } from "lucide-react"
 import logoGreen from "@/assets/logo_transparent-green.png"
 import { useManropeFont } from "@/hooks/useManropeFont"
 import { createOfferCheckoutSession, getOffer, requestOfferPasswordLink, type Offer } from "@/lib/offers"
 import { CARD_SHADOW, CTA_GRADIENT, CTA_SHADOW } from "@/lib/utils"
+import type { ServiceType } from "@/types/gerance"
 
 function formatAmount(cents: number, currency: string): string {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: currency.toUpperCase() }).format(cents / 100)
@@ -19,7 +20,9 @@ export default function OfferPage() {
   const [offer, setOffer] = useState<Offer | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [quantity, setQuantity] = useState(1)
+  // Services cochés (celui de l'invitation toujours) et stock d'agents.
+  const [services, setServices] = useState<ServiceType[]>([])
+  const [agents, setAgents] = useState(0)
   const [redirecting, setRedirecting] = useState(false)
 
   const [passwordLink, setPasswordLink] = useState<string | null>(null)
@@ -33,7 +36,8 @@ export default function OfferPage() {
     getOffer(token)
       .then((data) => {
         setOffer(data)
-        setQuantity(Math.max(1, data.existingSeatCount))
+        setServices(data.services.filter((service) => service.required).map((service) => service.type))
+        setAgents(data.minAgents)
       })
       .catch((err) => setError((err as Error).message))
       .finally(() => setLoading(false))
@@ -91,7 +95,7 @@ export default function OfferPage() {
     if (!token) return
     setRedirecting(true)
     try {
-      const { url } = await createOfferCheckoutSession(token, quantity)
+      const { url } = await createOfferCheckoutSession(token, { services, agents })
       window.location.href = url
     } catch (err) {
       setError((err as Error).message)
@@ -99,14 +103,11 @@ export default function OfferPage() {
     }
   }
 
-  const total =
-    offer?.pricePerSeatCents != null && offer.priceCurrency
-      ? formatAmount(offer.pricePerSeatCents * quantity, offer.priceCurrency)
-      : "—"
-  const unitPrice =
-    offer?.pricePerSeatCents != null && offer.priceCurrency
-      ? formatAmount(offer.pricePerSeatCents, offer.priceCurrency)
-      : "—"
+  const priced = offer?.servicePriceCents != null && offer.agentPriceCents != null && !!offer.priceCurrency
+  const price = (cents: number) => (priced ? formatAmount(cents, offer!.priceCurrency!) : "—")
+  const total = priced ? price(offer!.servicePriceCents! * services.length + offer!.agentPriceCents! * agents) : "—"
+  const minAgents = offer?.minAgents ?? 0
+  const maxAgents = offer?.maxAgents ?? 50
   // Durée en jours côté Stripe (90) : affichée en mois quand elle tombe juste.
   const trialDays = offer?.trialDays ?? 0
   const trialLabel =
@@ -153,7 +154,7 @@ export default function OfferPage() {
               Nos offres
             </h1>
             <p className="mt-3 max-w-[440px] text-[15px] leading-relaxed text-[oklch(92%_0.015_140)] sm:text-base">
-              Une licence, un tarif simple, sans surprise. Ajustez le nombre selon vos besoins.
+              Une licence par service, une licence par agent de votre équipe : un tarif simple, sans surprise.
             </p>
           </div>
         </div>
@@ -243,47 +244,88 @@ export default function OfferPage() {
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-6">
-                <div>
-                  <div className="mb-1 text-[13px] font-semibold text-[oklch(55%_0.01_150)]">
-                    Prix / licence <span className="text-[oklch(48%_0.09_155)]">HT</span>
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-2.5">
+                  <div className="text-[13px] font-semibold text-[oklch(55%_0.01_150)]">
+                    Licences service · {price(offer.servicePriceCents ?? 0)}{" "}
+                    <span className="text-[oklch(48%_0.09_155)]">HT</span> / mois chacune
                   </div>
-                  <div className="text-[22px] font-extrabold text-[oklch(22%_0.01_150)]">
-                    {unitPrice} <span className="text-sm font-semibold text-[oklch(55%_0.01_150)]">/ mois</span>
-                  </div>
+                  {offer.services.map((service) => {
+                    const checked = services.includes(service.type)
+                    return (
+                      <button
+                        key={service.type}
+                        type="button"
+                        disabled={service.required}
+                        aria-pressed={checked}
+                        onClick={() =>
+                          setServices((current) =>
+                            checked
+                              ? current.filter((type) => type !== service.type)
+                              : offer.services.map((s) => s.type).filter((t) => t === service.type || current.includes(t))
+                          )
+                        }
+                        className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-[15px] font-bold ${
+                          checked
+                            ? "border-[oklch(80%_0.06_155)] bg-[oklch(97%_0.015_155)] text-[oklch(30%_0.06_155)]"
+                            : "border-[oklch(90%_0.005_100)] bg-white text-[oklch(35%_0.01_150)]"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-5 w-5 items-center justify-center rounded-md border ${
+                            checked ? "border-transparent bg-[oklch(42%_0.08_155)] text-white" : "border-[oklch(80%_0.005_100)]"
+                          }`}
+                        >
+                          {checked && <Check className="h-3.5 w-3.5" />}
+                        </span>
+                        {service.label}
+                        {service.required && (
+                          <span className="ml-auto text-[12.5px] font-semibold text-[oklch(55%_0.01_150)]">
+                            Service de votre invitation
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
 
-                <div className="flex flex-col items-start gap-2">
-                  <div className="text-[13px] font-semibold text-[oklch(55%_0.01_150)]">Nombre de licences</div>
-                  <div className="flex items-center overflow-hidden rounded-2xl border border-[oklch(90%_0.005_100)]">
-                    <button
-                      type="button"
-                      aria-label="Retirer une licence"
-                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                      className="flex h-10 w-10 items-center justify-center bg-[oklch(97%_0.005_100)] text-[oklch(30%_0.01_150)] hover:bg-[oklch(93%_0.005_100)]"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-                    <div className="w-[52px] text-center text-base font-bold text-[oklch(22%_0.01_150)]">
-                      {quantity}
+                <div className="flex flex-wrap items-center justify-between gap-6">
+                  <div className="flex flex-col items-start gap-2">
+                    <div className="text-[13px] font-semibold text-[oklch(55%_0.01_150)]">
+                      Licences agent · {price(offer.agentPriceCents ?? 0)}{" "}
+                      <span className="text-[oklch(48%_0.09_155)]">HT</span> / mois chacune
                     </div>
-                    <button
-                      type="button"
-                      aria-label="Ajouter une licence"
-                      onClick={() => setQuantity((q) => Math.min(50, q + 1))}
-                      className="flex h-10 w-10 items-center justify-center bg-[oklch(97%_0.005_100)] text-[oklch(30%_0.01_150)] hover:bg-[oklch(93%_0.005_100)]"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center overflow-hidden rounded-2xl border border-[oklch(90%_0.005_100)]">
+                      <button
+                        type="button"
+                        aria-label="Retirer une licence agent"
+                        onClick={() => setAgents((n) => Math.max(minAgents, n - 1))}
+                        className="flex h-10 w-10 items-center justify-center bg-[oklch(97%_0.005_100)] text-[oklch(30%_0.01_150)] hover:bg-[oklch(93%_0.005_100)]"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <div className="w-[52px] text-center text-base font-bold text-[oklch(22%_0.01_150)]">{agents}</div>
+                      <button
+                        type="button"
+                        aria-label="Ajouter une licence agent"
+                        onClick={() => setAgents((n) => Math.min(maxAgents, n + 1))}
+                        className="flex h-10 w-10 items-center justify-center bg-[oklch(97%_0.005_100)] text-[oklch(30%_0.01_150)] hover:bg-[oklch(93%_0.005_100)]"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="text-[12.5px] text-[oklch(58%_0.01_150)]">
+                      Une par agent de votre équipe, en plus des comptes de service. Ajustable ensuite.
+                    </div>
                   </div>
-                </div>
 
-                <div className="text-right">
-                  <div className="mb-1 text-[13px] font-semibold text-[oklch(55%_0.01_150)]">
-                    Total <span className="text-[oklch(48%_0.09_155)]">HT</span>
-                  </div>
-                  <div className="text-2xl font-extrabold text-[oklch(38%_0.08_155)]">
-                    {total} <span className="text-sm font-semibold text-[oklch(55%_0.01_150)]">/ mois</span>
+                  <div className="text-right">
+                    <div className="mb-1 text-[13px] font-semibold text-[oklch(55%_0.01_150)]">
+                      Total <span className="text-[oklch(48%_0.09_155)]">HT</span>
+                    </div>
+                    <div className="text-2xl font-extrabold text-[oklch(38%_0.08_155)]">
+                      {total} <span className="text-sm font-semibold text-[oklch(55%_0.01_150)]">/ mois</span>
+                    </div>
                   </div>
                 </div>
               </div>

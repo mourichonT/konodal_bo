@@ -14,12 +14,14 @@ export function AddressAutocompleteInput({
   onChange,
   onSelect,
   required,
+  className,
 }: {
   id: string
   value: string
   onChange: (value: string) => void
   onSelect: (address: { street: string; zipCode: string; city: string }) => void
   required?: boolean
+  className?: string
 }) {
   const [suggestions, setSuggestions] = useState<AddressSearchResult[]>([])
   const [open, setOpen] = useState(false)
@@ -56,6 +58,7 @@ export function AddressAutocompleteInput({
       <Input
         id={id}
         required={required}
+        className={className}
         autoComplete="off"
         value={value}
         onChange={(e) => handleChange(e.target.value)}

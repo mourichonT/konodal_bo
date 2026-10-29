@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { db } from "@/firebase"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
+import { cn, ICON_TILE_CLASS, ICON_TILE_ON_CLASS, PANEL_CARD_CLASS } from "@/lib/utils"
 import { NodoIcon } from "./NodoIcon"
 
 // Même valeur que NODO_DEFAULT_MONTHLY_TOKENS (functions_python/nodo.py).
@@ -41,22 +42,24 @@ export function NodoQuotaSummary({ geranceId }: { geranceId: string }) {
       (snap) => {
         const value = (snap.data()?.nodoMonthlyTokenLimit as number | undefined) ?? NODO_DEFAULT_MONTHLY_TOKENS
         setLimit(value)
-        setDraft(String(value))
+        setDraft(formatter.format(value))
       },
       () => undefined
     )
   }, [geranceId])
 
+  const draftValue = Number(draft.replace(/\s/g, ""))
+
   async function handleSave() {
-    const value = Number(draft.replace(/\s/g, ""))
-    if (!Number.isFinite(value) || value < 0) {
+    if (!Number.isFinite(draftValue) || draftValue < 0) {
       toast.error("Plafond invalide")
       return
     }
     setSaving(true)
     try {
-      await updateDoc(doc(db, "gerances", geranceId), { nodoMonthlyTokenLimit: Math.round(value) })
-      setLimit(Math.round(value))
+      await updateDoc(doc(db, "gerances", geranceId), { nodoMonthlyTokenLimit: Math.round(draftValue) })
+      setLimit(Math.round(draftValue))
+      setDraft(formatter.format(Math.round(draftValue)))
       toast.success("Plafond Nodo mis à jour")
     } catch (error) {
       toast.error("Mise à jour impossible : " + (error instanceof Error ? error.message : String(error)))
@@ -68,38 +71,45 @@ export function NodoQuotaSummary({ geranceId }: { geranceId: string }) {
   const percent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 100
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-2xl bg-[oklch(97%_0.006_155)] p-[14px_18px] text-[12.5px]">
-      <div className="flex items-center gap-2 font-bold text-[oklch(30%_0.01_150)]">
-        <NodoIcon className="size-4" color="oklch(38% 0.07 152)" />
-        Nodo, assistant IA : consommation du mois
+    <div className={cn(PANEL_CARD_CLASS, "flex flex-col gap-3 text-[12.5px]")}>
+      <div className="flex items-center gap-3">
+        <div className={cn(ICON_TILE_CLASS, ICON_TILE_ON_CLASS)}>
+          <NodoIcon className="size-[18px]" color="oklch(32% 0.09 155)" />
+        </div>
+        <span className="text-[14px] font-bold text-[oklch(22%_0.01_150)]">Consommation Nodo</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-[oklch(92%_0.01_150)]">
-        <div
-          className={percent >= 90 ? "h-full bg-red-500" : "h-full bg-[oklch(45%_0.1_155)]"}
-          style={{ width: `${percent}%` }}
-        />
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <strong className="text-[13px] text-foreground">{formatter.format(used)} tokens</strong>
+          <span className="text-muted-foreground">
+            plafond {formatter.format(limit)} · {percent} %
+          </span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-[oklch(93%_0.006_150)]">
+          <div
+            className={percent >= 90 ? "h-full bg-red-500" : "h-full bg-[oklch(45%_0.1_155)]"}
+            style={{ width: `${percent}%` }}
+          />
+        </div>
       </div>
-      <span className="font-semibold text-muted-foreground">
-        <strong className="text-foreground">{formatter.format(used)}</strong> / {formatter.format(limit)} tokens
-        pondérés ({percent} %)
-      </span>
       {isSuperAdmin && (
         <div className="flex items-center gap-2">
           <Input
             inputMode="numeric"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            className="h-8 max-w-40 bg-white text-[12.5px]"
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSave())}
+            className="h-9 min-w-0 flex-1 rounded-[10px] bg-white text-[13px]"
             aria-label="Plafond mensuel Nodo (tokens)"
           />
           <Button
             type="button"
-            size="sm"
             variant="outline"
-            disabled={saving || draft === String(limit)}
+            className="h-9 rounded-[10px] px-3.5 text-[13px] font-bold"
+            disabled={saving || draftValue === limit}
             onClick={handleSave}
           >
-            Enregistrer le plafond
+            Enregistrer
           </Button>
         </div>
       )}

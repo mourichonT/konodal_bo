@@ -53,6 +53,7 @@ export type StructureInput = {
   name: string
   type: string
   etage: string[]
+  hiddenEtage: string[]
   hasUnderground: boolean
   elements: string[]
 }

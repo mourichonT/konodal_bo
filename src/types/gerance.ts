@@ -53,6 +53,10 @@ export type Gerance = {
   // superAdmin (set_nodo_mail_filter, functions_python/nodo_mail.py),
   // jamais en direct (firestore.rules) ; lue par NodoMailFilterSection.
   nodoMailFilter?: { enabled?: boolean; updatedBy?: string }
+  // Réponses aux résidents depuis la page Messages du BO
+  // (reply_to_resident_mail) : actives tant que enabled n'est pas false.
+  // Réglées par le compte agence ou un superAdmin (InAppRepliesSection).
+  inAppReplies?: { enabled?: boolean; updatedBy?: string }
 }
 
 export const emptyAgencyDept: AgencyDept = {

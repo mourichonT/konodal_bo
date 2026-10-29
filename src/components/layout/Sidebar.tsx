@@ -10,6 +10,7 @@ import {
   BookUser,
   FileText,
   Megaphone,
+  Mail,
   Newspaper,
   LogOut,
   ChevronsUpDown,
@@ -23,6 +24,7 @@ import { useAuth } from "@/lib/auth-context"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { usePendingUsersCount } from "@/hooks/usePendingUsersCount"
+import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount"
 import { usePendingRemovalRequestsCount } from "@/hooks/usePendingRemovalRequestsCount"
 import { usePendingContactsCount } from "@/hooks/usePendingContactsCount"
 import { usePendingResidenceRequestsCount } from "@/hooks/usePendingResidenceRequestsCount"
@@ -68,6 +70,8 @@ const navItems: NavItem[] = [
     ],
   },
   { to: "/communications", label: "Communication", icon: Newspaper },
+  // Mails des résidents au syndic et filtre de Nodo (MessagesPage).
+  { to: "/messages", label: "Messages", icon: Mail },
   { to: "/residences", label: "Résidences", icon: Building2 },
   { to: "/residents", label: "Utilisateurs", icon: Users },
   { to: "/agences", label: "Agences", icon: Briefcase },
@@ -150,6 +154,7 @@ export function Sidebar() {
   const { isSuperAdmin } = useIsSuperAdmin()
   const { isAgence, isAgent } = useAccountRole()
   const pendingUsersCount = usePendingUsersCount()
+  const unreadMessagesCount = useUnreadMessagesCount()
   const pendingContactsCount = usePendingContactsCount()
   const pendingResidenceRequestsCount = usePendingResidenceRequestsCount(isSuperAdmin)
   const pendingRemovalRequestsCount = usePendingRemovalRequestsCount(isSuperAdmin)
@@ -328,6 +333,7 @@ export function Sidebar() {
               <Icon className="size-4.5" />
               {label}
               {to === "/residents" && pendingUsersCount > 0 && <NavBadge count={pendingUsersCount} />}
+              {to === "/messages" && unreadMessagesCount > 0 && <NavBadge count={unreadMessagesCount} />}
               {to === "/contacts" && pendingContactsCount > 0 && <NavBadge count={pendingContactsCount} />}
             </NavLink>
           )
@@ -381,15 +387,15 @@ export function Sidebar() {
                 <UserCircle />
                 Profil
               </DropdownMenuItem>
-              {/* Facturation propre à l'agence de ce compte (abonnement Stripe
-                  par siège) - réservée à l'agence elle-même, jamais à un
-                  simple Agent (action sensible : paiement, moyen de paiement,
-                  résiliation - même logique que les autres actions réservées
-                  à l'agence dans ce BO) ni à Super Admin (pas de gérance
-                  propre). */}
+              {/* Facturation propre à l'agence de ce compte (onglet
+                  Abonnement de la page Agence) - réservée à l'agence
+                  elle-même, jamais à un simple Agent (action sensible :
+                  paiement, moyen de paiement, résiliation - même logique que
+                  les autres actions réservées à l'agence dans ce BO) ni à
+                  Super Admin (pas de gérance propre). */}
               {isAgence && (
                 <DropdownMenuItem
-                  render={<Link to="/facturation" />}
+                  render={<Link to="/agences?onglet=abonnement" />}
                   className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-[13px] font-semibold"
                 >
                   <CreditCard />
