@@ -23,8 +23,21 @@ import { auth, db, functions } from "@/firebase"
 // et réindexe celles qui ont changé (refreshedAt, contentChangedAt,
 // refreshError).
 
-export const KNOWLEDGE_CATEGORIES = ["Juridique", "Procédure", "Technique", "Article", "Autre"] as const
+// Domaines (CATEGORIES de nodo_knowledge.py, depuis le 2026-10-30 ; avant :
+// type de document). Une source rangée avant (categoryVersion absent)
+// attend reclassifyKnowledgeSources.
+export const KNOWLEDGE_CATEGORIES = [
+  "Juridique",
+  "Fiscal",
+  "Métier",
+  "Financement",
+  "Technique",
+  "Patrimoine",
+  "Immobilier",
+  "Autre",
+] as const
 export type KnowledgeCategory = (typeof KNOWLEDGE_CATEGORIES)[number]
+export const KNOWLEDGE_CATEGORY_VERSION = 2
 export type KnowledgeKind = "file" | "url" | "text"
 export type KnowledgeStatus = "pending" | "processing" | "ready" | "error"
 
@@ -32,6 +45,7 @@ export type KnowledgeSource = {
   id: string
   title: string
   category: string
+  categoryVersion: number | null
   kind: KnowledgeKind
   status: KnowledgeStatus
   url?: string
@@ -65,6 +79,7 @@ export function subscribeToKnowledgeSources(
             id: d.id,
             title: (data.title as string) || "Sans titre",
             category: (data.category as string) ?? "Autre",
+            categoryVersion: (data.categoryVersion as number | undefined) ?? null,
             kind: data.kind as KnowledgeKind,
             status: data.status as KnowledgeStatus,
             url: data.url as string | undefined,
@@ -149,6 +164,23 @@ export async function addKnowledgeSource(input: KnowledgeSourceInput): Promise<s
     return (await call({ ...base, url: input.url, allowWeb: !!input.allowWeb })).data.id
   }
   return (await call({ ...base, text: input.text })).data.id
+}
+
+export type ReclassifyResult = { done: number; failed: number; remaining: number }
+
+// Range par domaine les sources classées avant (nodo_kb_reclassify), par
+// lots : rappelé tant qu'il en reste et que l'appel avance. Le décompte suit
+// en direct par subscribeToKnowledgeSources (categoryVersion).
+export async function reclassifyKnowledgeSources(): Promise<ReclassifyResult> {
+  const call = httpsCallable<Record<string, never>, ReclassifyResult>(functions, "nodo_kb_reclassify", {
+    timeout: 540_000,
+  })
+  let total = 0
+  for (;;) {
+    const result = (await call({})).data
+    total += result.done
+    if (result.remaining === 0 || result.done === 0) return { ...result, done: total }
+  }
 }
 
 // Propositions de fiches écrites chaque lundi par la relecture du journal de

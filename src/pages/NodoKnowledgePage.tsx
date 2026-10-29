@@ -34,10 +34,12 @@ import {
   deleteKnowledgeSource,
   fileExtension,
   KNOWLEDGE_CATEGORIES,
+  KNOWLEDGE_CATEGORY_VERSION,
   KNOWLEDGE_FILE_EXTENSIONS,
   KNOWLEDGE_MAX_FILE_BYTES,
   listWebDomains,
   readKnowledgeZip,
+  reclassifyKnowledgeSources,
   rejectKnowledgeProposal,
   removeWebDomain,
   subscribeToKnowledgeProposals,
@@ -77,9 +79,9 @@ const FILE_ACCEPT = [...KNOWLEDGE_FILE_EXTENSIONS, "zip"].map((ext) => `.${ext}`
 
 type BulkEntry = { url: string; category: KnowledgeCategory | null; title: string }
 
-// Une source par ligne : "url" seule, ou "url;catégorie;titre" (format du
+// Une source par ligne : "url" seule, ou "url;domaine;titre" (format du
 // CSV importé, séparateur ; ou ,). Ligne d'en-tête et lignes sans URL
-// http(s) ignorées ; catégorie inconnue = catégorie choisie dans le dialogue.
+// http(s) ignorées ; domaine inconnu = domaine choisi dans le dialogue.
 function parseBulkLines(value: string): BulkEntry[] {
   const entries: BulkEntry[] = []
   for (const line of value.split(/\r?\n/)) {
@@ -375,7 +377,7 @@ function ProposalCard({
             value={category}
             onChange={(e) => setCategory(e.target.value as KnowledgeCategory)}
             className={FIELD_CLASS}
-            aria-label="Catégorie"
+            aria-label="Domaine"
           >
             {KNOWLEDGE_CATEGORIES.map((c) => (
               <option key={c} value={c}>
@@ -547,6 +549,22 @@ export default function NodoKnowledgePage() {
     () => new Set(sources.filter((s) => s.kind === "file" && s.fileName).map((s) => s.fileName!)),
     [sources]
   )
+  // Sources rangées avant les domaines (Procédure, Article…).
+  const legacyCount = sources.filter((s) => s.categoryVersion !== KNOWLEDGE_CATEGORY_VERSION).length
+  const [reclassifying, setReclassifying] = useState(false)
+
+  async function handleReclassify() {
+    setReclassifying(true)
+    try {
+      const { done, remaining } = await reclassifyKnowledgeSources()
+      if (remaining) toast.error(`${done} source(s) rangée(s), ${remaining} en échec : réessayez plus tard`)
+      else toast.success(`${done} source(s) rangée(s) par domaine`)
+    } catch (err) {
+      toast.error("Classement impossible : " + (err as Error).message)
+    } finally {
+      setReclassifying(false)
+    }
+  }
 
   async function handleRemove() {
     if (!removing) return
@@ -593,6 +611,18 @@ export default function NodoKnowledgePage() {
             <b className="text-foreground">{totals.ready}</b> source{totals.ready > 1 ? "s" : ""} indexée
             {totals.ready > 1 ? "s" : ""} · <b className="text-foreground">{totals.chunks}</b> passages
           </div>
+          {!loading && legacyCount > 0 && (
+            <div className="mx-7 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+              <span>
+                <b>{legacyCount}</b> source{legacyCount > 1 ? "s" : ""} encore rangée{legacyCount > 1 ? "s" : ""} par
+                type de document (Procédure, Article…) : Nodo peut les ranger par domaine.
+              </span>
+              <Button size="sm" variant="outline" disabled={reclassifying} onClick={handleReclassify}>
+                {reclassifying ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+                Ranger par domaine
+              </Button>
+            </div>
+          )}
           {!loading && sources.length === 0 ? (
             <div className="flex flex-col items-center gap-4 border-t border-[oklch(95%_0.003_100)] px-10 py-16">
               <div className="flex size-16 items-center justify-center rounded-[18px] bg-[oklch(93%_0.05_150)]">
@@ -607,7 +637,7 @@ export default function NodoKnowledgePage() {
               <TableHeader className="bg-muted/40">
                 <TableRow>
                   <TableHead>Source</TableHead>
-                  <TableHead>Catégorie</TableHead>
+                  <TableHead>Domaine</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Passages</TableHead>
                   <TableHead>Ajoutée le</TableHead>
@@ -928,7 +958,7 @@ function AddSourceDialog({
                       ? "Lecture de l'archive…"
                       : !zip.readable
                         ? "Archive ZIP illisible"
-                        : `${zip.files.length} nouveau(x) fichier(s), une source chacun : titre et catégorie déduits de chaque document`}
+                        : `${zip.files.length} nouveau(x) fichier(s), une source chacun : titre et domaine lus dans chaque fiche (en-tête Markdown), sinon déduits par Nodo`}
                     {zip?.readable && zip.existing > 0 ? ` · ${zip.existing} déjà dans la base, ignoré(s)` : ""}
                     {zip?.readable && zip.ignored.length > 0
                       ? ` · ${zip.ignored.length} ignoré(s), autre format ou plus de 15 Mo : ` +
@@ -981,7 +1011,7 @@ function AddSourceDialog({
                   onChange={(e) => setBulkUrls(e.target.value)}
                 />
                 <span className="text-xs text-muted-foreground">
-                  CSV : url;catégorie;titre (catégorie et titre facultatifs) · {parsedBulk.entries.length}{" "}
+                  CSV : url;domaine;titre (domaine et titre facultatifs) · {parsedBulk.entries.length}{" "}
                   nouveau(x) lien(s)
                   {parsedBulk.skipped > 0 ? ` · ${parsedBulk.skipped} déjà dans la base, ignoré(s)` : ""}
                   {progress ? ` · ajout ${progress.done + 1} / ${progress.total}…` : ""}
@@ -1000,7 +1030,7 @@ function AddSourceDialog({
 
             {!isZip && (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="kb-category">Catégorie</Label>
+                <Label htmlFor="kb-category">Domaine</Label>
                 <select
                   id="kb-category"
                   className={FIELD_CLASS}
