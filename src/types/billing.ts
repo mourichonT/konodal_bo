@@ -181,6 +181,45 @@ export type LicenseKpiAgency = {
   cancelAtPeriodEnd: boolean
 }
 
+// Option CS avancé (abonnements de résidence, cs_avance_billing.py) : bloc
+// csAvance de get_license_kpis. "grant" : option offerte, sans abonnement
+// Stripe.
+export type CsAvanceKpiTotals = {
+  activeResidences: number
+  trialingResidences: number
+  pastDueResidences: number
+  offeredResidences: number
+  billedLots: number
+  offeredLots: number
+  mrrCents: number
+  arrCents: number
+  cancelingResidences: number
+  churnedResidences30d: number
+  newResidences30d: number
+  revenue30dCents: number
+  openInvoicesCents: number
+  openInvoicesCount: number
+}
+
+export type CsAvanceKpiResidence = {
+  residenceId: string
+  name: string
+  status: BillingStatus | "grant"
+  lots: number
+  interval: "month" | "year" | null
+  byInvoice: boolean
+  mrrCents: number
+  currentPeriodEnd: Date | null
+  cancelAtPeriodEnd: boolean
+}
+
+export type CsAvanceKpis = {
+  totals: CsAvanceKpiTotals
+  // "AAAA-MM" ; résidences abonnées chez Stripe en fin de mois.
+  monthly: { month: string; residences: number; revenueCents: number }[]
+  residences: CsAvanceKpiResidence[]
+}
+
 export type LicenseKpis = {
   currency: string
   servicePriceCents: number | null
@@ -188,4 +227,6 @@ export type LicenseKpis = {
   totals: LicenseKpiTotals
   monthly: LicenseKpiMonth[]
   agencies: LicenseKpiAgency[]
+  // Absent tant que get_license_kpis n'est pas redéployée.
+  csAvance?: CsAvanceKpis
 }

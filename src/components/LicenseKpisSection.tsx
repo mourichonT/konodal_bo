@@ -27,7 +27,12 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip as InfoTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { getLicenseKpis } from "@/lib/billing"
-import { billingStatusBadgeClass, billingStatusLabels, type LicenseKpis } from "@/types/billing"
+import {
+  billingStatusBadgeClass,
+  billingStatusLabels,
+  type CsAvanceKpiResidence,
+  type LicenseKpis,
+} from "@/types/billing"
 
 function formatAmount(cents: number, currency: string): string {
   return new Intl.NumberFormat("fr-FR", {
@@ -93,121 +98,109 @@ function LicenseTile({
   )
 }
 
-// KPI licences (abonnements Stripe par siège) - Super Admin uniquement :
-// vue transverse sur toutes les agences, données lues en direct chez Stripe
-// (get_license_kpis) car l'historique mensuel n'existe pas en Firestore.
-export function LicenseKpisSection() {
-  const [kpis, setKpis] = useState<LicenseKpis | null>(null)
-  const [error, setError] = useState<string | null>(null)
+function csStatusLabel(status: CsAvanceKpiResidence["status"]): string {
+  return status === "grant" ? "Offerte" : (billingStatusLabels[status] ?? status)
+}
 
-  useEffect(() => {
-    let cancelled = false
-    getLicenseKpis()
-      .then((data) => !cancelled && setKpis(data))
-      .catch((err: Error) => !cancelled && setError(err.message))
-    return () => {
-      cancelled = true
-    }
-  }, [])
+function csStatusBadgeClass(status: CsAvanceKpiResidence["status"]): string {
+  return status === "grant"
+    ? "border-transparent bg-violet-100 text-violet-800"
+    : (billingStatusBadgeClass[status] ?? billingStatusBadgeClass.none)
+}
 
+// Option CS avancé (abonnements de résidence) : même appel que les licences,
+// bloc csAvance. kpis null pendant le chargement.
+function CsAvanceKpisCard({ kpis }: { kpis: LicenseKpis | null }) {
   const currency = kpis?.currency ?? "eur"
-  const t = kpis?.totals
+  const cs = kpis?.csAvance
+  const t = cs?.totals
   const money = (cents: number | undefined) => (t ? formatAmount(cents ?? 0, currency) : "…")
   const count = (n: number | undefined) => (t ? String(n ?? 0) : "…")
-  const monthly = (kpis?.monthly ?? []).map((m) => ({
-    ...m,
-    label: monthLabel(m.month),
-    revenue: m.revenueCents / 100,
-  }))
+  const subscribed = t ? t.activeResidences + t.pastDueResidences : 0
+  const monthly = (cs?.monthly ?? []).map((m) => ({ ...m, label: monthLabel(m.month), revenue: m.revenueCents / 100 }))
 
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
         <h2 className="flex items-center gap-2 text-[15.5px] font-bold text-foreground">
-          <KeyRound className="size-[18px] text-primary" />
-          Licences
-          <span className="text-xs font-normal text-muted-foreground">(données Stripe, toutes agences)</span>
+          <Building2 className="size-[18px] text-primary" />
+          Option CS avancé
+          <span className="text-xs font-normal text-muted-foreground">(données Stripe et options offertes)</span>
         </h2>
 
-        {error ? (
-          <p className="flex items-center gap-2 text-sm text-red-700">
+        {kpis && !cs ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <AlertCircle className="size-4" />
-            Impossible de charger les KPI de licences : {error}
+            Chiffres indisponibles : la fonction get_license_kpis doit être redéployée.
           </p>
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <LicenseTile
-                label="Licences actives"
-                icon={KeyRound}
-                value={count(t && t.activeSeats + t.pastDueSeats)}
+                label="Résidences abonnées"
+                icon={Building2}
+                value={count(subscribed)}
                 sub={
                   t
-                    ? `${t.serviceSeats} service · ${t.agentSeats} agent (essai compris) · + ${t.trialingSeats} en essai`
+                    ? `+ ${t.trialingResidences} en essai · ${t.offeredResidences} offerte(s) · ${t.newResidences30d} nouvelle(s) sur 30 j`
                     : undefined
                 }
-                description="Licences des abonnements actifs (ou en retard de paiement, l'accès n'étant pas coupé). Les licences en période d'essai sont comptées à part ; le détail service / agent les inclut."
+                description="Résidences dont l'abonnement est actif ou en retard de paiement. Celles en période d'essai et celles où l'option est offerte (sans abonnement) sont comptées à part."
               />
               <LicenseTile
-                label="Agences abonnées"
-                icon={Building2}
-                value={count(t && t.payingAgencies + t.pastDueAgencies)}
-                sub={t ? `+ ${t.trialingAgencies} en essai · ${t.newAgencies30d} nouvelle(s) sur 30 j` : undefined}
-                description="Agences ayant un abonnement actif ou en retard de paiement."
+                label="Lots facturés"
+                icon={KeyRound}
+                value={count(t?.billedLots)}
+                sub={t ? `+ ${t.offeredLots} lot(s) dans les résidences offertes` : undefined}
+                description="Lots des abonnements actifs, en essai ou en retard (ligne « par lot » de l'abonnement)."
               />
               <LicenseTile
                 label="MRR"
                 icon={TrendingUp}
                 value={money(t?.mrrCents)}
                 sub={t ? `ARR ${formatAmount(t.arrCents, currency)}` : undefined}
-                description="Revenu mensuel récurrent : licences service et agent facturées × leur prix, hors périodes d'essai. ARR = MRR × 12."
+                description="Revenu mensuel récurrent : forfait résidence et lots des abonnements actifs ou en retard, hors essai et options offertes ; un abonnement annuel compte pour 1/12. ARR = MRR × 12."
               />
               <LicenseTile
-                label="Revenu moyen par agence"
+                label="Revenu moyen par résidence"
                 icon={BadgeEuro}
-                value={money(t?.arpaCents)}
-                sub={
-                  kpis?.servicePriceCents != null && kpis.agentPriceCents != null
-                    ? `Service ${formatAmount(kpis.servicePriceCents, currency)} · agent ${formatAmount(kpis.agentPriceCents, currency)}`
-                    : undefined
-                }
-                description="MRR divisé par le nombre d'agences abonnées (ARPA)."
+                value={money(t && (subscribed ? Math.round(t.mrrCents / subscribed) : 0))}
+                description="MRR divisé par le nombre de résidences abonnées."
               />
               <LicenseTile
                 label="Encaissé sur 30 jours"
                 icon={Wallet}
                 value={money(t?.revenue30dCents)}
-                description="Total des factures de licences payées au cours des 30 derniers jours."
+                description="Total des factures de l'option payées au cours des 30 derniers jours."
               />
               <LicenseTile
                 label="Factures impayées"
                 icon={Receipt}
                 value={money(t?.openInvoicesCents)}
-                sub={t ? `${t.openInvoicesCount} facture(s) · ${t.pastDueAgencies} agence(s) en retard` : undefined}
+                sub={t ? `${t.openInvoicesCount} facture(s) · ${t.pastDueResidences} résidence(s) en retard` : undefined}
                 warn={!!t && t.openInvoicesCount > 0}
-                description="Montant restant dû sur les factures de licences en attente de paiement."
+                description="Montant restant dû sur les factures de l'option en attente de paiement (y compris les factures envoyées au syndicat)."
               />
               <LicenseTile
                 label="Résiliations programmées"
                 icon={CalendarX2}
-                value={count(t?.cancelingAgencies)}
-                sub={t ? `${t.cancelingSeats} licence(s) concernée(s)` : undefined}
-                warn={!!t && t.cancelingAgencies > 0}
+                value={count(t?.cancelingResidences)}
+                warn={!!t && t.cancelingResidences > 0}
                 description="Abonnements toujours en cours mais résiliés pour la fin de la période en cours."
               />
               <LicenseTile
                 label="Désabonnements sur 30 jours"
                 icon={TrendingDown}
-                value={count(t?.churnedAgencies30d)}
-                warn={!!t && t.churnedAgencies30d > 0}
-                description="Abonnements d'agence terminés au cours des 30 derniers jours."
+                value={count(t?.churnedResidences30d)}
+                warn={!!t && t.churnedResidences30d > 0}
+                description="Abonnements de résidence terminés au cours des 30 derniers jours."
               />
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
                 <CardContent className="flex flex-col gap-4">
-                  <h3 className="text-sm font-medium">Licences en fin de mois (12 derniers mois)</h3>
+                  <h3 className="text-sm font-medium">Résidences abonnées en fin de mois</h3>
                   <div className="h-48">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={monthly} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
@@ -215,34 +208,7 @@ export function LicenseKpisSection() {
                         <XAxis dataKey="label" tickLine={false} axisLine={false} tick={axisTick} />
                         <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={axisTick} />
                         <Tooltip cursor={{ fill: "var(--muted)" }} contentStyle={chartTooltipStyle} />
-                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-                        <Bar dataKey="serviceSeats" name="Service" stackId="licences" fill="var(--chart-2)" />
-                        <Bar
-                          dataKey="agentSeats"
-                          name="Agent"
-                          stackId="licences"
-                          fill="var(--chart-4)"
-                          radius={[4, 4, 0, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
-                <CardContent className="flex flex-col gap-4">
-                  <h3 className="text-sm font-medium">Licences prises / retirées par mois</h3>
-                  <div className="h-48">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={monthly} margin={{ top: 8, right: 8, bottom: 0, left: -20 }} barGap={2}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                        <XAxis dataKey="label" tickLine={false} axisLine={false} tick={axisTick} />
-                        <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={axisTick} />
-                        <Tooltip cursor={{ fill: "var(--muted)" }} contentStyle={chartTooltipStyle} />
-                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-                        <Bar dataKey="addedSeats" name="Prises" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="removedSeats" name="Retirées" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="residences" name="Résidences" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -274,65 +240,313 @@ export function LicenseKpisSection() {
                   </div>
                 </CardContent>
               </Card>
-
-              <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
-                <CardContent className="flex flex-col gap-4">
-                  <h3 className="text-sm font-medium">Licences par agence</h3>
-                  {!kpis ? (
-                    <p className="text-sm text-muted-foreground">Chargement…</p>
-                  ) : kpis.agencies.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Aucune agence abonnée pour l'instant.</p>
-                  ) : (
-                    <div className="max-h-56 overflow-y-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Agence</TableHead>
-                            <TableHead>Statut</TableHead>
-                            <TableHead className="text-right">Service</TableHead>
-                            <TableHead className="text-right">Agent</TableHead>
-                            <TableHead className="text-right">MRR</TableHead>
-                            <TableHead>Échéance</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {kpis.agencies.map((agency) => (
-                            <TableRow key={agency.geranceId}>
-                              <TableCell className="font-medium">
-                                <Link to="/agences" className="hover:underline">
-                                  {agency.name}
-                                </Link>
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant="outline"
-                                  className={billingStatusBadgeClass[agency.status] ?? billingStatusBadgeClass.none}
-                                >
-                                  {billingStatusLabels[agency.status] ?? agency.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">{agency.serviceSeats}</TableCell>
-                              <TableCell className="text-right tabular-nums">{agency.agentSeats}</TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {formatAmount(agency.mrrCents, currency)}
-                              </TableCell>
-                              <TableCell className="text-muted-foreground">
-                                {agency.currentPeriodEnd
-                                  ? `${agency.cancelAtPeriodEnd ? "Fin le " : ""}${agency.currentPeriodEnd.toLocaleDateString("fr-FR")}`
-                                  : "—"}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
             </div>
+
+            <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
+              <CardContent className="flex flex-col gap-4">
+                <h3 className="text-sm font-medium">Résidences</h3>
+                {!cs ? (
+                  <p className="text-sm text-muted-foreground">Chargement…</p>
+                ) : cs.residences.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucune résidence avec l'option pour l'instant.</p>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Résidence</TableHead>
+                          <TableHead>Statut</TableHead>
+                          <TableHead className="text-right">Lots</TableHead>
+                          <TableHead>Formule</TableHead>
+                          <TableHead className="text-right">MRR</TableHead>
+                          <TableHead>Échéance</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {cs.residences.map((residence) => (
+                          <TableRow key={residence.residenceId}>
+                            <TableCell className="font-medium">
+                              <Link to={`/residences/${residence.residenceId}`} className="hover:underline">
+                                {residence.name}
+                              </Link>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={csStatusBadgeClass(residence.status)}>
+                                {csStatusLabel(residence.status)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">{residence.lots}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {residence.interval === "year" ? "Annuelle" : residence.interval === "month" ? "Mensuelle" : "—"}
+                              {residence.byInvoice ? " · sur facture" : ""}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {formatAmount(residence.mrrCents, currency)}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {residence.currentPeriodEnd
+                                ? `${residence.cancelAtPeriodEnd || residence.status === "grant" ? "Fin le " : ""}${residence.currentPeriodEnd.toLocaleDateString("fr-FR")}`
+                                : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </>
         )}
       </CardContent>
     </Card>
+  )
+}
+
+// KPI licences (abonnements Stripe par siège) et option CS avancé - Super
+// Admin uniquement : vue transverse sur toutes les agences et résidences,
+// données lues en direct chez Stripe (get_license_kpis) car l'historique
+// mensuel n'existe pas en Firestore.
+export function LicenseKpisSection() {
+  const [kpis, setKpis] = useState<LicenseKpis | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getLicenseKpis()
+      .then((data) => !cancelled && setKpis(data))
+      .catch((err: Error) => !cancelled && setError(err.message))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const currency = kpis?.currency ?? "eur"
+  const t = kpis?.totals
+  const money = (cents: number | undefined) => (t ? formatAmount(cents ?? 0, currency) : "…")
+  const count = (n: number | undefined) => (t ? String(n ?? 0) : "…")
+  const monthly = (kpis?.monthly ?? []).map((m) => ({
+    ...m,
+    label: monthLabel(m.month),
+    revenue: m.revenueCents / 100,
+  }))
+
+  return (
+    <div className="flex flex-col gap-6">
+      <Card>
+        <CardContent className="flex flex-col gap-4">
+          <h2 className="flex items-center gap-2 text-[15.5px] font-bold text-foreground">
+            <KeyRound className="size-[18px] text-primary" />
+            Licences
+            <span className="text-xs font-normal text-muted-foreground">(données Stripe, toutes agences)</span>
+          </h2>
+
+          {error ? (
+            <p className="flex items-center gap-2 text-sm text-red-700">
+              <AlertCircle className="size-4" />
+              Impossible de charger les KPI de licences : {error}
+            </p>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <LicenseTile
+                  label="Licences actives"
+                  icon={KeyRound}
+                  value={count(t && t.activeSeats + t.pastDueSeats)}
+                  sub={
+                    t
+                      ? `${t.serviceSeats} service · ${t.agentSeats} agent (essai compris) · + ${t.trialingSeats} en essai`
+                      : undefined
+                  }
+                  description="Licences des abonnements actifs (ou en retard de paiement, l'accès n'étant pas coupé). Les licences en période d'essai sont comptées à part ; le détail service / agent les inclut."
+                />
+                <LicenseTile
+                  label="Agences abonnées"
+                  icon={Building2}
+                  value={count(t && t.payingAgencies + t.pastDueAgencies)}
+                  sub={t ? `+ ${t.trialingAgencies} en essai · ${t.newAgencies30d} nouvelle(s) sur 30 j` : undefined}
+                  description="Agences ayant un abonnement actif ou en retard de paiement."
+                />
+                <LicenseTile
+                  label="MRR"
+                  icon={TrendingUp}
+                  value={money(t?.mrrCents)}
+                  sub={t ? `ARR ${formatAmount(t.arrCents, currency)}` : undefined}
+                  description="Revenu mensuel récurrent : licences service et agent facturées × leur prix, hors périodes d'essai. ARR = MRR × 12."
+                />
+                <LicenseTile
+                  label="Revenu moyen par agence"
+                  icon={BadgeEuro}
+                  value={money(t?.arpaCents)}
+                  sub={
+                    kpis?.servicePriceCents != null && kpis.agentPriceCents != null
+                      ? `Service ${formatAmount(kpis.servicePriceCents, currency)} · agent ${formatAmount(kpis.agentPriceCents, currency)}`
+                      : undefined
+                  }
+                  description="MRR divisé par le nombre d'agences abonnées (ARPA)."
+                />
+                <LicenseTile
+                  label="Encaissé sur 30 jours"
+                  icon={Wallet}
+                  value={money(t?.revenue30dCents)}
+                  description="Total des factures de licences payées au cours des 30 derniers jours."
+                />
+                <LicenseTile
+                  label="Factures impayées"
+                  icon={Receipt}
+                  value={money(t?.openInvoicesCents)}
+                  sub={t ? `${t.openInvoicesCount} facture(s) · ${t.pastDueAgencies} agence(s) en retard` : undefined}
+                  warn={!!t && t.openInvoicesCount > 0}
+                  description="Montant restant dû sur les factures de licences en attente de paiement."
+                />
+                <LicenseTile
+                  label="Résiliations programmées"
+                  icon={CalendarX2}
+                  value={count(t?.cancelingAgencies)}
+                  sub={t ? `${t.cancelingSeats} licence(s) concernée(s)` : undefined}
+                  warn={!!t && t.cancelingAgencies > 0}
+                  description="Abonnements toujours en cours mais résiliés pour la fin de la période en cours."
+                />
+                <LicenseTile
+                  label="Désabonnements sur 30 jours"
+                  icon={TrendingDown}
+                  value={count(t?.churnedAgencies30d)}
+                  warn={!!t && t.churnedAgencies30d > 0}
+                  description="Abonnements d'agence terminés au cours des 30 derniers jours."
+                />
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
+                  <CardContent className="flex flex-col gap-4">
+                    <h3 className="text-sm font-medium">Licences en fin de mois (12 derniers mois)</h3>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={monthly} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                          <XAxis dataKey="label" tickLine={false} axisLine={false} tick={axisTick} />
+                          <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={axisTick} />
+                          <Tooltip cursor={{ fill: "var(--muted)" }} contentStyle={chartTooltipStyle} />
+                          <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+                          <Bar dataKey="serviceSeats" name="Service" stackId="licences" fill="var(--chart-2)" />
+                          <Bar
+                            dataKey="agentSeats"
+                            name="Agent"
+                            stackId="licences"
+                            fill="var(--chart-4)"
+                            radius={[4, 4, 0, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
+                  <CardContent className="flex flex-col gap-4">
+                    <h3 className="text-sm font-medium">Licences prises / retirées par mois</h3>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={monthly} margin={{ top: 8, right: 8, bottom: 0, left: -20 }} barGap={2}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                          <XAxis dataKey="label" tickLine={false} axisLine={false} tick={axisTick} />
+                          <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={axisTick} />
+                          <Tooltip cursor={{ fill: "var(--muted)" }} contentStyle={chartTooltipStyle} />
+                          <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+                          <Bar dataKey="addedSeats" name="Prises" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="removedSeats" name="Retirées" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
+                  <CardContent className="flex flex-col gap-4">
+                    <h3 className="text-sm font-medium">Encaissements mensuels</h3>
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={monthly} margin={{ top: 8, right: 8, bottom: 0, left: -4 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                          <XAxis dataKey="label" tickLine={false} axisLine={false} tick={axisTick} />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            tick={axisTick}
+                            tickFormatter={(v: number) => formatAmount(v * 100, currency)}
+                          />
+                          <Tooltip
+                            cursor={{ fill: "var(--muted)" }}
+                            contentStyle={chartTooltipStyle}
+                            formatter={(v) => formatAmount(Number(v) * 100, currency)}
+                          />
+                          <Bar dataKey="revenue" name="Encaissé" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
+                  <CardContent className="flex flex-col gap-4">
+                    <h3 className="text-sm font-medium">Licences par agence</h3>
+                    {!kpis ? (
+                      <p className="text-sm text-muted-foreground">Chargement…</p>
+                    ) : kpis.agencies.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Aucune agence abonnée pour l'instant.</p>
+                    ) : (
+                      <div className="max-h-56 overflow-y-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Agence</TableHead>
+                              <TableHead>Statut</TableHead>
+                              <TableHead className="text-right">Service</TableHead>
+                              <TableHead className="text-right">Agent</TableHead>
+                              <TableHead className="text-right">MRR</TableHead>
+                              <TableHead>Échéance</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {kpis.agencies.map((agency) => (
+                              <TableRow key={agency.geranceId}>
+                                <TableCell className="font-medium">
+                                  <Link to="/agences" className="hover:underline">
+                                    {agency.name}
+                                  </Link>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant="outline"
+                                    className={billingStatusBadgeClass[agency.status] ?? billingStatusBadgeClass.none}
+                                  >
+                                    {billingStatusLabels[agency.status] ?? agency.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">{agency.serviceSeats}</TableCell>
+                                <TableCell className="text-right tabular-nums">{agency.agentSeats}</TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                  {formatAmount(agency.mrrCents, currency)}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {agency.currentPeriodEnd
+                                    ? `${agency.cancelAtPeriodEnd ? "Fin le " : ""}${agency.currentPeriodEnd.toLocaleDateString("fr-FR")}`
+                                    : "—"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+      {!error && <CsAvanceKpisCard kpis={kpis} />}
+    </div>
   )
 }

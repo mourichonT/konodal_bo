@@ -6,6 +6,8 @@ import type {
   BillingOverview,
   BillingPaymentIssue,
   BillingStatus,
+  CsAvanceKpiResidence,
+  CsAvanceKpis,
   InvoiceStatus,
   GeranceBilling,
   LicenseKpiAgency,
@@ -271,8 +273,15 @@ export async function getBillingOverview(geranceId: string): Promise<BillingOver
 // KPI licences du dashboard (Super Admin uniquement, _require_superadmin
 // côté get_license_kpis) - même principe que getBillingOverview : appel
 // ponctuel chez Stripe, pas de listener.
-type LicenseKpisResponse = Omit<LicenseKpis, "agencies"> & {
-  agencies: (Omit<LicenseKpiAgency, "currentPeriodEnd"> & { currentPeriodEnd: number | null })[]
+type WithTimestamp<T> = Omit<T, "currentPeriodEnd"> & { currentPeriodEnd: number | null }
+
+type LicenseKpisResponse = Omit<LicenseKpis, "agencies" | "csAvance"> & {
+  agencies: WithTimestamp<LicenseKpiAgency>[]
+  csAvance?: Omit<CsAvanceKpis, "residences"> & { residences: WithTimestamp<CsAvanceKpiResidence>[] }
+}
+
+function withDate<T>(row: WithTimestamp<T>): T {
+  return { ...row, currentPeriodEnd: row.currentPeriodEnd ? new Date(row.currentPeriodEnd * 1000) : null } as T
 }
 
 export async function getLicenseKpis(): Promise<LicenseKpis> {
@@ -280,9 +289,10 @@ export async function getLicenseKpis(): Promise<LicenseKpis> {
   const { data } = await call()
   return {
     ...data,
-    agencies: data.agencies.map((agency) => ({
-      ...agency,
-      currentPeriodEnd: agency.currentPeriodEnd ? new Date(agency.currentPeriodEnd * 1000) : null,
-    })),
+    agencies: data.agencies.map((agency) => withDate<LicenseKpiAgency>(agency)),
+    csAvance: data.csAvance && {
+      ...data.csAvance,
+      residences: data.csAvance.residences.map((residence) => withDate<CsAvanceKpiResidence>(residence)),
+    },
   }
 }
