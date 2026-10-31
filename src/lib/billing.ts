@@ -12,6 +12,8 @@ import type {
   GeranceBilling,
   LicenseKpiAgency,
   LicenseKpis,
+  RevenueForecast,
+  RevenueForecastActivation,
 } from "@/types/billing"
 import type { ServiceType } from "@/types/gerance"
 
@@ -275,9 +277,12 @@ export async function getBillingOverview(geranceId: string): Promise<BillingOver
 // ponctuel chez Stripe, pas de listener.
 type WithTimestamp<T> = Omit<T, "currentPeriodEnd"> & { currentPeriodEnd: number | null }
 
-type LicenseKpisResponse = Omit<LicenseKpis, "agencies" | "csAvance"> & {
+type LicenseKpisResponse = Omit<LicenseKpis, "agencies" | "csAvance" | "forecast"> & {
   agencies: WithTimestamp<LicenseKpiAgency>[]
   csAvance?: Omit<CsAvanceKpis, "residences"> & { residences: WithTimestamp<CsAvanceKpiResidence>[] }
+  forecast?: Omit<RevenueForecast, "activations"> & {
+    activations: (Omit<RevenueForecastActivation, "date"> & { date: number | null })[]
+  }
 }
 
 function withDate<T>(row: WithTimestamp<T>): T {
@@ -293,6 +298,10 @@ export async function getLicenseKpis(): Promise<LicenseKpis> {
     csAvance: data.csAvance && {
       ...data.csAvance,
       residences: data.csAvance.residences.map((residence) => withDate<CsAvanceKpiResidence>(residence)),
+    },
+    forecast: data.forecast && {
+      ...data.forecast,
+      activations: data.forecast.activations.map((a) => ({ ...a, date: a.date ? new Date(a.date * 1000) : null })),
     },
   }
 }

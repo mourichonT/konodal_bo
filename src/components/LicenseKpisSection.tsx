@@ -4,7 +4,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -14,10 +16,12 @@ import {
   AlertCircle,
   BadgeEuro,
   Building2,
+  CalendarClock,
   CalendarX2,
   HelpCircle,
   KeyRound,
   Receipt,
+  Target,
   TrendingDown,
   TrendingUp,
   Wallet,
@@ -32,6 +36,7 @@ import {
   billingStatusLabels,
   type CsAvanceKpiResidence,
   type LicenseKpis,
+  type RevenueForecastActivation,
 } from "@/types/billing"
 
 function formatAmount(cents: number, currency: string): string {
@@ -93,6 +98,260 @@ function LicenseTile({
         >
           <Icon className="size-[15px]" />
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+const activationSourceLabels: Record<RevenueForecastActivation["source"], string> = {
+  trial: "Fin d'essai",
+  paused: "En pause",
+}
+
+function activationVolume(a: RevenueForecastActivation): string {
+  if (a.type === "cs") return `${a.lots} lot(s)`
+  return [a.serviceSeats && `${a.serviceSeats} service`, a.agentSeats && `${a.agentSeats} agent`]
+    .filter(Boolean)
+    .join(" · ")
+}
+
+// Prévisionnel : CA une fois tous les essais en cours devenus payants
+// (licences et option CS avancé), et activations mois par mois.
+// Synthèse en tête de l'onglet : réalisé et actuel (licences et option CS
+// avancé additionnées), puis prévisionnel.
+function SummaryCard({ kpis }: { kpis: LicenseKpis | null }) {
+  const currency = kpis?.currency ?? "eur"
+  const lic = kpis?.totals
+  const cs = kpis?.csAvance?.totals
+  const realized = kpis?.realized
+  const f = kpis?.forecast?.totals
+  const ready = !!(lic && cs && realized && f)
+  const money = (cents: number | undefined) => (ready ? formatAmount(cents ?? 0, currency) : "…")
+  const count = (n: number | undefined) => (ready ? String(n ?? 0) : "…")
+  const payingAgencies = lic ? lic.payingAgencies + lic.pastDueAgencies : 0
+  const payingResidences = cs ? cs.activeResidences + cs.pastDueResidences : 0
+
+  if (kpis && !ready) return null
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4">
+        <h2 className="flex items-center gap-2 text-[15.5px] font-bold text-foreground">
+          <Target className="size-[18px] text-primary" />
+          Synthèse
+          <span className="text-xs font-normal text-muted-foreground">
+            (licences et option CS avancé, hors taxes ; prévisionnel au prix catalogue, hors remises)
+          </span>
+        </h2>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <LicenseTile
+            label={`CA réalisé ${realized?.year ?? ""}`.trim()}
+            icon={Wallet}
+            value={money(realized?.yearCents)}
+            sub={
+              ready && realized
+                ? `Ce mois ${formatAmount(realized.monthCents, currency)} · 12 derniers mois ${formatAmount(realized.last12mCents, currency)}`
+                : undefined
+            }
+            description="Factures payées depuis le 1er janvier, hors taxes, à leur date de paiement (licences et option CS avancé)."
+          />
+          <LicenseTile
+            label="CA mensuel actuel"
+            icon={TrendingUp}
+            value={money(f?.currentMrrCents)}
+            sub={
+              ready && lic && cs
+                ? `Licences ${formatAmount(lic.mrrCents, currency)} · CS avancé ${formatAmount(cs.mrrCents, currency)}`
+                : undefined
+            }
+            description="MRR : abonnements actifs ou en retard de paiement, hors essai et options offertes (licences et option CS avancé)."
+          />
+          <LicenseTile
+            label="Clients payants"
+            icon={Building2}
+            value={count(payingAgencies + payingResidences)}
+            sub={
+              ready && lic && cs
+                ? `${payingAgencies} agence(s) · ${payingResidences} résidence(s) · + ${lic.trialingAgencies + cs.trialingResidences} en essai`
+                : undefined
+            }
+            description="Agences (licences) et résidences (option CS avancé) dont l'abonnement est actif ou en retard de paiement."
+          />
+          <LicenseTile
+            label="Impayés"
+            icon={Receipt}
+            value={money(lic && cs ? lic.openInvoicesCents + cs.openInvoicesCents : undefined)}
+            sub={ready && lic && cs ? `${lic.openInvoicesCount + cs.openInvoicesCount} facture(s) en attente` : undefined}
+            warn={!!lic && !!cs && lic.openInvoicesCount + cs.openInvoicesCount > 0}
+            description="Montant restant dû sur les factures de licences et de l'option CS avancé en attente de paiement."
+          />
+          <LicenseTile
+            label="CA prévisionnel mensuel"
+            icon={Target}
+            value={money(f?.targetMrrCents)}
+            sub={
+              ready && f
+                ? `+ ${formatAmount(f.pendingMrrCents, currency)} à activer`
+                  + (f.lostMrrCents ? ` · − ${formatAmount(f.lostMrrCents, currency)} résilié` : "")
+                : undefined
+            }
+            description="CA mensuel une fois toutes les licences et options en essai devenues payantes : chaque essai devient payant à sa fin, un abonnement en pause reprend ; les résiliations programmées sont retirées. Une option seulement offerte (sans abonnement, donc sans payeur) ne compte pas. Prix catalogue, hors remises."
+          />
+          <LicenseTile
+            label="CA prévisionnel annuel"
+            icon={TrendingUp}
+            value={money(f?.targetArrCents)}
+            sub={ready ? "CA prévisionnel mensuel × 12" : undefined}
+            description="CA prévisionnel mensuel multiplié par 12."
+          />
+          <LicenseTile
+            label="Licences à activer"
+            icon={KeyRound}
+            value={count(f && f.pendingServiceSeats + f.pendingAgentSeats)}
+            sub={
+              ready && f
+                ? `${f.pendingServiceSeats} service · ${f.pendingAgentSeats} agent`
+                  + (f.pausedSubscriptions ? ` · ${f.pausedSubscriptions} abonnement(s) en pause` : "")
+                : undefined
+            }
+            description="Licences des abonnements d'agence en période d'essai (sans résiliation programmée) ou en pause."
+          />
+          <LicenseTile
+            label="Résidences CS avancé à activer"
+            icon={Building2}
+            value={count(f?.pendingResidences)}
+            sub={f?.offeredResidences ? `+ ${f.offeredResidences} offerte(s) sans abonnement, non comptée(s)` : undefined}
+            description="Résidences dont l'abonnement à l'option est en période d'essai : elles deviennent payantes à la fin de l'essai (première facture au payeur de l'abonnement)."
+          />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// Prévisionnel mois par mois : CA mensuel activé et CA mensuel prévu, puis
+// activations à venir.
+function ForecastCard({ kpis }: { kpis: LicenseKpis | null }) {
+  const currency = kpis?.currency ?? "eur"
+  const forecast = kpis?.forecast
+  const t = forecast?.totals
+  const monthly = (forecast?.monthly ?? []).map((m) => ({
+    ...m,
+    label: monthLabel(m.month),
+    licences: m.licenceMrrCents / 100,
+    cs: m.csMrrCents / 100,
+    mrr: m.mrrCents / 100,
+  }))
+  const lastMonth = forecast?.monthly.at(-1)?.month
+
+  if (kpis && !forecast) return null
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4">
+        <h2 className="flex items-center gap-2 text-[15.5px] font-bold text-foreground">
+          <CalendarClock className="size-[18px] text-primary" />
+          Prévisionnel
+          <span className="text-xs font-normal text-muted-foreground">(prix catalogue, hors remises)</span>
+        </h2>
+
+        <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
+          <CardContent className="flex flex-col gap-4">
+            <h3 className="text-sm font-medium">CA mensuel activé par mois et CA mensuel prévu</h3>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={monthly} margin={{ top: 8, right: 8, bottom: 0, left: -4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={axisTick} />
+                  <YAxis
+                    yAxisId="activated"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={axisTick}
+                    tickFormatter={(v: number) => formatAmount(v * 100, currency)}
+                  />
+                  <YAxis
+                    yAxisId="mrr"
+                    orientation="right"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={axisTick}
+                    tickFormatter={(v: number) => formatAmount(v * 100, currency)}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "var(--muted)" }}
+                    contentStyle={chartTooltipStyle}
+                    formatter={(v) => formatAmount(Number(v) * 100, currency)}
+                  />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+                  <Bar yAxisId="activated" dataKey="licences" name="Licences activées" stackId="activated" fill="var(--chart-2)" />
+                  <Bar
+                    yAxisId="activated"
+                    dataKey="cs"
+                    name="CS avancé activé"
+                    stackId="activated"
+                    fill="var(--chart-4)"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Line yAxisId="mrr" dataKey="mrr" name="CA mensuel prévu" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+            {!!t?.laterMrrCents && lastMonth && (
+              <p className="text-xs text-muted-foreground">
+                + {formatAmount(t.laterMrrCents, currency)} activés après {monthLabel(lastMonth)}.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border border-[oklch(94%_0.005_100)] bg-[oklch(98%_0.003_100)] shadow-none">
+          <CardContent className="flex flex-col gap-4">
+            <h3 className="flex items-center gap-1.5 text-sm font-medium">
+              <CalendarClock className="size-4 text-muted-foreground" />
+              Activations à venir
+            </h3>
+            {!forecast ? (
+              <p className="text-sm text-muted-foreground">Chargement…</p>
+            ) : forecast.activations.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun essai en cours.</p>
+            ) : (
+              <div className="max-h-80 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Offre</TableHead>
+                      <TableHead>Origine</TableHead>
+                      <TableHead>Volume</TableHead>
+                      <TableHead className="text-right">CA mensuel</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {forecast.activations.map((a) => (
+                      <TableRow key={`${a.type}-${a.id}-${a.source}`}>
+                        <TableCell className="tabular-nums">
+                          {a.date ? a.date.toLocaleDateString("fr-FR") : "—"}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <Link to={a.type === "cs" ? `/residences/${a.id}` : "/agences"} className="hover:underline">
+                            {a.name}
+                          </Link>
+                        </TableCell>
+                        <TableCell>{a.type === "cs" ? "CS avancé" : "Licences"}</TableCell>
+                        <TableCell className="text-muted-foreground">{activationSourceLabels[a.source]}</TableCell>
+                        <TableCell className="text-muted-foreground">{activationVolume(a)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatAmount(a.mrrCents, currency)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </CardContent>
     </Card>
   )
@@ -333,6 +592,8 @@ export function LicenseKpisSection() {
 
   return (
     <div className="flex flex-col gap-6">
+      {!error && <SummaryCard kpis={kpis} />}
+      {!error && <ForecastCard kpis={kpis} />}
       <Card>
         <CardContent className="flex flex-col gap-4">
           <h2 className="flex items-center gap-2 text-[15.5px] font-bold text-foreground">

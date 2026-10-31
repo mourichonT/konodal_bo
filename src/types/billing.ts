@@ -227,6 +227,64 @@ export type LicenseKpis = {
   totals: LicenseKpiTotals
   monthly: LicenseKpiMonth[]
   agencies: LicenseKpiAgency[]
-  // Absent tant que get_license_kpis n'est pas redéployée.
+  // Absents tant que get_license_kpis n'est pas redéployée.
   csAvance?: CsAvanceKpis
+  forecast?: RevenueForecast
+  realized?: RealizedRevenue
+}
+
+// CA réalisé hors taxes (_realized_revenue) : factures payées, à leur date
+// de paiement.
+export type RealizedRevenue = {
+  year: number
+  yearCents: number
+  yearLicencesCents: number
+  yearCsCents: number
+  monthCents: number
+  last12mCents: number
+}
+
+// Prévisionnel (_revenue_forecast) : CA mensuel une fois tous les essais
+// devenus payants, au prix catalogue hors remises, et activations à venir
+// (une option seulement offerte, sans abonnement, ne compte pas). date null :
+// abonnement en pause, reprise sans date.
+export type RevenueForecastActivation = {
+  type: "licences" | "cs"
+  id: string
+  name: string
+  date: Date | null
+  source: "trial" | "paused"
+  serviceSeats: number
+  agentSeats: number
+  lots: number
+  mrrCents: number
+}
+
+export type RevenueForecast = {
+  totals: {
+    currentMrrCents: number
+    targetMrrCents: number
+    targetArrCents: number
+    pendingMrrCents: number
+    lostMrrCents: number
+    laterMrrCents: number
+    pendingServiceSeats: number
+    pendingAgentSeats: number
+    pendingResidences: number
+    pausedSubscriptions: number
+    // Options offertes sans abonnement : non comptées.
+    offeredResidences: number
+  }
+  // "AAAA-MM", à partir du mois en cours ; mrrCents = MRR prévu en fin de mois.
+  monthly: {
+    month: string
+    licenceMrrCents: number
+    csMrrCents: number
+    serviceSeats: number
+    agentSeats: number
+    residences: number
+    lostMrrCents: number
+    mrrCents: number
+  }[]
+  activations: RevenueForecastActivation[]
 }
