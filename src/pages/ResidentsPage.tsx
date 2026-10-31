@@ -177,35 +177,41 @@ export default function ResidentsPage() {
     return user.isApproved || user.isCertified ? "idValidated" : "registered"
   }
 
-  // Comptés sur `residents` (périmètre RBAC), pas `filteredResidents` : les
-  // KPI reflètent le total du périmètre, indépendamment des filtres actifs
-  // (recherche, dates...) - seul le clic dessus change un filtre, cf.
-  // FilterKpiCard ci-dessous.
-  const lotValidatedCount = residents.filter((u) => statusOf(u) === "validated").length
-  const pendingLotCount = residents.filter(isPendingLot).length
   // Décision de certification réservée superAdmin (cf.
   // CertificationRequestCard) - jamais signalée à agence/agent.
   const isPendingCertification = (user: KonodalUser) =>
     isSuperAdmin && user.certificationStatus === "pending"
-  const pendingCertificationCount = residents.filter(isPendingCertification).length
   const needsAction = (user: KonodalUser) => isPendingLot(user) || isPendingCertification(user)
 
-  const filteredResidents = useMemo(() => {
+  // Recherche, résidence et dates restreignent aussi les KPI. Le statut et la
+  // certification, pilotés par les cartes (cf. FilterKpiCard ci-dessous), ne
+  // s'appliquent qu'à la liste : sinon un clic sur "Lot validé" mettrait
+  // "À traiter" à 0.
+  const kpiResidents = useMemo(() => {
     const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null
     const toDate = dateTo ? new Date(`${dateTo}T23:59:59`) : null
-    const filtered = residents.filter((user) => {
-      if (statusFilter !== "all" && statusOf(user) !== statusFilter) return false
+    return residents.filter((user) => {
       if (residenceFilter !== "all" && !residenceIdsOf(user).includes(residenceFilter)) return false
-      if (certificationFilter && !isPendingCertification(user)) return false
       if (fromDate && (!user.createdDate || user.createdDate < fromDate)) return false
       if (toDate && (!user.createdDate || user.createdDate > toDate)) return false
       return matchesSearch(user, search)
+    })
+  }, [residents, search, residenceFilter, dateFrom, dateTo, residenceIdsByUid, scopedResidenceIds])
+
+  const lotValidatedCount = kpiResidents.filter((u) => statusOf(u) === "validated").length
+  const pendingLotCount = kpiResidents.filter(isPendingLot).length
+  const pendingCertificationCount = kpiResidents.filter(isPendingCertification).length
+
+  const filteredResidents = useMemo(() => {
+    const filtered = kpiResidents.filter((user) => {
+      if (statusFilter !== "all" && statusOf(user) !== statusFilter) return false
+      return !certificationFilter || isPendingCertification(user)
     })
     // Comptes ayant un lot à valider en tête (tri stable) : depuis que
     // isApproved est automatique, c'est la seule action en attente de la
     // liste - sans ce tri, elle se noyait parmi les comptes "Validé".
     return [...filtered.filter(needsAction), ...filtered.filter((u) => !needsAction(u))]
-  }, [residents, search, statusFilter, certificationFilter, residenceFilter, dateFrom, dateTo, residenceIdsByUid, scopedResidenceIds, isSuperAdmin])
+  }, [kpiResidents, statusFilter, certificationFilter, residenceIdsByUid, scopedResidenceIds, isSuperAdmin])
 
   return (
     <div className="flex flex-col gap-6">
@@ -220,7 +226,7 @@ export default function ResidentsPage() {
       <div className={cn("grid grid-cols-1 gap-4", isSuperAdmin ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3")}>
         <FilterKpiCard
           label="Total utilisateurs"
-          value={residents.length}
+          value={kpiResidents.length}
           icon={Users}
           colorClass="bg-slate-100 text-slate-600"
           active={statusFilter === "all" && !certificationFilter}
