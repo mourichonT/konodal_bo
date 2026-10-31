@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { Building2, FileText, Pencil, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -13,21 +13,32 @@ import {
   type CsBillingAdmin,
   type CsCustomerInput,
 } from "@/lib/csAvance"
+import { subscribeToGerance } from "@/lib/gerances"
 import { PRIMARY_CTA_CLASS } from "@/lib/utils"
+import type { Gerance } from "@/types/gerance"
 import type { Residence } from "@/types/residence"
 import { ConfirmActionDialog } from "./ConfirmActionDialog"
 
-function defaults(data: CsBillingAdmin, residence: Residence): CsCustomerInput {
+// Sans client Stripe : payeur = la gérance syndic associée (décision du
+// 31/10/2026), « SDC <résidence> c/o <gérance> » à son adresse et à l'email
+// de son service syndic, sans SIRET ; à défaut, le syndicat à l'adresse de
+// la résidence.
+function defaults(data: CsBillingAdmin, residence: Residence, gerance: Gerance | null): CsCustomerInput {
   const customer = data.customer
   const address = customer?.address
+  const payer = gerance?.address ?? residence.address
   return {
-    name: customer?.name || `Syndicat des copropriétaires ${residence.name}`.trim(),
-    email: customer?.email ?? "",
+    name:
+      customer?.name ||
+      (gerance
+        ? `SDC ${residence.name} c/o ${gerance.name}`
+        : `Syndicat des copropriétaires ${residence.name}`.trim()),
+    email: customer?.email ?? gerance?.services.serviceSyndic?.mail ?? "",
     address: {
-      line1: address?.line1 ?? residence.address?.street ?? "",
-      line2: address?.line2 ?? residence.address?.complement ?? "",
-      postal_code: address?.postal_code ?? residence.address?.zipCode ?? "",
-      city: address?.city ?? residence.address?.city ?? "",
+      line1: address?.line1 ?? payer?.street ?? "",
+      line2: address?.line2 ?? payer?.complement ?? "",
+      postal_code: address?.postal_code ?? payer?.zipCode ?? "",
+      city: address?.city ?? payer?.city ?? "",
     },
     siret: customer?.siret ?? "",
   }
@@ -47,7 +58,13 @@ export function SdcCard({
   onChanged: () => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState<CsCustomerInput>(() => defaults(data, residence))
+  const [gerance, setGerance] = useState<Gerance | null>(null)
+  const syndicId = residence.geranceRef?.serviceType === "serviceSyndic" ? residence.geranceRef.geranceId : undefined
+  useEffect(() => {
+    if (!syndicId) return
+    return subscribeToGerance(syndicId, setGerance, () => setGerance(null))
+  }, [syndicId])
+  const [form, setForm] = useState<CsCustomerInput>(() => defaults(data, residence, null))
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState("")
   const [results, setResults] = useState<CompanySearchResult[]>([])
@@ -58,7 +75,7 @@ export function SdcCard({
   const subscribed = data.subscription?.subscribed ?? false
 
   function openEditor() {
-    setForm(defaults(data, residence))
+    setForm(defaults(data, residence, gerance))
     setSearch("")
     setResults([])
     setEditing(true)
