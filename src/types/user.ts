@@ -57,6 +57,10 @@ export type KonodalUser = {
   // Résidences dont l'accès est suspendu (decide_resident_removal) - écrit
   // par le serveur, levé par unblock_resident.
   blockedResidencesIds: string[]
+  // Réponses de l'utilisateur aux mails Konodal pas encore lues par un
+  // superAdmin (onglet Échanges) : posé par _store_user_replies (relève
+  // IMAP, réponses automatiques exclues), effacé par mark_user_replies_read.
+  unreadEmailReplies: number
   // Inscription menée jusqu'au bout dans l'app : refUserApp n'est écrit
   // qu'en fin de parcours (setUser, cf. login_transition_page.dart côté
   // app). Un compte abandonné en cours de route n'est pas remonté dans le

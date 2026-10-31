@@ -20,7 +20,9 @@ import type { KonodalUser } from "@/types/user"
 // ajoutent les demandes de certification en attente (certificationStatus
 // "pending", cf. CertificationRequestCard). Un compte est compté une seule
 // fois même s'il a les deux.
-export function usePendingUsersCount(): number {
+// unreadReplies : comptes ayant une réponse à un mail Konodal pas encore lue
+// (unreadEmailReplies, pastille bleue à côté), même abonnement.
+export function usePendingUsersCount(): { pending: number; unreadReplies: number } {
   const [users, setUsers] = useState<KonodalUser[]>([])
   const { isSuperAdmin } = useAccountRole()
 
@@ -34,7 +36,10 @@ export function usePendingUsersCount(): number {
 
   return useMemo(() => {
     const residents = users.filter((u) => (u.accountType || "utilisateur") === "utilisateur" && u.signupCompleted)
-    return residents.filter((u) => u.pendingLotResidenceIds.length > 0 || u.certificationStatus === "pending")
-      .length
+    return {
+      pending: residents.filter((u) => u.pendingLotResidenceIds.length > 0 || u.certificationStatus === "pending")
+        .length,
+      unreadReplies: residents.filter((u) => u.unreadEmailReplies > 0).length,
+    }
   }, [users])
 }

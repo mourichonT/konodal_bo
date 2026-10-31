@@ -41,6 +41,7 @@ import { db } from "@/firebase"
 import { CertificationRequestCard } from "@/components/CertificationRequestCard"
 import { DocumentThumbnail } from "@/components/DocumentThumbnail"
 import { UserEmailsCard } from "@/components/UserEmailsCard"
+import { DetachLotDialog } from "@/components/DetachLotDialog"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
@@ -301,10 +302,17 @@ export default function ResidentDetailPage() {
   }
   const openTodo = todo.filter((item) => !item.done)
 
-  const tabs: { key: DetailTab; label: string; count?: number }[] = [
+  // replies : réponses de l'utilisateur pas encore lues (pastille bleue,
+  // superAdmin) - lues à l'ouverture de l'onglet (UserEmailsCard).
+  const tabs: { key: DetailTab; label: string; count?: number; replies?: number }[] = [
     { key: "profil", label: "Profil" },
     { key: "lots", label: "Lots", count: lots.length },
-    { key: "mails", label: "Échanges", count: emailCount > 0 ? emailCount : undefined },
+    {
+      key: "mails",
+      label: "Échanges",
+      count: emailCount > 0 ? emailCount : undefined,
+      replies: isSuperAdmin ? user?.unreadEmailReplies : undefined,
+    },
   ]
 
   return (
@@ -432,6 +440,14 @@ export default function ResidentDetailPage() {
                         {t.count}
                       </span>
                     )}
+                    {!!t.replies && (
+                      <span
+                        className="min-w-5 rounded-full bg-[oklch(62%_0.15_240)] px-1.5 py-px text-center text-[11.5px] font-extrabold text-white"
+                        title={`${t.replies} réponse(s) à lire`}
+                      >
+                        {t.replies}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -519,6 +535,7 @@ export default function ResidentDetailPage() {
                   residenceIds={[...new Set(lots.map((l) => l.residenceId))]}
                   lotIds={lots.map((l) => l.id)}
                   onCountChange={setEmailCount}
+                  markRepliesRead={isSuperAdmin && tab === "mails"}
                 />
               </div>
             </div>
@@ -985,10 +1002,28 @@ function LotRow({
     { id: string; refLot: string; batiment: string; lot: string }[]
   >([])
   const [pendingChildrenInfo, setPendingChildrenInfo] = useState<
-    { id: string; refLot: string; batiment: string; lot: string }[]
+    {
+      id: string
+      refLot: string
+      batiment: string
+      lot: string
+      // Lot principal auquel le BO rattache déjà cette dépendance (autre que
+      // celui demandé), et propriétaires déjà inscrits sur elle.
+      otherParent: { refLot: string; batiment: string; lot: string } | null
+      otherOwners: string[]
+    }[]
   >([])
+  // Dépendances demandées décochées / recochées par le superAdmin avant
+  // d'approuver (par défaut : cochées sauf celles qui contredisent le BO).
+  const [childChoice, setChildChoice] = useState<Record<string, boolean>>({})
+  // Autres propriétaires déjà inscrits sur le lot demandé lui-même.
+  const [mainOtherOwners, setMainOtherOwners] = useState<string[]>([])
   const [approving, setApproving] = useState(false)
   const [revoking, setRevoking] = useState(false)
+  // Dépendance en cours de détachement (DetachLotDialog) et relecture des
+  // lots groupés une fois faite.
+  const [detachingLotId, setDetachingLotId] = useState<string | null>(null)
+  const [childrenReload, setChildrenReload] = useState(0)
   const [documents, setDocuments] = useState<UserDocument[]>([])
   const [ownerLabel, setOwnerLabel] = useState<string | null>(null)
 
@@ -1031,7 +1066,7 @@ function LotRow({
         }))
       )
     })
-  }, [lot.residenceId, lot.id])
+  }, [lot.residenceId, lot.id, childrenReload])
 
   useEffect(() => {
     // Info seule, jamais un lien réel (pas encore de parentLotId/
@@ -1043,21 +1078,28 @@ function LotRow({
       setPendingChildrenInfo([])
       return
     }
+    const lotSummary = (data: Record<string, unknown>) => ({
+      refLot: (data.refLot as string) ?? "",
+      batiment: (data.batiment as string) ?? "",
+      lot: (data.lot as string) ?? "",
+    })
     Promise.all(
-      lot.pendingChildLotIds.map((childId) =>
-        getDoc(doc(db, "residences", lot.residenceId, "lots", childId)).then((snap) =>
-          snap.exists()
-            ? {
-                id: childId,
-                refLot: (snap.data().refLot as string) ?? "",
-                batiment: (snap.data().batiment as string) ?? "",
-                lot: (snap.data().lot as string) ?? "",
-              }
-            : null
-        )
-      )
+      lot.pendingChildLotIds.map(async (childId) => {
+        const snap = await getDoc(doc(db, "residences", lot.residenceId, "lots", childId))
+        if (!snap.exists()) return null
+        const data = snap.data()
+        const parentId = data.parentLotId as string | undefined
+        const parentSnap =
+          parentId && parentId !== lot.id ? await getDoc(doc(db, "residences", lot.residenceId, "lots", parentId)) : null
+        return {
+          id: childId,
+          ...lotSummary(data),
+          otherParent: parentSnap?.exists() ? lotSummary(parentSnap.data()) : null,
+          otherOwners: ((data.idProprietaire as string[] | undefined) ?? []).filter((owner) => owner !== uid),
+        }
+      })
     ).then((results) => setPendingChildrenInfo(results.filter((r) => r !== null)))
-  }, [lot.residenceId, lot.pendingChildLotIds])
+  }, [lot.residenceId, lot.pendingChildLotIds, lot.id, uid])
 
   useEffect(() => {
     if (!lot.residenceId) return
@@ -1085,6 +1127,7 @@ function LotRow({
       // source de vérité réelle de l'attribution.
       const idProprietaire = (data.idProprietaire as string[] | undefined) ?? []
       const idLocataire = (data.idLocataire as string[] | undefined) ?? []
+      setMainOtherOwners(idProprietaire.filter((owner) => owner !== uid))
       if (idProprietaire.includes(uid)) setResolvedStatut("Propriétaire")
       else if (idLocataire.includes(uid)) setResolvedStatut("Locataire")
       const parentLotId = data.parentLotId as string | undefined
@@ -1112,11 +1155,38 @@ function LotRow({
     )
   }, [uid, lot.id, showDocuments])
 
+  const lotLabel = (info: { refLot: string; batiment: string; lot: string; id?: string }) =>
+    `${info.batiment || info.id || ""}${info.lot ? ` — ${info.lot}` : ""}${info.refLot ? ` · Réf. ${info.refLot}` : ""}`
+
+  // Garde-fou : écarts entre la demande (dépendances choisies à
+  // l'inscription) et ce que le BO a déjà défini, notamment d'après la
+  // feuille de présence (lots groupés de ce lot principal, dépendance
+  // rattachée ailleurs ou ayant déjà un propriétaire). Le serveur ignore déjà
+  // une dépendance rattachée ailleurs, mais écraserait le propriétaire d'une
+  // dépendance libre - d'où la case décochée par défaut.
+  const childConflicts = new Map<string, string>()
+  for (const child of pendingChildrenInfo) {
+    if (child.otherParent) childConflicts.set(child.id, `déjà rattaché dans le BO à ${lotLabel(child.otherParent)}`)
+    else if (child.otherOwners.length) childConflicts.set(child.id, "a déjà un autre propriétaire dans le BO")
+    else if (groupedChildren.length && !groupedChildren.some((c) => c.id === child.id))
+      childConflicts.set(
+        child.id,
+        `absent du BO, qui rattache à ce lot ${groupedChildren.map((c) => lotLabel(c)).join(", ")}`
+      )
+  }
+  const isChildKept = (childId: string) => childChoice[childId] ?? !childConflicts.has(childId)
+  const lotConflict =
+    !lot.isApprovedLot && !lot.pendingPeerApproval && mainOtherOwners.length > 0
+      ? "Ce lot a déjà un autre propriétaire dans le BO : vérifiez qu'il s'agit bien d'un copropriétaire."
+      : null
+
   async function handleApprove() {
     setApproving(true)
     try {
-      await approveUserLot(uid, lot.id)
-      toast.success("Lot approuvé")
+      const kept = lot.pendingChildLotIds.filter(isChildKept)
+      await approveUserLot(uid, lot.id, kept.length === lot.pendingChildLotIds.length ? undefined : kept)
+      const dropped = lot.pendingChildLotIds.length - kept.length
+      toast.success(dropped ? `Lot approuvé, ${dropped} dépendance(s) non rattachée(s)` : "Lot approuvé")
     } catch (err) {
       toast.error("Échec de l'approbation : " + (err as Error).message)
     } finally {
@@ -1145,9 +1215,7 @@ function LotRow({
   // simplement rattaché (non groupé) garde sa propre ligne.
   if (groupedParentId && userLotIds.includes(groupedParentId)) return null
 
-  const lotLabel = (info: { refLot: string; batiment: string; lot: string; id?: string }) =>
-    `${info.batiment || info.id || ""}${info.lot ? ` — ${info.lot}` : ""}${info.refLot ? ` · Réf. ${info.refLot}` : ""}`
-  const hasBody = groupedChildren.length > 0 || pendingChildrenInfo.length > 0 || showDocuments
+  const hasBody = groupedChildren.length > 0 || pendingChildrenInfo.length > 0 || showDocuments || !!lotConflict
 
   return (
     <div
@@ -1172,8 +1240,17 @@ function LotRow({
             {[lotInfo?.refLot ? `Réf. ${lotInfo.refLot}` : null, role].filter(Boolean).join(" · ") || "—"}
           </div>
           {parentLotInfo && (
-            <div className="mt-[3px] text-[12.5px] text-[oklch(52%_0.01_150)]">
+            <div className="mt-[3px] flex flex-wrap items-center gap-2 text-[12.5px] text-[oklch(52%_0.01_150)]">
               Rattaché à {lotLabel(parentLotInfo)}
+              {canRevoke && (
+                <button
+                  type="button"
+                  className="font-semibold text-primary hover:underline"
+                  onClick={() => setDetachingLotId(lot.id)}
+                >
+                  Détacher
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1217,13 +1294,32 @@ function LotRow({
 
       {hasBody && (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-6 gap-y-4 border-t border-[oklch(94%_0.004_100)] p-[16px_20px]">
+          {canApprove && lotConflict && (
+            <div className="flex items-start gap-2 rounded-[12px] bg-amber-50 p-[10px_12px] text-sm text-amber-900">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+              <span>{lotConflict}</span>
+            </div>
+          )}
+
           {groupedChildren.length > 0 && (
             <div>
               <div className={LOT_SUBTITLE_CLASS}>Lots groupés avec celui-ci</div>
               <div className="flex flex-col gap-1.5">
                 {groupedChildren.map((child) => (
-                  <div key={child.id} className={LOT_CHIP_CLASS}>
-                    {lotLabel(child)}
+                  <div key={child.id} className={cn(LOT_CHIP_CLASS, "flex items-center justify-between gap-2")}>
+                    <span className="min-w-0 truncate">{lotLabel(child)}</span>
+                    {canRevoke && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 shrink-0 rounded-[8px] px-2 text-xs"
+                        onClick={() => setDetachingLotId(child.id)}
+                      >
+                        <Unlink />
+                        Détacher
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1235,15 +1331,49 @@ function LotRow({
           {pendingChildrenInfo.length > 0 && (
             <div>
               <div className={LOT_SUBTITLE_CLASS}>Lot(s) supplémentaire(s) demandé(s) à l'inscription</div>
+              {canApprove && !lot.isApprovedLot && childConflicts.size > 0 && (
+                <div className="mb-2 flex items-start gap-2 rounded-[12px] bg-amber-50 p-[10px_12px] text-sm text-amber-900">
+                  <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    <span className="font-semibold">Différence avec le BO</span> (structure issue de la feuille de
+                    présence) : vérifiez avant d'approuver. Les lots en écart sont décochés.
+                  </span>
+                </div>
+              )}
               <div className="flex flex-col gap-1.5">
-                {pendingChildrenInfo.map((child) => (
-                  <div key={child.id} className={LOT_CHIP_CLASS}>
-                    {lotLabel(child)}
-                  </div>
-                ))}
+                {pendingChildrenInfo.map((child) => {
+                  const conflict = childConflicts.get(child.id)
+                  const editable = canApprove && !lot.isApprovedLot
+                  return (
+                    <label
+                      key={child.id}
+                      className={cn(
+                        LOT_CHIP_CLASS,
+                        "flex items-start gap-2",
+                        conflict && "bg-amber-50 text-amber-900",
+                        editable && "cursor-pointer"
+                      )}
+                    >
+                      {editable && (
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={isChildKept(child.id)}
+                          onChange={(e) => setChildChoice((prev) => ({ ...prev, [child.id]: e.target.checked }))}
+                        />
+                      )}
+                      <span>
+                        {lotLabel(child)}
+                        {conflict && <span className="block text-xs font-normal">{conflict}</span>}
+                      </span>
+                    </label>
+                  )
+                })}
               </div>
               <p className="mt-1.5 text-xs text-[oklch(54%_0.01_150)]">
-                Rattaché(s) automatiquement à l'approbation de ce lot.
+                {canApprove && !lot.isApprovedLot
+                  ? "Les lots cochés sont rattachés à l'approbation de ce lot."
+                  : "Rattaché(s) automatiquement à l'approbation de ce lot."}
               </p>
             </div>
           )}
@@ -1302,6 +1432,16 @@ function LotRow({
             </div>
           )}
         </div>
+      )}
+
+      {lot.residenceId && detachingLotId && (
+        <DetachLotDialog
+          residenceId={lot.residenceId}
+          lotId={detachingLotId}
+          open={!!detachingLotId}
+          onOpenChange={(open) => !open && setDetachingLotId(null)}
+          onDone={() => setChildrenReload((n) => n + 1)}
+        />
       )}
     </div>
   )

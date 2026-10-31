@@ -39,6 +39,9 @@ export type UserEmail = {
   redacted: boolean
   // Destinataire(s) ou expéditeur affiché(s).
   counterpart: string
+  // Réponse de l'utilisateur pas encore lue par un superAdmin (pastille
+  // bleue) ; jamais pour un mail système ni une réponse automatique.
+  unread: boolean
   // Filtre des mails au syndic (nodo_mail.py) : message au syndic lu par
   // Nodo - en cours d'analyse, traité par Nodo (retenu), transmis par Nodo
   // ou par le résident après la réponse de Nodo. null sinon.
@@ -103,6 +106,7 @@ function fromLog(snap: QueryDocumentSnapshot<DocumentData>): UserEmail {
     sentBy: d.sentBy ?? null,
     redacted: d.redacted === true,
     counterpart: (inbound ? d.from : d.to) ?? "",
+    unread: inbound && d.unread === true,
     nodo: null,
   }
 }
@@ -143,6 +147,7 @@ function fromResidenceMail(residenceId: string, uid: string, snap: QueryDocument
     sentBy: null,
     redacted: false,
     counterpart: d.from ?? to,
+    unread: false,
     nodo: nodoMailState(d),
   }
 }
@@ -176,6 +181,11 @@ export async function fetchResidenceThreads(
     })
   )
   return [...byId.values()]
+}
+
+/** Réponses de l'utilisateur marquées lues (superAdmin, mark_user_replies_read). */
+export async function markUserRepliesRead(uid: string): Promise<void> {
+  await httpsCallable<{ uid: string }, { read: number }>(functions, "mark_user_replies_read")({ uid })
 }
 
 export async function sendUserEmail(uid: string, subject: string, body: string): Promise<boolean> {

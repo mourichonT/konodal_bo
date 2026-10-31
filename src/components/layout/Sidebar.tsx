@@ -139,13 +139,28 @@ function useOpenSections(navItems: { to: string; children?: unknown }[]) {
   ] as const
 }
 
-function NavBadge({ count }: { count: number }) {
+// Pastilles d'un lien, alignées à droite : ambre = en attente, bleue = réponse
+// d'un utilisateur à lire (Utilisateurs, onglet Échanges).
+function NavBadges({ count = 0, replies = 0 }: { count?: number; replies?: number }) {
+  if (count <= 0 && replies <= 0) return null
   return (
-    <span
-      className="ml-auto flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-[oklch(78%_0.15_75)] px-1 text-[10px] font-bold text-[oklch(25%_0.02_75)]"
-      aria-label={`${count} en attente`}
-    >
-      {count}
+    <span className="ml-auto flex shrink-0 items-center gap-1">
+      {replies > 0 && (
+        <span
+          className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-[oklch(62%_0.15_240)] px-1 text-[10px] font-bold text-white"
+          aria-label={`${replies} réponse(s) à lire`}
+        >
+          {replies}
+        </span>
+      )}
+      {count > 0 && (
+        <span
+          className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-[oklch(78%_0.15_75)] px-1 text-[10px] font-bold text-[oklch(25%_0.02_75)]"
+          aria-label={`${count} en attente`}
+        >
+          {count}
+        </span>
+      )}
     </span>
   )
 }
@@ -160,7 +175,7 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
   const { user, logout } = useAuth()
   const { isSuperAdmin } = useIsSuperAdmin()
   const { isAgence, isAgent } = useAccountRole()
-  const pendingUsersCount = usePendingUsersCount()
+  const { pending: pendingUsersCount, unreadReplies: unreadRepliesCount } = usePendingUsersCount()
   const unreadMessagesCount = useUnreadMessagesCount()
   const pendingContactsCount = usePendingContactsCount()
   const pendingResidenceRequestsCount = usePendingResidenceRequestsCount(isSuperAdmin)
@@ -224,6 +239,7 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
     "/residents/retraits": pendingRemovalRequestsCount,
     "/nodo/connaissances/propositions": pendingKnowledgeProposalsCount,
   }
+  const childReplyCount: Record<string, number> = { "/residents": unreadRepliesCount }
   const allNavItems: NavItem[] = isSuperAdmin ? [...withResidenceChildren, ...superAdminNavItems] : baseNavItems
   const [openSections, toggleSection] = useOpenSections(allNavItems)
 
@@ -279,10 +295,12 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
                     <NavLink to={item.to} className="flex flex-1 items-center gap-3">
                       <item.icon className="size-4.5" />
                       {item.label}
-                      {(() => {
-                        const total = item.children.reduce((sum, child) => sum + (childBadgeCount[child.to] ?? 0), 0)
-                        return !isOpen && total > 0 ? <NavBadge count={total} /> : null
-                      })()}
+                      {!isOpen && (
+                        <NavBadges
+                          count={item.children.reduce((sum, child) => sum + (childBadgeCount[child.to] ?? 0), 0)}
+                          replies={item.children.reduce((sum, child) => sum + (childReplyCount[child.to] ?? 0), 0)}
+                        />
+                      )}
                     </NavLink>
                     <button
                       type="button"
@@ -320,7 +338,7 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
                                 )}
                               />
                               <span className="truncate">{child.label}</span>
-                              {(childBadgeCount[child.to] ?? 0) > 0 && <NavBadge count={childBadgeCount[child.to]} />}
+                              <NavBadges count={childBadgeCount[child.to]} replies={childReplyCount[child.to]} />
                             </>
                           )}
                         </NavLink>
@@ -346,9 +364,9 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
               >
                 <Icon className="size-4.5" />
                 {label}
-                {to === "/residents" && pendingUsersCount > 0 && <NavBadge count={pendingUsersCount} />}
-                {to === "/messages" && unreadMessagesCount > 0 && <NavBadge count={unreadMessagesCount} />}
-                {to === "/contacts" && pendingContactsCount > 0 && <NavBadge count={pendingContactsCount} />}
+                {to === "/residents" && <NavBadges count={pendingUsersCount} />}
+                {to === "/messages" && <NavBadges count={unreadMessagesCount} />}
+                {to === "/contacts" && <NavBadges count={pendingContactsCount} />}
               </NavLink>
             )
           })}

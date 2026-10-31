@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { BadgeCheck, Building2, CheckCircle2, Clock, Eye, Home, Search, ShieldQuestion, User as UserIcon, Users } from "lucide-react"
+import { BadgeCheck, Building2, CheckCircle2, Clock, Eye, Home, Mail, Search, ShieldQuestion, User as UserIcon, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -181,7 +181,10 @@ export default function ResidentsPage() {
   // CertificationRequestCard) - jamais signalée à agence/agent.
   const isPendingCertification = (user: KonodalUser) =>
     isSuperAdmin && user.certificationStatus === "pending"
-  const needsAction = (user: KonodalUser) => isPendingLot(user) || isPendingCertification(user)
+  // Réponse de l'utilisateur à un mail Konodal pas encore lue (onglet
+  // Échanges) : pastille bleue, superAdmin seulement.
+  const hasNewReply = (user: KonodalUser) => isSuperAdmin && user.unreadEmailReplies > 0
+  const needsAction = (user: KonodalUser) => isPendingLot(user) || isPendingCertification(user) || hasNewReply(user)
 
   // Recherche, résidence et dates restreignent aussi les KPI. Le statut et la
   // certification, pilotés par les cartes (cf. FilterKpiCard ci-dessous), ne
@@ -376,6 +379,16 @@ export default function ResidentsPage() {
                           <Badge className="border-transparent bg-blue-100 text-blue-800">
                             Certification à vérifier
                           </Badge>
+                        )}
+                        {hasNewReply(user) && (
+                          <Link to={`/residents/${user.uid}?onglet=mails`} title="Ouvrir ses échanges">
+                            <Badge className="border-transparent bg-[oklch(62%_0.15_240)] text-white">
+                              <Mail className="size-3" />
+                              {user.unreadEmailReplies > 1
+                                ? `${user.unreadEmailReplies} réponses à lire`
+                                : "Réponse à lire"}
+                            </Badge>
+                          </Link>
                         )}
                       </span>
                     </div>

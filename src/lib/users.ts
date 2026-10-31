@@ -57,6 +57,7 @@ function toKonodalUser(snapshot: DocumentSnapshot<DocumentData>): KonodalUser {
         ? data.certificationStatus
         : null,
     blockedResidencesIds: (data.blockedResidencesIds as string[] | undefined) ?? [],
+    unreadEmailReplies: Math.max(Number(data.unreadEmailReplies) || 0, 0),
     signupCompleted: !!data.refUserApp,
   }
 }
@@ -575,6 +576,16 @@ export async function resolveUsersByUids(uids: string[]): Promise<KonodalUser[]>
 // utile - ça redéclenche la Cloud Function sync_lot_approval si elle avait
 // échoué la première fois faute de users/{uid}.isApproved (cf. mémoire du
 // projet sur l'ordre approbation identité -> approbation lot).
-export async function approveUserLot(uid: string, lotId: string) {
-  await updateDoc(doc(db, "users", uid, "lots", lotId), { isApprovedLot: true })
+//
+// keepChildLotIds : dépendances demandées à l'inscription à rattacher
+// vraiment (garde-fou de la fiche : celles qui contredisent le BO sont
+// décochées) ; pendingChildLotIds est réduit dans la même écriture, avant le
+// traitement de sync_lot_approval. Absent : toutes, comme avant.
+export async function approveUserLot(uid: string, lotId: string, keepChildLotIds?: string[]) {
+  await updateDoc(doc(db, "users", uid, "lots", lotId), {
+    isApprovedLot: true,
+    ...(keepChildLotIds
+      ? { pendingChildLotIds: keepChildLotIds.length ? keepChildLotIds : deleteField() }
+      : {}),
+  })
 }

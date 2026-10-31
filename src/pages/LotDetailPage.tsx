@@ -12,6 +12,7 @@ import { db } from "@/firebase"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { subscribeToResidence } from "@/lib/residences"
 import { subscribeToLot, grantLotRole, revokeLotRole, type LotRole } from "@/lib/lots"
+import { DetachLotDialog } from "@/components/DetachLotDialog"
 import { createLotDocument } from "@/lib/lotDocuments"
 import { getUserLotAttribution, resolveUsersByUids, subscribeToUsers } from "@/lib/users"
 import type { Residence } from "@/types/residence"
@@ -59,6 +60,7 @@ export default function LotDetailPage() {
   const [parentLotLabel, setParentLotLabel] = useState<string | null>(null)
   const [owners, setOwners] = useState<RoleUser[]>([])
   const [tenants, setTenants] = useState<RoleUser[]>([])
+  const [confirmDetach, setConfirmDetach] = useState(false)
 
   useEffect(() => {
     if (!residenceId) return
@@ -191,9 +193,19 @@ export default function LotDetailPage() {
                 {lot.isLinkable ? "Oui" : "Non"}
               </div>
               {lot.isLinkable && (
-                <div>
-                  <span className="text-muted-foreground">Rattaché à : </span>
-                  {parentLotLabel ?? "—"}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>
+                    <span className="text-muted-foreground">Rattaché à : </span>
+                    {parentLotLabel ?? "—"}
+                  </span>
+                  {/* Rattachement erroné (dépendance demandée à tort à
+                      l'inscription) : superAdmin seulement, cf. detachLot. */}
+                  {isSuperAdmin && lot.parentLotId && (
+                    <Button variant="outline" size="sm" onClick={() => setConfirmDetach(true)}>
+                      <Unlink />
+                      Détacher
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -222,6 +234,10 @@ export default function LotDetailPage() {
             />
           </div>
         </div>
+      )}
+
+      {residenceId && lotId && (
+        <DetachLotDialog residenceId={residenceId} lotId={lotId} open={confirmDetach} onOpenChange={setConfirmDetach} />
       )}
     </div>
   )

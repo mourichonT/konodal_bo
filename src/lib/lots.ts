@@ -5,6 +5,7 @@ import {
   deleteDoc,
   deleteField,
   doc,
+  getDoc,
   onSnapshot,
   query,
   setDoc,
@@ -239,6 +240,33 @@ export async function linkLot(residenceId: string, childLotId: string, parentLot
   await updateDoc(doc(db, "residences", residenceId, "lots", childLotId), {
     parentLotId: parentLotId ?? deleteField(),
     groupedWithParent: parentLotId !== null,
+  })
+}
+
+// Détache un lot dépendant de son lot principal ET le libère (superAdmin,
+// bouton « Détacher » de LotDetailPage) : sync_lot_tenants ne retire pas de
+// lui-même les propriétaires/locataires recopiés du parent quand le lien
+// disparaît, ils sont donc retirés dans la même écriture (archivage de leur
+// users/{uid}/lots/{lotId} sous lotsOld par sync_lot_tenants, comme
+// revokeLotRole). Les uids hérités sont ceux du parent au moment du clic.
+export async function detachLot(residenceId: string, childLotId: string) {
+  const childRef = doc(db, "residences", residenceId, "lots", childLotId)
+  const child = (await getDoc(childRef)).data() ?? {}
+  const parentLotId = child.parentLotId as string | undefined
+  const parent = parentLotId ? ((await getDoc(doc(db, "residences", residenceId, "lots", parentLotId))).data() ?? {}) : {}
+  const inheritedOwners = ((parent.idProprietaire as string[] | undefined) ?? []).filter((uid) =>
+    ((child.idProprietaire as string[] | undefined) ?? []).includes(uid)
+  )
+  const inheritedTenants = child.groupedWithParent
+    ? ((parent.idLocataire as string[] | undefined) ?? []).filter((uid) =>
+        ((child.idLocataire as string[] | undefined) ?? []).includes(uid)
+      )
+    : []
+  await updateDoc(childRef, {
+    parentLotId: deleteField(),
+    groupedWithParent: false,
+    ...(inheritedOwners.length ? { idProprietaire: arrayRemove(...inheritedOwners) } : {}),
+    ...(inheritedTenants.length ? { idLocataire: arrayRemove(...inheritedTenants) } : {}),
   })
 }
 

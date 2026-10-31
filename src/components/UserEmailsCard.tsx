@@ -11,6 +11,7 @@ import { resolveUserLabels } from "@/lib/users"
 import {
   emailKindLabel,
   fetchResidenceThreads,
+  markUserRepliesRead,
   sendUserEmail,
   subscribeToUserEmails,
   type NodoMailState,
@@ -50,6 +51,7 @@ export function UserEmailsCard({
   residenceIds,
   lotIds,
   onCountChange,
+  markRepliesRead = false,
 }: {
   uid: string
   userName: string
@@ -57,6 +59,9 @@ export function UserEmailsCard({
   lotIds: string[]
   // Compteur de l'onglet "Échanges" de la fiche utilisateur.
   onCountChange?: (count: number) => void
+  // Onglet ouvert par un superAdmin : les réponses non lues passent lues,
+  // et restent signalées (« Nouvelle réponse ») jusqu'à la sortie de la fiche.
+  markRepliesRead?: boolean
 }) {
   const [logged, setLogged] = useState<UserEmail[]>([])
   const [threads, setThreads] = useState<UserEmail[]>([])
@@ -114,6 +119,18 @@ export function UserEmailsCard({
   useEffect(() => {
     onCountChange?.(emails.length)
   }, [emails.length, onCountChange])
+
+  const [newReplies, setNewReplies] = useState<Set<string>>(new Set())
+  useEffect(() => setNewReplies(new Set()), [uid])
+  const unreadKey = logged
+    .filter((e) => e.unread)
+    .map((e) => e.id)
+    .join(",")
+  useEffect(() => {
+    if (!markRepliesRead || !unreadKey) return
+    setNewReplies((prev) => new Set([...prev, ...unreadKey.split(",")]))
+    markUserRepliesRead(uid).catch((err) => console.warn("markUserRepliesRead", err))
+  }, [markRepliesRead, unreadKey, uid])
 
   async function handleSend() {
     setSending(true)
@@ -174,6 +191,9 @@ export function UserEmailsCard({
                   <span className="truncate text-sm font-bold text-[oklch(24%_0.01_150)]">
                     {email.subject || "(sans objet)"}
                   </span>
+                  {newReplies.has(email.id) && (
+                    <Badge className="border-transparent bg-[oklch(62%_0.15_240)] text-white">Nouvelle réponse</Badge>
+                  )}
                   {!email.success && <Badge variant="destructive">Échec</Badge>}
                   {email.nodo && <Badge variant="secondary">{NODO_LABELS[email.nodo.state]}</Badge>}
                 </div>
