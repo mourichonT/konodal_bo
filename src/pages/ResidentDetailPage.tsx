@@ -9,6 +9,7 @@ import {
   Check,
   ChevronRight,
   Home,
+  Info,
   Mail,
   Phone,
   Plus,
@@ -1215,7 +1216,11 @@ function LotRow({
   // simplement rattaché (non groupé) garde sa propre ligne.
   if (groupedParentId && userLotIds.includes(groupedParentId)) return null
 
-  const hasBody = groupedChildren.length > 0 || pendingChildrenInfo.length > 0 || showDocuments || !!lotConflict
+  // Motifs du passage en validation manuelle (validation automatique non
+  // retenue), utiles à qui valide à la main.
+  const autoFailures = !lot.isApprovedLot && lot.autoApproval?.status === "manual" ? lot.autoApproval.failures : []
+  const hasBody =
+    groupedChildren.length > 0 || pendingChildrenInfo.length > 0 || showDocuments || !!lotConflict || autoFailures.length > 0
 
   return (
     <div
@@ -1265,6 +1270,14 @@ function LotRow({
           >
             {lot.isApprovedLot ? "Approuvé" : lot.pendingPeerApproval ? "En attente de l'occupant" : "En attente"}
           </span>
+          {lot.isApprovedLot && lot.autoApproval?.status === "approved" && (
+            <span
+              className="rounded-full bg-sky-100 px-3 py-[5px] text-xs font-bold text-sky-800"
+              title="Demande faite à l'inscription par un résident (justificatif contrôlé par l'app), tous les critères remplis"
+            >
+              Validé automatiquement
+            </span>
+          )}
           {canApprove && !lot.isApprovedLot && (
             <Button
               size="sm"
@@ -1294,6 +1307,15 @@ function LotRow({
 
       {hasBody && (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-6 gap-y-4 border-t border-[oklch(94%_0.004_100)] p-[16px_20px]">
+          {canApprove && autoFailures.length > 0 && (
+            <div className="flex items-start gap-2 rounded-[12px] bg-slate-50 p-[10px_12px] text-sm text-slate-700">
+              <Info className="mt-0.5 size-4 shrink-0" />
+              <span>
+                <span className="font-semibold">Validation automatique non retenue</span> : {autoFailures.join(" ; ")}.
+              </span>
+            </div>
+          )}
+
           {canApprove && lotConflict && (
             <div className="flex items-start gap-2 rounded-[12px] bg-amber-50 p-[10px_12px] text-sm text-amber-900">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" />

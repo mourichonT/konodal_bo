@@ -440,6 +440,9 @@ export type UserLot = {
   // place : la demande est transmise à Konodal, qui tranche ici (motif du
   // refus). Cf. respondToCoOccupantRequest côté konodal_app.
   peerRefusal: { reason: string } | null
+  // Validation automatique (functions_python/lot_auto_approval.py) :
+  // "approved" = validée sans le BO, "manual" = circuit manuel avec ses motifs.
+  autoApproval: { status: "checking" | "manual" | "approved"; failures: string[] } | null
 }
 
 // users/{uid}/lots : jamais créé depuis le backoffice (toujours en
@@ -498,6 +501,12 @@ export function subscribeToUserLots(
             pendingPeerApproval: data.pendingPeerApproval === true,
             peerRefusal: data.peerRefusal
               ? { reason: ((data.peerRefusal as { reason?: string }).reason as string | undefined) ?? "" }
+              : null,
+            autoApproval: data.autoApproval
+              ? {
+                  status: (data.autoApproval as { status?: string }).status as "checking" | "manual" | "approved",
+                  failures: ((data.autoApproval as { failures?: string[] }).failures as string[] | undefined) ?? [],
+                }
               : null,
           }
         })
