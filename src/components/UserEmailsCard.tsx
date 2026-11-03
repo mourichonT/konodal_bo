@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { ArrowDownLeft, ArrowUpRight, Send } from "lucide-react"
+import { ArrowDownLeft, ArrowUpRight, Reply, Send } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { resolveUserLabels } from "@/lib/users"
+import { resolveUserLabels, type MailDraft } from "@/lib/users"
 import {
   emailKindLabel,
   fetchResidenceThreads,
@@ -43,6 +43,17 @@ function formatDate(date: Date | null): string {
   return `${date.toLocaleDateString("fr-FR")} à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
 }
 
+// On répond à une réponse de l'utilisateur, ou on relance un mail écrit
+// depuis le BO ; pas aux mails système (mot de passe…) ni aux échanges syndic.
+function canReply(email: UserEmail): boolean {
+  return email.source === "fromUser" || (email.source === "konodal" && email.kind === "bo_message")
+}
+
+function replySubject(subject: string): string {
+  const trimmed = subject.trim()
+  return !trimmed || /^re\s*:/i.test(trimmed) ? trimmed : `Re: ${trimmed}`
+}
+
 // Échanges mails avec ce compte (lib/userEmails.ts) - visible par tous les
 // rôles du BO ; les règles limitent agence/agent à leur portefeuille.
 export function UserEmailsCard({
@@ -52,6 +63,8 @@ export function UserEmailsCard({
   lotIds,
   onCountChange,
   markRepliesRead = false,
+  draft = null,
+  onDraftOpened,
 }: {
   uid: string
   userName: string
@@ -62,6 +75,10 @@ export function UserEmailsCard({
   // Onglet ouvert par un superAdmin : les réponses non lues passent lues,
   // et restent signalées (« Nouvelle réponse ») jusqu'à la sortie de la fiche.
   markRepliesRead?: boolean
+  // Brouillon préparé ailleurs sur la fiche (analyse du justificatif) :
+  // ouvre « Écrire » prérempli, rien n'est envoyé sans clic sur Envoyer.
+  draft?: MailDraft | null
+  onDraftOpened?: () => void
 }) {
   const [logged, setLogged] = useState<UserEmail[]>([])
   const [threads, setThreads] = useState<UserEmail[]>([])
@@ -73,6 +90,14 @@ export function UserEmailsCard({
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
   const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    if (!draft) return
+    setSubject(draft.subject)
+    setBody(draft.body)
+    setComposing(true)
+    onDraftOpened?.()
+  }, [draft, onDraftOpened])
 
   useEffect(() => {
     setLoading(true)
@@ -131,6 +156,13 @@ export function UserEmailsCard({
     setNewReplies((prev) => new Set([...prev, ...unreadKey.split(",")]))
     markUserRepliesRead(uid).catch((err) => console.warn("markUserRepliesRead", err))
   }, [markRepliesRead, unreadKey, uid])
+
+  function handleReply(email: UserEmail) {
+    setSubject(replySubject(email.subject))
+    setBody("")
+    setOpened(null)
+    setComposing(true)
+  }
 
   async function handleSend() {
     setSending(true)
@@ -249,6 +281,17 @@ export function UserEmailsCard({
                 </div>
               )}
             </div>
+            {opened && canReply(opened) && (
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setOpened(null)}>
+                  Fermer
+                </Button>
+                <Button onClick={() => handleReply(opened)} className={PRIMARY_CTA_CLASS}>
+                  <Reply />
+                  Répondre
+                </Button>
+              </DialogFooter>
+            )}
           </div>
         </DialogContent>
       </Dialog>

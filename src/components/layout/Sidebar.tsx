@@ -26,6 +26,7 @@ import { useAccountRole } from "@/hooks/useAccountRole"
 import { usePendingUsersCount } from "@/hooks/usePendingUsersCount"
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount"
 import { usePendingRemovalRequestsCount } from "@/hooks/usePendingRemovalRequestsCount"
+import { usePendingAccountPairsCount } from "@/hooks/usePendingAccountPairsCount"
 import { usePendingContactsCount } from "@/hooks/usePendingContactsCount"
 import { usePendingResidenceRequestsCount } from "@/hooks/usePendingResidenceRequestsCount"
 import { useScrollWithPage } from "@/hooks/useScrollWithPage"
@@ -180,6 +181,7 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
   const pendingContactsCount = usePendingContactsCount()
   const pendingResidenceRequestsCount = usePendingResidenceRequestsCount(isSuperAdmin)
   const pendingRemovalRequestsCount = usePendingRemovalRequestsCount(isSuperAdmin)
+  const pendingAccountPairsCount = usePendingAccountPairsCount(isSuperAdmin)
   const pendingKnowledgeProposalsCount = usePendingKnowledgeProposalsCount(isSuperAdmin)
   const location = useLocation()
   // profil.profilPic n'est pas porté par Firebase Auth (displayName/photoURL
@@ -208,7 +210,7 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
       ? navItems.map((item) => (item.to === "/agences" ? { ...item, label: "Agence" } : item))
       : navItems
   // Résidences : sous-menu Actives / Demandes (inscriptions konodal.com) et
-  // Utilisateurs : Annuaire / Demandes de retrait, pour le superAdmin, seul
+  // Utilisateurs : Annuaire / Demandes de retrait / Unificateur, pour le superAdmin, seul
   // à traiter ces demandes - liens simples pour les autres.
   const withResidenceChildren: NavItem[] = isSuperAdmin
     ? baseNavItems.map((item) =>
@@ -226,6 +228,7 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
                 children: [
                   { to: "/residents", label: "Annuaire", end: true },
                   { to: "/residents/retraits", label: "Demandes de retrait" },
+                  { to: "/residents/unificateur", label: "Unificateur" },
                 ],
               }
             : item
@@ -237,6 +240,7 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
     "/residences/demandes": pendingResidenceRequestsCount,
     "/residents": pendingUsersCount,
     "/residents/retraits": pendingRemovalRequestsCount,
+    "/residents/unificateur": pendingAccountPairsCount,
     "/nodo/connaissances/propositions": pendingKnowledgeProposalsCount,
   }
   const childReplyCount: Record<string, number> = { "/residents": unreadRepliesCount }

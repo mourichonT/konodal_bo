@@ -12,6 +12,7 @@ import LotDetailPage from "@/pages/LotDetailPage"
 import VoteDetailPage from "@/pages/VoteDetailPage"
 import ResidentsPage from "@/pages/ResidentsPage"
 import RemovalRequestsPage from "@/pages/RemovalRequestsPage"
+import AccountUnifierPage from "@/pages/AccountUnifierPage"
 import ResidentDetailPage from "@/pages/ResidentDetailPage"
 import SinistresPage from "@/pages/SinistresPage"
 import SinistresKanbanPage from "@/pages/SinistresKanbanPage"
@@ -106,6 +107,14 @@ function App() {
           element={
             <RequireSuperAdmin>
               <RemovalRequestsPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="residents/unificateur"
+          element={
+            <RequireSuperAdmin>
+              <AccountUnifierPage />
             </RequireSuperAdmin>
           }
         />

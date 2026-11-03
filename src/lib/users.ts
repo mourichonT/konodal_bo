@@ -443,6 +443,27 @@ export type UserLot = {
   // Validation automatique (functions_python/lot_auto_approval.py) :
   // "approved" = validée sans le BO, "manual" = circuit manuel avec ses motifs.
   autoApproval: { status: "checking" | "manual" | "approved"; failures: string[] } | null
+  // Analyse du justificatif (functions_python/lot_proof_analysis.py) : écarts
+  // avec la demande et le BO, proposition de correction, brouillon de mail.
+  proofAnalysis: ProofAnalysis | null
+}
+
+export type MailDraft = { subject: string; body: string }
+
+export type ProofAnalysis = {
+  status: "match" | "mismatch" | "no_lots" | "error"
+  documentType: string
+  holders: string[]
+  findings: string[]
+  proposal: {
+    applicable: boolean
+    blockers: string[]
+    targetLabel: string
+    followLabels: string[]
+    warnings: string[]
+    removeRequestLabel: string
+  } | null
+  mail: MailDraft | null
 }
 
 // users/{uid}/lots : jamais créé depuis le backoffice (toujours en
@@ -508,6 +529,7 @@ export function subscribeToUserLots(
                   failures: ((data.autoApproval as { failures?: string[] }).failures as string[] | undefined) ?? [],
                 }
               : null,
+            proofAnalysis: (data.proofAnalysis as ProofAnalysis | undefined) ?? null,
           }
         })
       )
@@ -590,6 +612,20 @@ export async function resolveUsersByUids(uids: string[]): Promise<KonodalUser[]>
 // vraiment (garde-fou de la fiche : celles qui contredisent le BO sont
 // décochées) ; pendingChildLotIds est réduit dans la même écriture, avant le
 // traitement de sync_lot_approval. Absent : toutes, comme avant.
+/** « Relancer l'analyse » du justificatif d'une demande (superAdmin). */
+export async function analyzeLotRequest(uid: string, lotId: string): Promise<void> {
+  await httpsCallable<{ uid: string; lotId: string }, unknown>(functions, "analyze_lot_request")({ uid, lotId })
+}
+
+/** « Appliquer » la correction proposée par l'analyse : renvoie le brouillon de mail. */
+export async function applyLotRequestCorrection(uid: string, lotId: string): Promise<MailDraft | null> {
+  const call = httpsCallable<{ uid: string; lotId: string }, { mail: MailDraft | null }>(
+    functions,
+    "apply_lot_request_correction"
+  )
+  return (await call({ uid, lotId })).data.mail
+}
+
 export async function approveUserLot(uid: string, lotId: string, keepChildLotIds?: string[]) {
   await updateDoc(doc(db, "users", uid, "lots", lotId), {
     isApprovedLot: true,

@@ -1,14 +1,16 @@
 import { Link } from "react-router-dom"
-import { UserX, Users } from "lucide-react"
+import { Merge, UserX, Users } from "lucide-react"
 import { usePendingRemovalRequestsCount } from "@/hooks/usePendingRemovalRequestsCount"
+import { usePendingAccountPairsCount } from "@/hooks/usePendingAccountPairsCount"
 import { cn } from "@/lib/utils"
 
-// Bascule d'en-tête "Annuaire / Demandes de retrait" des pages Utilisateurs
+// Bascule d'en-tête "Annuaire / Demandes de retrait / Unificateur" des pages Utilisateurs
 // (superAdmin uniquement, comme la route /residents/retraits), avec le
 // nombre de demandes de retrait en attente. Même style que le switch
 // Kanban / Liste des sinistres (SinistresPage).
-export function UsersSectionToggle({ current }: { current: "annuaire" | "retraits" }) {
+export function UsersSectionToggle({ current }: { current: "annuaire" | "retraits" | "unificateur" }) {
   const pendingCount = usePendingRemovalRequestsCount(true)
+  const pairsCount = usePendingAccountPairsCount(true)
 
   const item = (active: boolean) =>
     cn(
@@ -31,6 +33,15 @@ export function UsersSectionToggle({ current }: { current: "annuaire" | "retrait
         {pendingCount > 0 && (
           <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[oklch(58%_0.2_27)] px-1.5 text-[11.5px] font-extrabold text-white">
             {pendingCount}
+          </span>
+        )}
+      </Link>
+      <Link to="/residents/unificateur" className={item(current === "unificateur")}>
+        <Merge className="size-3.5 sm:size-4" />
+        Unificateur
+        {pairsCount > 0 && (
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[oklch(58%_0.2_27)] px-1.5 text-[11.5px] font-extrabold text-white">
+            {pairsCount}
           </span>
         )}
       </Link>

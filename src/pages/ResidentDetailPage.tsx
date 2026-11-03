@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import {
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
   Phone,
   Plus,
   PlusCircle,
+  RefreshCw,
   Save,
   Trash2,
   TriangleAlert,
@@ -43,6 +44,8 @@ import { CertificationRequestCard } from "@/components/CertificationRequestCard"
 import { DocumentThumbnail } from "@/components/DocumentThumbnail"
 import { UserEmailsCard } from "@/components/UserEmailsCard"
 import { DetachLotDialog } from "@/components/DetachLotDialog"
+import { AccountUnifierCard } from "@/components/AccountUnifierCard"
+import { ConfirmActionDialog } from "@/components/residence-billing/ConfirmActionDialog"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
@@ -50,6 +53,8 @@ import { residenceNameOf, unblockResident } from "@/lib/residentRemovals"
 import { subscribeToResidences } from "@/lib/residences"
 import { subscribeToLots, grantLotRole, revokeLotRole, type LotRole } from "@/lib/lots"
 import {
+  analyzeLotRequest,
+  applyLotRequestCorrection,
   approveUserLot,
   deleteUserAccount,
   rejectUser,
@@ -61,6 +66,7 @@ import {
   updateUserIdentity,
   updateUserPhone,
   type UserDocument,
+  type MailDraft,
   type UserLot,
 } from "@/lib/users"
 import type { KonodalUser } from "@/types/user"
@@ -91,6 +97,14 @@ export default function ResidentDetailPage() {
   const [lots, setLots] = useState<UserLot[]>([])
   const [savingApproval, setSavingApproval] = useState(false)
   const [emailCount, setEmailCount] = useState(0)
+  const [mailDraft, setMailDraft] = useState<MailDraft | null>(null)
+  // Brouillon de mail laissé par l'unificateur de comptes après une fusion
+  // (AccountUnifierPage, navigate(..., { state: { mailDraft } })).
+  const location = useLocation()
+  useEffect(() => {
+    const draft = (location.state as { mailDraft?: MailDraft } | null)?.mailDraft
+    if (draft) setMailDraft(draft)
+  }, [location.state])
   // Onglet dans l'URL (?onglet=lots) : survit au rechargement et se partage.
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get("onglet") as DetailTab | null
@@ -457,6 +471,7 @@ export default function ResidentDetailPage() {
                   compteur "Échanges" vient de la card mails, et les lots ne
                   sont pas rechargés à chaque changement d'onglet. */}
               <div className={cn("flex flex-col gap-4", tab !== "profil" && "hidden")}>
+                {isSuperAdmin && <AccountUnifierCard uid={user.uid} />}
                 {isSuperAdmin && user.blockedResidencesIds.length > 0 && (
                   <BlockedResidencesCard uid={user.uid} residenceIds={user.blockedResidencesIds} />
                 )}
@@ -524,6 +539,10 @@ export default function ResidentDetailPage() {
                       canApprove={canApproveLots}
                       canRevoke={isSuperAdmin}
                       showDocuments={isSuperAdmin}
+                      onPrepareMail={(draft) => {
+                        setMailDraft(draft)
+                        setTab("mails")
+                      }}
                     />
                   ))}
                 </CardContent>
@@ -537,6 +556,8 @@ export default function ResidentDetailPage() {
                   lotIds={lots.map((l) => l.id)}
                   onCountChange={setEmailCount}
                   markRepliesRead={isSuperAdmin && tab === "mails"}
+                  draft={mailDraft}
+                  onDraftOpened={() => setMailDraft(null)}
                 />
               </div>
             </div>
@@ -967,9 +988,13 @@ function LotRow({
   canApprove,
   canRevoke,
   showDocuments,
+  onPrepareMail,
 }: {
   uid: string
   lot: UserLot
+  // Brouillon de mail préparé par l'analyse du justificatif : ouvert dans
+  // « Écrire » de l'onglet Échanges, envoyé seulement par le superAdmin.
+  onPrepareMail: (draft: MailDraft) => void
   // Ids de tous les users/{uid}/lots de la fiche - sert à masquer un lot
   // enfant groupé dont le parent est déjà affiché (cf. groupedParentId).
   userLotIds: string[]
@@ -1024,6 +1049,8 @@ function LotRow({
   // Dépendance en cours de détachement (DetachLotDialog) et relecture des
   // lots groupés une fois faite.
   const [detachingLotId, setDetachingLotId] = useState<string | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [confirmApply, setConfirmApply] = useState(false)
   const [childrenReload, setChildrenReload] = useState(0)
   const [documents, setDocuments] = useState<UserDocument[]>([])
   const [ownerLabel, setOwnerLabel] = useState<string | null>(null)
@@ -1181,6 +1208,21 @@ function LotRow({
       ? "Ce lot a déjà un autre propriétaire dans le BO : vérifiez qu'il s'agit bien d'un copropriétaire."
       : null
 
+  const analysis = lot.proofAnalysis
+  const showAnalysis = showDocuments && !lot.isApprovedLot
+
+  async function handleAnalyze() {
+    setAnalyzing(true)
+    try {
+      await analyzeLotRequest(uid, lot.id)
+      toast.success("Justificatif analysé")
+    } catch (err) {
+      toast.error("Analyse impossible : " + (err as Error).message)
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
   async function handleApprove() {
     setApproving(true)
     try {
@@ -1220,7 +1262,12 @@ function LotRow({
   // retenue), utiles à qui valide à la main.
   const autoFailures = !lot.isApprovedLot && lot.autoApproval?.status === "manual" ? lot.autoApproval.failures : []
   const hasBody =
-    groupedChildren.length > 0 || pendingChildrenInfo.length > 0 || showDocuments || !!lotConflict || autoFailures.length > 0
+    groupedChildren.length > 0 ||
+    pendingChildrenInfo.length > 0 ||
+    showDocuments ||
+    !!lotConflict ||
+    autoFailures.length > 0 ||
+    showAnalysis
 
   return (
     <div
@@ -1307,6 +1354,73 @@ function LotRow({
 
       {hasBody && (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-6 gap-y-4 border-t border-[oklch(94%_0.004_100)] p-[16px_20px]">
+          {showAnalysis && (
+            <div className="col-span-full flex flex-col gap-2 rounded-[12px] border border-[oklch(93%_0.005_100)] p-[12px_14px] text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold">
+                  Analyse du justificatif{analysis?.documentType ? ` : ${analysis.documentType}` : ""}
+                </span>
+                <Button type="button" size="sm" variant="outline" disabled={analyzing} onClick={handleAnalyze}>
+                  <RefreshCw className={cn(analyzing && "animate-spin")} />
+                  Relancer l'analyse
+                </Button>
+              </div>
+              {!analysis && <p className="text-muted-foreground">Pas encore analysé.</p>}
+              {analysis?.status === "match" && <p className="text-emerald-700">Le justificatif correspond à la demande.</p>}
+              {(analysis?.status === "no_lots" || analysis?.status === "error") && (
+                <p className={analysis.status === "error" ? "text-red-700" : "text-muted-foreground"}>
+                  {analysis.findings.join(" ; ")}
+                </p>
+              )}
+              {analysis?.status === "mismatch" && (
+                <>
+                  <ul className="list-disc pl-5 text-amber-900">
+                    {analysis.findings.map((finding) => (
+                      <li key={finding}>{finding}</li>
+                    ))}
+                  </ul>
+                  {analysis.proposal && (
+                    <div className="flex flex-col gap-1 rounded-[10px] bg-sky-50 p-[10px_12px] text-sky-900">
+                      <span className="font-semibold">Proposition de correction</span>
+                      <span>
+                        Rattacher à {analysis.proposal.targetLabel}
+                        {analysis.proposal.followLabels.length ? `, avec ${analysis.proposal.followLabels.join(", ")}` : ""}, et
+                        retirer la demande sur {analysis.proposal.removeRequestLabel}.
+                      </span>
+                      {analysis.proposal.warnings.map((warning) => (
+                        <span key={warning} className="text-xs">
+                          ⚠ {warning}
+                        </span>
+                      ))}
+                      {!analysis.proposal.applicable && (
+                        <span className="text-xs">Non applicable : {analysis.proposal.blockers.join(" ; ")}.</span>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {analysis.proposal?.applicable && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className={cn("rounded-[10px] font-bold", PRIMARY_CTA_CLASS)}
+                        onClick={() => setConfirmApply(true)}
+                      >
+                        <Check />
+                        Appliquer la correction
+                      </Button>
+                    )}
+                    {analysis.mail && (
+                      <Button type="button" size="sm" variant="outline" onClick={() => onPrepareMail(analysis.mail as MailDraft)}>
+                        <Mail />
+                        Préparer le mail
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {canApprove && autoFailures.length > 0 && (
             <div className="flex items-start gap-2 rounded-[12px] bg-slate-50 p-[10px_12px] text-sm text-slate-700">
               <Info className="mt-0.5 size-4 shrink-0" />
@@ -1454,6 +1568,32 @@ function LotRow({
             </div>
           )}
         </div>
+      )}
+
+      {analysis?.proposal?.applicable && (
+        <ConfirmActionDialog
+          open={confirmApply}
+          onOpenChange={setConfirmApply}
+          title="Appliquer la correction ?"
+          description={
+            <>
+              Rattachement à {analysis.proposal.targetLabel}
+              {analysis.proposal.followLabels.length ? `, avec ${analysis.proposal.followLabels.join(", ")}` : ""}. La demande
+              sur {analysis.proposal.removeRequestLabel} est archivée puis retirée, et le justificatif passe sur le bon lot.
+              Le brouillon de mail s'ouvre ensuite, à relire avant envoi.
+            </>
+          }
+          confirmLabel="Appliquer"
+          onConfirm={async () => {
+            try {
+              const mail = await applyLotRequestCorrection(uid, lot.id)
+              toast.success("Correction appliquée")
+              if (mail) onPrepareMail(mail)
+            } catch (err) {
+              toast.error("Correction impossible : " + (err as Error).message)
+            }
+          }}
+        />
       )}
 
       {lot.residenceId && detachingLotId && (
