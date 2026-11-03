@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "konodal-web"
+  },
+  "targets": {
+    "konodal-web": {
+      "hosting": {
+        "portail": [
+          "konodal-portail"
+        ]
+      }
+    }
+  }
+}

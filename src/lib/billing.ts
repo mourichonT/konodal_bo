@@ -81,7 +81,7 @@ export function subscribeToGeranceBilling(
 // Cloud Functions réservées à l'agence elle-même ou Super Admin
 // (_require_superadmin_or_own_agence côté functions_python/main.py), même
 // patron d'appel que inviteAgencyAccount/revokeAgencyAccount (lib/gerances.ts).
-// `origin` (appBaseUrl(), préfixe /portail inclus) permet à la Cloud Function de construire
+// `origin` (appBaseUrl(), préfixe de déploiement inclus) permet à la Cloud Function de construire
 // les URL de retour Stripe sans dépendre d'un domaine figé côté serveur.
 // Licences à souscrire : services cochés (au moins un activé sur la fiche) et
 // stock de licences agent ; le serveur garde au moins les comptes en place.

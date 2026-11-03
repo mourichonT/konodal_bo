@@ -31,3 +31,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Cache du déploiement Firebase Hosting (npm run deploy)
+.firebase/

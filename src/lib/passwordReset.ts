@@ -16,10 +16,9 @@ const FUNCTIONS_BASE = `https://europe-west9-${import.meta.env.VITE_FIREBASE_PRO
 export type PasswordResetErrorCode = "user-not-found" | "invalid-email" | "unknown"
 
 export async function sendPasswordResetEmail(email: string): Promise<void> {
-  // origin + BASE_URL (pas origin seul) : en prod le BO est servi sous
-  // konodal.com/portail/, pas à la racine (cf. vite.config.ts) - sans le
-  // préfixe, le lien de reset pointerait vers konodal.com/reset-password,
-  // une route qui n'existe pas. Même convention que invite_agency_account/
+  // origin + BASE_URL (pas origin seul) : si le BO est servi sous un
+  // préfixe (cf. vite.config.ts), le lien de reset doit le garder, sinon il
+  // pointerait vers une route qui n'existe pas. Même convention que invite_agency_account/
   // create_checkout_session (origin envoyé au serveur, jamais un domaine en
   // dur côté fonction) - indispensable ici puisque konodal.com n'est pas un
   // domaine autorisé de l'Auth konodal-dev (UNAUTHORIZED_DOMAIN sinon).

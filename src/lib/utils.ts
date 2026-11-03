@@ -29,9 +29,10 @@ export const CTA_SHADOW = "0 10px 26px -10px oklch(38% 0.08 155 / 0.55)"
 
 // URL racine du BO (origine + préfixe de déploiement, sans slash final) à
 // transmettre aux Cloud Functions qui construisent des liens `${origin}/...`
-// (invitation /offre/:token, retours Stripe /facturation...). En prod le BO
-// est servi sous konodal.com/portail/ (cf. vite.config.ts) : window.location
-// .origin seul produirait des liens konodal.com/offre/... inexistants.
+// (invitation /offre/:token, retours Stripe /facturation...). Le BO est
+// servi à la racine de portail.konodal.com ; le préfixe éventuel (BASE_URL,
+// cf. vite.config.ts) est repris pour qu'un BO servi sous un chemin
+// produise des liens valides.
 export function appBaseUrl(): string {
   return `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, "")
 }

@@ -128,9 +128,9 @@ export async function sendInterventionEmail({
     expiresAt,
   })
 
-  // BASE_URL porte déjà le préfixe de déploiement (ex: /portail/ sous
-  // konodal.com, / en local) et se termine par un slash - cf.
-  // base dans vite.config.ts.
+  // BASE_URL porte déjà le préfixe de déploiement (/ sur
+  // portail.konodal.com comme en local) et se termine par un slash - cf.
+  // vite.config.ts.
   const link = `${window.location.origin}${import.meta.env.BASE_URL}partage/${token}`
   await addDoc(collection(db, "residences", residenceId, "mail"), {
     to: [prestataireMail],
