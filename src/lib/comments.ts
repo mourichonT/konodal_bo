@@ -25,6 +25,8 @@ export type PostComment = {
   user: string
   timestamp: Date | null
   replies: PostComment[]
+  // Masqué pour tous après 3 signalements (moderation.py), en attente de décision.
+  hidden?: boolean
 }
 
 function toDateOrNull(value: unknown): Date | null {
@@ -45,6 +47,7 @@ function toComment(
     user: (data.user as string) ?? "",
     timestamp: toDateOrNull(data.timestamp),
     replies,
+    hidden: (data.moderation as { status?: string } | undefined)?.status === "hidden",
   }
 }
 

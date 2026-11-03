@@ -39,6 +39,8 @@ import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
 import ResidenceRequestsPage from "@/pages/ResidenceRequestsPage"
 import ResidencesLayout from "@/pages/ResidencesLayout"
 import ResidenceRequestDetailPage from "@/pages/ResidenceRequestDetailPage"
+import ContentPostsPage from "@/pages/ContentPostsPage"
+import ModerationPage from "@/pages/ModerationPage"
 
 // Ancienne page Facturation : devenue l'onglet Abonnement de la page Agence.
 // Les retours Stripe (Checkout, portail) arrivent encore ici, avec ?checkout=.
@@ -119,6 +121,23 @@ function App() {
           }
         />
         <Route path="residents/:uid" element={<ResidentDetailPage />} />
+        <Route path="contenus" element={<Navigate to="/contenus/posts" replace />} />
+        <Route
+          path="contenus/posts"
+          element={
+            <RequireSuperAdmin>
+              <ContentPostsPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="contenus/moderation"
+          element={
+            <RequireSuperAdmin>
+              <ModerationPage />
+            </RequireSuperAdmin>
+          }
+        />
         <Route path="agences" element={<AgencesPage />} />
         <Route
           path="agences/:id"

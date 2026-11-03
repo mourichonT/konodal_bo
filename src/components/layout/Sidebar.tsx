@@ -18,6 +18,7 @@ import {
   UserCircle,
   CreditCard,
   ShieldCheck,
+  ShieldAlert,
   Library,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
@@ -27,6 +28,7 @@ import { usePendingUsersCount } from "@/hooks/usePendingUsersCount"
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount"
 import { usePendingRemovalRequestsCount } from "@/hooks/usePendingRemovalRequestsCount"
 import { usePendingAccountPairsCount } from "@/hooks/usePendingAccountPairsCount"
+import { usePendingModerationCount } from "@/hooks/usePendingModerationCount"
 import { usePendingContactsCount } from "@/hooks/usePendingContactsCount"
 import { usePendingResidenceRequestsCount } from "@/hooks/usePendingResidenceRequestsCount"
 import { useScrollWithPage } from "@/hooks/useScrollWithPage"
@@ -82,6 +84,15 @@ const navItems: NavItem[] = [
 ]
 
 const superAdminNavItems: NavItem[] = [
+  {
+    to: "/contenus",
+    label: "Contenus",
+    icon: ShieldAlert,
+    children: [
+      { to: "/contenus/posts", label: "Posts" },
+      { to: "/contenus/moderation", label: "Modération" },
+    ],
+  },
   { to: "/publicites", label: "Publicités", icon: Megaphone, end: true },
   { to: "/acces", label: "Accès", icon: ShieldCheck },
   {
@@ -182,6 +193,7 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
   const pendingResidenceRequestsCount = usePendingResidenceRequestsCount(isSuperAdmin)
   const pendingRemovalRequestsCount = usePendingRemovalRequestsCount(isSuperAdmin)
   const pendingAccountPairsCount = usePendingAccountPairsCount(isSuperAdmin)
+  const pendingModerationCount = usePendingModerationCount(isSuperAdmin)
   const pendingKnowledgeProposalsCount = usePendingKnowledgeProposalsCount(isSuperAdmin)
   const location = useLocation()
   // profil.profilPic n'est pas porté par Firebase Auth (displayName/photoURL
@@ -241,6 +253,7 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
     "/residents": pendingUsersCount,
     "/residents/retraits": pendingRemovalRequestsCount,
     "/residents/unificateur": pendingAccountPairsCount,
+    "/contenus/moderation": pendingModerationCount,
     "/nodo/connaissances/propositions": pendingKnowledgeProposalsCount,
   }
   const childReplyCount: Record<string, number> = { "/residents": unreadRepliesCount }
