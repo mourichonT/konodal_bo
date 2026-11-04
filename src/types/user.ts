@@ -58,8 +58,9 @@ export type KonodalUser = {
   // certifiée). Posé par submit_certification_request côté serveur,
   // effacé/mis à jour par la décision BO.
   certificationStatus: "pending" | "rejected" | null
-  // Résidences dont l'accès est suspendu (decide_resident_removal) - écrit
-  // par le serveur, levé par unblock_resident.
+  // Résidences dont l'accès est restreint, lecture et vote seulement
+  // (decide_resident_removal) - écrit par le serveur, levé par
+  // unblock_resident.
   blockedResidencesIds: string[]
   // Comptes agence/agent : résidences dont ce compte est le syndic, écrit par
   // le serveur (_recompute_pro_gerance_ids) - firestore.rules ne lui laisse

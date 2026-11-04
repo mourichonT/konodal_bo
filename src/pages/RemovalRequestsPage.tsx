@@ -34,9 +34,10 @@ function fullName(user: KonodalUser | undefined, uid: string): string {
 }
 
 // Demandes de retrait envoyées par les membres du CS (annuaire des voisins
-// de l'app). « Bloquer l'accès » suspend l'accès du résident à CETTE
-// résidence sans rien supprimer (lots, publications, messages) et lui
-// retire son rôle CS ; « Lever le blocage » depuis sa fiche utilisateur.
+// de l'app). « Restreindre l'accès » laisse au résident la lecture de CETTE
+// résidence, de son lot et son vote, sans rien supprimer (lots,
+// publications, messages), mais lui retire toute écriture et son rôle CS ;
+// « Lever la restriction » depuis sa fiche utilisateur.
 export default function RemovalRequestsPage() {
   const [requests, setRequests] = useState<RemovalRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -102,7 +103,7 @@ export default function RemovalRequestsPage() {
           onClick={() => toggleFilter("pending")}
         />
         <FilterKpiCard
-          label="Accès bloqués"
+          label="Accès restreints"
           value={countBy("accepted")}
           icon={Ban}
           colorClass="bg-rose-100 text-rose-600"
@@ -123,8 +124,10 @@ export default function RemovalRequestsPage() {
         <div className="px-7 pt-[26px] pb-5">
           <h2 className="text-lg font-extrabold text-[oklch(20%_0.02_150)]">Signalements du conseil syndical</h2>
           <p className="mt-1.5 max-w-[820px] text-sm leading-normal text-[oklch(50%_0.01_150)]">
-            Bloquer l'accès suspend le résident pour cette résidence uniquement : ses lots, publications et messages
-            sont conservés, il est retiré du conseil syndical et peut écrire au médiateur depuis l'app.
+            Restreindre l'accès vaut pour cette résidence uniquement : le résident garde la lecture de la résidence, de
+            son lot et son vote, mais ne peut plus publier, commenter, réagir, participer, signaler ni écrire aux voisins
+            ou au syndic. Rien n'est supprimé ; il est retiré du conseil syndical et peut contacter le support depuis le
+            bandeau « Votre accès a été restreint » de l'app.
           </p>
         </div>
 
@@ -186,7 +189,7 @@ export default function RemovalRequestsPage() {
                         setSelected(request)
                       }}
                     >
-                      Bloquer l'accès
+                      Restreindre l'accès
                     </Button>
                   </div>
                 ) : (
@@ -226,11 +229,11 @@ function RemovalRequestDialog({
 
   async function decide(decision: "accept" | "reject") {
     if (!request) return
-    if (decision === "accept" && !confirm("Bloquer l'accès de ce résident à la résidence ?")) return
+    if (decision === "accept" && !confirm("Restreindre l'accès de ce résident à la résidence ?")) return
     setSaving(decision)
     try {
       await decideRemovalRequest(request.id, decision, decision === "reject" ? rejectReason.trim() : undefined)
-      toast.success(decision === "accept" ? "Accès bloqué" : "Demande refusée")
+      toast.success(decision === "accept" ? "Accès restreint" : "Demande refusée")
       setRejectReason("")
       onClose()
     } catch (err) {
@@ -322,7 +325,7 @@ function RemovalRequestDialog({
                   onClick={() => decide("accept")}
                 >
                   <Ban />
-                  Bloquer l'accès
+                  Restreindre l'accès
                 </Button>
               </DialogFooter>
             )}

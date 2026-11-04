@@ -1613,9 +1613,10 @@ const LOT_SUBTITLE_CLASS = "mb-2 text-xs font-bold text-[oklch(50%_0.01_150)]"
 const LOT_CHIP_CLASS =
   "rounded-[12px] bg-[oklch(97%_0.006_100)] px-3 py-[9px] text-[13px] font-semibold text-[oklch(30%_0.01_150)]"
 
-// Accès suspendu par un superAdmin (demande de retrait du CS acceptée, cf.
-// RemovalRequestsPage) : rien n'a été supprimé, lever le blocage rend
-// l'accès à l'identique (le rôle CS retiré n'est pas rendu).
+// Accès restreint par un superAdmin (demande de retrait du CS acceptée, cf.
+// RemovalRequestsPage) : lecture et vote seulement, rien n'a été supprimé ;
+// lever la restriction rend l'accès complet (le rôle CS retiré n'est pas
+// rendu).
 function BlockedResidencesCard({ uid, residenceIds }: { uid: string; residenceIds: string[] }) {
   const [names, setNames] = useState<Record<string, string>>({})
   const [unblocking, setUnblocking] = useState<string | null>(null)
@@ -1627,7 +1628,7 @@ function BlockedResidencesCard({ uid, residenceIds }: { uid: string; residenceId
   }, [residenceIds])
 
   async function handleUnblock(residenceId: string) {
-    if (!confirm("Lever le blocage et rendre l'accès à cette résidence ?")) return
+    if (!confirm("Lever la restriction et rendre l'accès complet à cette résidence ?")) return
     setUnblocking(residenceId)
     try {
       await unblockResident(residenceId, uid)
@@ -1644,10 +1645,12 @@ function BlockedResidencesCard({ uid, residenceIds }: { uid: string; residenceId
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-rose-700">
           <Ban className="size-4" />
-          Accès bloqué
+          Accès restreint
         </CardTitle>
         <CardDescription>
-          Ses lots, publications et messages sont conservés ; il voit une page « Accès suspendu » dans l'app.
+          Il garde la lecture de la résidence, de son lot et son vote, mais ne peut plus publier, commenter, réagir,
+          participer, signaler ni écrire aux voisins ou au syndic ; il voit un bandeau « Votre accès a été restreint »
+          dans l'app.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
@@ -1662,7 +1665,7 @@ function BlockedResidencesCard({ uid, residenceIds }: { uid: string; residenceId
               disabled={unblocking !== null}
               onClick={() => handleUnblock(residenceId)}
             >
-              Lever le blocage
+              Lever la restriction
             </Button>
           </div>
         ))}

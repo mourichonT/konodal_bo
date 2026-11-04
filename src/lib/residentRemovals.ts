@@ -13,8 +13,9 @@ import { db, functions } from "@/firebase"
 
 // Demandes de retrait d'un résident (residentRemovalRequests), envoyées par
 // un membre du CS depuis l'annuaire des voisins de l'app. Décision par un
-// superAdmin : decide_resident_removal (blocage de l'accès à la résidence,
-// rien n'est supprimé) ; unblock_resident lève le blocage.
+// superAdmin : decide_resident_removal (accès restreint à la résidence :
+// lecture et vote seulement, rien n'est supprimé) ; unblock_resident lève
+// la restriction.
 
 export type RemovalRequestStatus = "pending" | "accepted" | "rejected"
 
@@ -43,7 +44,7 @@ export const REMOVAL_REASON_LABEL: Record<string, string> = {
 
 export const REMOVAL_STATUS_LABEL: Record<RemovalRequestStatus, string> = {
   pending: "En attente",
-  accepted: "Accès bloqué",
+  accepted: "Accès restreint",
   rejected: "Refusée",
 }
 
