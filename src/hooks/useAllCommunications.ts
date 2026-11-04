@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "@/firebase"
 import { useScopedResidences } from "@/hooks/useScopedResidenceIds"
 import { subscribeToResidenceCommunications } from "@/lib/communications"
+import { resolveUsersByUids } from "@/lib/users"
 import type { Communication } from "@/types/communication"
 
 export type CommunicationWithResidence = Communication & { residenceName: string }
@@ -45,19 +44,24 @@ export function useAllCommunications(
   // officielles publiées par l'agence/gérance ou un superAdmin (accountType
   // agence/agent/superAdmin), pas au fil de discussion résident->résident.
   // Rôle résolu par uid, une fois (accountType ne change pas assez souvent
-  // pour justifier un onSnapshot dédié par auteur).
+  // pour justifier un onSnapshot dédié par auteur). Via resolveUsersByUids :
+  // une agence ne lit pas la fiche d'un superAdmin, son rôle vient alors du
+  // profil réduit (sinon ses communications disparaissaient de la liste).
   const [authorRoles, setAuthorRoles] = useState<Record<string, string>>({})
   useEffect(() => {
     const missing = [...new Set(rawCommunications.map((c) => c.user))].filter(
       (uid) => uid && !(uid in authorRoles)
     )
     if (missing.length === 0) return
-    missing.forEach((uid) => {
-      getDoc(doc(db, "users", uid)).then((snap) => {
-        const accountType = snap.exists() ? ((snap.data().accountType as string) ?? "utilisateur") : "utilisateur"
-        setAuthorRoles((prev) => ({ ...prev, [uid]: accountType }))
+    resolveUsersByUids(missing)
+      .then((users) => {
+        const roles = new Map(users.map((u) => [u.uid, u.accountType]))
+        setAuthorRoles((prev) => ({
+          ...prev,
+          ...Object.fromEntries(missing.map((uid) => [uid, roles.get(uid) ?? "utilisateur"])),
+        }))
       })
-    })
+      .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawCommunications])
 

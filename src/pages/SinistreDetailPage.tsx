@@ -40,7 +40,7 @@ import {
   updateSinistreStatut,
 } from "@/lib/sinistres"
 import { exportElementToPdf, waitForImagesToLoad } from "@/lib/exportPdf"
-import { subscribeToUser, subscribeToUserLots, type UserLot } from "@/lib/users"
+import { resolveUsersByUids, subscribeToUser, subscribeToUserLots, type UserLot } from "@/lib/users"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { useAllSinistres } from "@/hooks/useAllSinistres"
 import {
@@ -685,11 +685,17 @@ function DeclarantCard({
 
   useEffect(() => {
     if (!uid) return
-    return subscribeToUser(
-      uid,
-      setDeclarant,
-      (error) => toast.error("Impossible de charger le déclarant : " + error.message)
-    )
+    return subscribeToUser(uid, setDeclarant, (error) => {
+      // Compte supprimé ou hors du périmètre de l'agence (firestore.rules) :
+      // profil réduit s'il existe encore, sans message d'erreur.
+      if ((error as { code?: string }).code !== "permission-denied") {
+        toast.error("Impossible de charger le déclarant : " + error.message)
+        return
+      }
+      resolveUsersByUids([uid])
+        .then((users) => setDeclarant(users[0] ?? null))
+        .catch(() => setDeclarant(null))
+    })
   }, [uid])
 
   useEffect(() => {

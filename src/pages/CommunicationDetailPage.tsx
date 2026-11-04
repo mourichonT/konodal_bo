@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PostCommentsCard } from "@/components/PostCommentsCard"
 import { db } from "@/firebase"
 import { subscribeToCommunication } from "@/lib/communications"
-import { subscribeToUser } from "@/lib/users"
+import { resolveUsersByUids, subscribeToUser } from "@/lib/users"
 import { useCommentStats } from "@/hooks/useCommentCount"
 import { useUniqueViewCount } from "@/hooks/useUniqueViewCount"
 import { communicationAudienceLabels, type Communication } from "@/types/communication"
@@ -48,8 +48,14 @@ export default function CommunicationDetailPage() {
   }, [residenceId])
 
   useEffect(() => {
-    if (!communication?.user) return
-    return subscribeToUser(communication.user, setAuthor, () => setAuthor(null))
+    const uid = communication?.user
+    if (!uid) return
+    // Fiche d'un superAdmin refusée à une agence : profil réduit.
+    return subscribeToUser(uid, setAuthor, () => {
+      resolveUsersByUids([uid])
+        .then((users) => setAuthor(users[0] ?? null))
+        .catch(() => setAuthor(null))
+    })
   }, [communication?.user])
 
   if (!residenceId || !postId) return null

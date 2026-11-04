@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react"
-import { doc, getDoc } from "firebase/firestore"
 import { toast } from "sonner"
 import { Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { db } from "@/firebase"
 import { useAuth } from "@/lib/auth-context"
 import {
   addPostComment,
@@ -13,6 +11,7 @@ import {
   subscribeToPostComments,
   type PostComment,
 } from "@/lib/comments"
+import { resolveUsersByUids } from "@/lib/users"
 
 function CommentRow({
   comment,
@@ -85,15 +84,20 @@ export function PostCommentsCard({ residenceId, postId }: { residenceId: string;
     }
     const missing = [...uids].filter((uid) => uid !== user?.uid && !(uid in authorNames))
     if (missing.length === 0) return
-    missing.forEach((uid) => {
-      getDoc(doc(db, "users", uid)).then((snap) => {
-        if (!snap.exists()) return
-        const data = snap.data()
-        const userGroup = (data.user as Record<string, unknown>) ?? {}
-        const name = [userGroup.surname, userGroup.name].filter(Boolean).join(" ")
-        setAuthorNames((prev) => ({ ...prev, [uid]: name || uid }))
+    resolveUsersByUids(missing)
+      .then((users) => {
+        const byUid = new Map(users.map((u) => [u.uid, u]))
+        setAuthorNames((prev) => ({
+          ...prev,
+          ...Object.fromEntries(
+            missing.map((uid) => {
+              const u = byUid.get(uid)
+              return [uid, (u && ([u.surname, u.name].filter(Boolean).join(" ") || u.pseudo)) || uid]
+            })
+          ),
+        }))
       })
-    })
+      .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comments, user?.uid])
 

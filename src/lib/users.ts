@@ -565,28 +565,89 @@ export async function getUserLotAttribution(
   }
 }
 
-// Résout uid -> "Prénom Nom" (ou email/uid à défaut) pour l'affichage - ex:
-// destinataires d'un document de lot (DocumentsPage). uids dédupliqués
-// avant lecture (un même destinataire peut apparaître comme propriétaire
-// ET locataire).
+// Résout uid -> "Prénom Nom" (ou pseudo/email/uid à défaut) pour
+// l'affichage - ex: destinataires d'un document de lot (DocumentsPage).
 export async function resolveUserLabels(uids: string[]): Promise<Map<string, string>> {
   const unique = [...new Set(uids)]
-  const snapshots = await Promise.all(unique.map((uid) => getDoc(doc(usersCollection, uid))))
+  const users = new Map((await resolveUsersByUids(unique)).map((u) => [u.uid, u]))
   return new Map(
-    snapshots.map((snap, i) => {
-      const data = snap.data()
-      const userGroup = (data?.user as Record<string, unknown>) ?? {}
-      const name = [userGroup.name, userGroup.surname].filter(Boolean).join(" ").trim()
-      return [unique[i], name || (data?.email as string) || unique[i]]
+    unique.map((uid) => {
+      const user = users.get(uid)
+      const name = [user?.name, user?.surname].filter(Boolean).join(" ").trim()
+      return [uid, name || user?.pseudo || user?.email || uid]
     })
   )
 }
 
-// Résout des uids en fiches complètes (nom/prénom/email/téléphone) - ex:
-// agents nommés d'une gérance (serviceSyndicAgentUids/
-// geranceLocativeAgentUids, cf. AgencesPage), qui n'existent plus qu'en tant
-// qu'uid depuis qu'un agent = un compte déjà invité, plus un objet séparé
-// saisi à la main.
+type PublicProfile = {
+  uid: string
+  accountType: string
+  isCertified: boolean
+  user: { name?: string; surname?: string }
+  profil: { pseudo?: string; profilPic?: string }
+}
+
+const MAX_PUBLIC_PROFILES_PER_CALL = 50 // = functions_python/main.py
+
+async function fetchPublicProfiles(uids: string[]): Promise<KonodalUser[]> {
+  const call = httpsCallable<{ uids: string[] }, { profiles: PublicProfile[] }>(functions, "get_public_profiles")
+  const profiles: PublicProfile[] = []
+  for (let i = 0; i < uids.length; i += MAX_PUBLIC_PROFILES_PER_CALL) {
+    profiles.push(...(await call({ uids: uids.slice(i, i + MAX_PUBLIC_PROFILES_PER_CALL) })).data.profiles)
+  }
+  return profiles.map((p) => ({
+    uid: p.uid,
+    email: "",
+    name: p.user.name ?? "",
+    surname: p.user.surname ?? "",
+    phone: "",
+    pseudo: p.profil.pseudo ?? "",
+    profilePic: p.profil.profilPic || undefined,
+    isApproved: false,
+    accountType: p.accountType,
+    createdDate: null,
+    birthday: null,
+    sex: "",
+    nationality: "",
+    placeOfborn: "",
+    isInfoCorrect: false,
+    rejectionReason: null,
+    pendingLotResidenceIds: [],
+    isCertified: p.isCertified,
+    certificationStatus: null,
+    blockedResidencesIds: [],
+    unreadEmailReplies: 0,
+    signupCompleted: true,
+  }))
+}
+
+// Résout des uids en fiches (nom/prénom/email/téléphone), dans l'ordre des
+// uids - ex: agents nommés d'une gérance (AgencesPage), occupants d'un lot,
+// auteurs. firestore.rules ne laisse une agence lire que les fiches de son
+// périmètre : une fiche refusée (superAdmin, compte supprimé, ancien
+// occupant) passe par le profil réduit côté serveur au lieu de faire
+// échouer toute la liste ; une fiche absente est ignorée.
+export async function resolveUsersByUids(uids: string[]): Promise<KonodalUser[]> {
+  const unique = [...new Set(uids)].filter(Boolean)
+  const found = new Map<string, KonodalUser>()
+  const denied: string[] = []
+  await Promise.all(
+    unique.map(async (uid) => {
+      try {
+        const snap = await getDoc(doc(usersCollection, uid))
+        if (snap.exists()) found.set(uid, toKonodalUser(snap))
+      } catch (error) {
+        if ((error as { code?: string }).code !== "permission-denied") throw error
+        denied.push(uid)
+      }
+    })
+  )
+  if (denied.length > 0) {
+    for (const user of await fetchPublicProfiles(denied)) found.set(user.uid, user)
+  }
+  return unique.flatMap((uid) => found.get(uid) ?? [])
+}
+
 // Recherche un compte par email exact (ResidentDetailPage "Ajouter un lot",
 // LotDetailPage "Ajouter" propriétaire/locataire) - un CS member/superAdmin
 // ne connaît généralement que l'email du résident à rattacher, pas son uid.
@@ -595,12 +656,6 @@ export async function findUserByEmail(email: string): Promise<KonodalUser | null
   if (!trimmed) return null
   const snapshot = await getDocs(query(usersCollection, where("email", "==", trimmed)))
   return snapshot.empty ? null : toKonodalUser(snapshot.docs[0])
-}
-
-export async function resolveUsersByUids(uids: string[]): Promise<KonodalUser[]> {
-  const unique = [...new Set(uids)]
-  const snapshots = await Promise.all(unique.map((uid) => getDoc(doc(usersCollection, uid))))
-  return snapshots.filter((snap) => snap.exists()).map(toKonodalUser)
 }
 
 // Idempotent à dessein : ré-écrire `true` alors que c'est déjà `true` reste
