@@ -70,6 +70,7 @@ import {
 } from "@/lib/lots"
 import { DeleteResidenceSection } from "@/components/DeleteResidenceSection"
 import { CsAvanceSection } from "@/components/CsAvanceSection"
+import { RestrictedAccessBadge } from "@/components/RestrictedAccessBadge"
 import { ResidenceBillingTab } from "@/components/residence-billing/ResidenceBillingTab"
 import { LotImportDialog } from "@/components/LotImportDialog"
 import { VoteFormDialog } from "@/components/VoteFormDialog"
@@ -290,6 +291,10 @@ function CsMembersSection({ residenceId, residence }: { residenceId: string; res
   }
 
   const csMemberUids = residence.csmembers ?? []
+  // Accès restreint à cette résidence (demande de retrait du CS acceptée) :
+  // retiré du CS par decide_resident_removal, il n'y est pas réinvité tant
+  // que la restriction n'est pas levée (fiche utilisateur, superAdmin).
+  const isRestricted = (u: KonodalUser) => u.blockedResidencesIds.includes(residenceId)
   const members = owners.filter((u) => csMemberUids.includes(u.uid))
   const eligible = owners.filter((u) => !csMemberUids.includes(u.uid))
   const normalizedEligibleSearch = eligibleSearch.trim().toLowerCase()
@@ -318,9 +323,10 @@ function CsMembersSection({ residenceId, residence }: { residenceId: string; res
                 key={u.uid}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 p-2.5"
               >
-                <div className="text-sm">
+                <div className="flex flex-wrap items-center gap-1.5 text-sm">
                   <span className="font-medium">{`${u.name} ${u.surname}`.trim() || u.email}</span>
                   <span className="text-muted-foreground"> — {u.email}</span>
+                  {isRestricted(u) && <RestrictedAccessBadge />}
                 </div>
                 <Button
                   type="button"
@@ -358,20 +364,25 @@ function CsMembersSection({ residenceId, residence }: { residenceId: string; res
                     key={u.uid}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 p-2.5"
                   >
-                    <div className="text-sm">
+                    <div className="flex flex-wrap items-center gap-1.5 text-sm">
                       <span className="font-medium">{`${u.name} ${u.surname}`.trim() || u.email}</span>
                       <span className="text-muted-foreground"> — {u.email}</span>
+                      {isRestricted(u) && <RestrictedAccessBadge />}
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={pendingUid === u.uid}
-                      onClick={() => handleToggle(u, true)}
-                    >
-                      <UserPlus />
-                      Inviter au CS
-                    </Button>
+                    {/* Bouton désactivé = plus de survol (pointer-events-none) :
+                        l'explication est portée par le span. */}
+                    <span title={isRestricted(u) ? "Accès restreint à cette résidence : lever la restriction d'abord" : undefined}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={pendingUid === u.uid || isRestricted(u)}
+                        onClick={() => handleToggle(u, true)}
+                      >
+                        <UserPlus />
+                        Inviter au CS
+                      </Button>
+                    </span>
                   </div>
                 ))
               )}

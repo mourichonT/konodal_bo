@@ -13,6 +13,7 @@ import { useAccountRole } from "@/hooks/useAccountRole"
 import { subscribeToResidence } from "@/lib/residences"
 import { subscribeToLot, grantLotRole, revokeLotRole, type LotRole } from "@/lib/lots"
 import { DetachLotDialog } from "@/components/DetachLotDialog"
+import { RestrictedAccessBadge } from "@/components/RestrictedAccessBadge"
 import { createLotDocument } from "@/lib/lotDocuments"
 import { getUserLotAttribution, resolveUsersByUids, subscribeToUsers } from "@/lib/users"
 import type { Residence } from "@/types/residence"
@@ -29,9 +30,11 @@ type RoleUser = {
   // "Destination du bien" côté propriétaire, "Type de bail" côté locataire -
   // même champ Firestore (intendedFor), cf. getUserLotAttribution.
   intendedFor: string
+  // Accès restreint à la résidence du lot (blockedResidencesIds).
+  restricted: boolean
 }
 
-async function loadRoleUsers(uids: string[], lotId: string): Promise<RoleUser[]> {
+async function loadRoleUsers(uids: string[], residenceId: string, lotId: string): Promise<RoleUser[]> {
   const [identities, attributions] = await Promise.all([
     resolveUsersByUids(uids),
     Promise.all(uids.map((uid) => getUserLotAttribution(uid, lotId))),
@@ -47,6 +50,7 @@ async function loadRoleUsers(uids: string[], lotId: string): Promise<RoleUser[]>
       email: identity?.email ?? "",
       phone: identity?.phone ?? "",
       intendedFor: attribution?.intendedFor ?? "",
+      restricted: identity?.blockedResidencesIds.includes(residenceId) ?? false,
     }
   })
 }
@@ -111,34 +115,34 @@ export default function LotDetailPage() {
   const tenantUids = useMemo(() => lot?.idLocataire ?? [], [lot])
 
   useEffect(() => {
-    if (!lotId || ownerUids.length === 0) {
+    if (!residenceId || !lotId || ownerUids.length === 0) {
       setOwners([])
       return
     }
     let cancelled = false
-    loadRoleUsers(ownerUids, lotId).then((data) => {
+    loadRoleUsers(ownerUids, residenceId, lotId).then((data) => {
       if (!cancelled) setOwners(data)
     })
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownerUids.join(","), lotId])
+  }, [ownerUids.join(","), residenceId, lotId])
 
   useEffect(() => {
-    if (!lotId || tenantUids.length === 0) {
+    if (!residenceId || !lotId || tenantUids.length === 0) {
       setTenants([])
       return
     }
     let cancelled = false
-    loadRoleUsers(tenantUids, lotId).then((data) => {
+    loadRoleUsers(tenantUids, residenceId, lotId).then((data) => {
       if (!cancelled) setTenants(data)
     })
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantUids.join(","), lotId])
+  }, [tenantUids.join(","), residenceId, lotId])
 
   if (!residenceId || !lotId) return null
 
@@ -357,6 +361,11 @@ function RoleCard({
             key={user.uid}
             className={cn("grid gap-3 text-sm sm:grid-cols-2", index > 0 && "border-t pt-4")}
           >
+            {user.restricted && (
+              <div className="sm:col-span-2">
+                <RestrictedAccessBadge title="Lecture et vote seulement dans cette résidence" />
+              </div>
+            )}
             <div>
               <span className="text-muted-foreground">Nom : </span>
               {user.surname || "—"}

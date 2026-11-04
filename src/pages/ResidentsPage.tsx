@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { BadgeCheck, Building2, CheckCircle2, Clock, Eye, Home, Mail, Search, ShieldQuestion, User as UserIcon, Users } from "lucide-react"
+import { BadgeCheck, Ban, Building2, CheckCircle2, Clock, Eye, Home, Mail, Search, ShieldQuestion, User as UserIcon, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
+import { RestrictedAccessBadge } from "@/components/RestrictedAccessBadge"
 import { DateInput } from "@/components/DateInput"
 import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import { subscribeToUsersInScope } from "@/lib/users"
@@ -167,6 +168,13 @@ export default function ResidentsPage() {
     () => [...residences].sort((a, b) => a.name.localeCompare(b.name)).map((r) => [r.id, r.name] as const),
     [residences]
   )
+
+  // Résidences du périmètre où l'accès du compte est restreint (demande de
+  // retrait acceptée) : badge à côté du nom, et sur la puce de la résidence.
+  const restrictedResidenceIdsOf = (user: KonodalUser): string[] =>
+    scopedResidenceIds
+      ? user.blockedResidencesIds.filter((id) => scopedResidenceIds.has(id))
+      : user.blockedResidencesIds
 
   const isPendingLot = (user: KonodalUser) => pendingResidenceIdsOf(user).length > 0
 
@@ -375,6 +383,13 @@ export default function ResidentsPage() {
                             <BadgeCheck className="size-4 shrink-0 fill-blue-500 text-white" />
                           </span>
                         )}
+                        {restrictedResidenceIdsOf(user).length > 0 && (
+                          <RestrictedAccessBadge
+                            title={`Accès restreint à : ${restrictedResidenceIdsOf(user)
+                              .map((id) => residenceNameById.get(id) ?? id)
+                              .join(", ")}`}
+                          />
+                        )}
                         {isPendingCertification(user) && (
                           <Badge className="border-transparent bg-blue-100 text-blue-800">
                             Certification à vérifier
@@ -404,11 +419,18 @@ export default function ResidentsPage() {
                           // en attente se distingue par un contour pointillé et
                           // une horloge.
                           const pending = !residenceIdsByUid.get(user.uid)?.has(id)
+                          const restricted = user.blockedResidencesIds.includes(id)
                           return (
                             <button
                               key={id}
                               type="button"
-                              title={pending ? "Demande en cours - filtrer sur cette résidence" : "Filtrer sur cette résidence"}
+                              title={
+                                pending
+                                  ? "Demande en cours - filtrer sur cette résidence"
+                                  : restricted
+                                    ? "Accès restreint - filtrer sur cette résidence"
+                                    : "Filtrer sur cette résidence"
+                              }
                               onClick={() => setResidenceFilter(id)}
                               style={{
                                 backgroundColor: residenceBadgeColors(id).background,
@@ -419,7 +441,13 @@ export default function ResidentsPage() {
                                 pending ? "border-dashed border-current/50" : "border-transparent"
                               )}
                             >
-                              {pending ? <Clock className="size-3" /> : <Building2 className="size-3" />}
+                              {pending ? (
+                                <Clock className="size-3" />
+                              ) : restricted ? (
+                                <Ban className="size-3" />
+                              ) : (
+                                <Building2 className="size-3" />
+                              )}
                               {residenceNameById.get(id) ?? id}
                             </button>
                           )

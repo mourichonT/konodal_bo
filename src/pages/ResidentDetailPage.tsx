@@ -45,6 +45,7 @@ import { DocumentThumbnail } from "@/components/DocumentThumbnail"
 import { UserEmailsCard } from "@/components/UserEmailsCard"
 import { DetachLotDialog } from "@/components/DetachLotDialog"
 import { AccountUnifierCard } from "@/components/AccountUnifierCard"
+import { RestrictedAccessBadge } from "@/components/RestrictedAccessBadge"
 import { ConfirmActionDialog } from "@/components/residence-billing/ConfirmActionDialog"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
@@ -377,6 +378,11 @@ export default function ResidentDetailPage() {
                   <span className={cn(PILL_CLASS, "bg-red-100 text-red-700")}>Bloqué</span>
                 ) : (
                   <span className={cn(PILL_CLASS, "bg-amber-100 text-amber-800")}>Non certifiée</span>
+                )}
+                {/* Restriction dans une résidence du périmètre : le syndic la
+                    voit ici, le superAdmin a en plus la carte pour la lever. */}
+                {user.blockedResidencesIds.some((id) => !scopedResidenceIds || scopedResidenceIds.has(id)) && (
+                  <RestrictedAccessBadge title="Lecture et vote seulement dans la résidence concernée" />
                 )}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-[18px] gap-y-1 text-[13px] font-medium text-[oklch(48%_0.01_150)]">
