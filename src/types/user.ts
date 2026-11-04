@@ -61,6 +61,10 @@ export type KonodalUser = {
   // Résidences dont l'accès est suspendu (decide_resident_removal) - écrit
   // par le serveur, levé par unblock_resident.
   blockedResidencesIds: string[]
+  // Comptes agence/agent : résidences dont ce compte est le syndic, écrit par
+  // le serveur (_recompute_pro_gerance_ids) - firestore.rules ne lui laisse
+  // lister que les comptes de ces résidences.
+  proResidenceIds: string[]
   // Réponses de l'utilisateur aux mails Konodal pas encore lues par un
   // superAdmin (onglet Échanges) : posé par _store_user_replies (relève
   // IMAP, réponses automatiques exclues), effacé par mark_user_replies_read.

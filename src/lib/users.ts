@@ -57,6 +57,7 @@ function toKonodalUser(snapshot: DocumentSnapshot<DocumentData>): KonodalUser {
         ? data.certificationStatus
         : null,
     blockedResidencesIds: (data.blockedResidencesIds as string[] | undefined) ?? [],
+    proResidenceIds: (data.proResidenceIds as string[] | undefined) ?? [],
     unreadEmailReplies: Math.max(Number(data.unreadEmailReplies) || 0, 0),
     signupCompleted: !!data.refUserApp,
   }
@@ -616,6 +617,7 @@ async function fetchPublicProfiles(uids: string[]): Promise<KonodalUser[]> {
     isCertified: p.isCertified,
     certificationStatus: null,
     blockedResidencesIds: [],
+    proResidenceIds: [],
     unreadEmailReplies: 0,
     signupCompleted: true,
   }))

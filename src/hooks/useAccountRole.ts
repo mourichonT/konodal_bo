@@ -18,6 +18,10 @@ export type AccountRole = {
   // invite_agency_account). null tant que non résolu ou compte non lié.
   geranceId: string | null
   serviceType: ServiceType | null
+  // Résidences dont ce compte est le syndic (users/{uid}.proResidenceIds,
+  // écrit par le serveur) : seul périmètre où firestore.rules lui laisse
+  // lister des comptes. Vide hors agence/agent.
+  proResidenceIds: string[]
   loading: boolean
 }
 
@@ -27,6 +31,7 @@ export type AccountRole = {
 export function useAccountRole(): AccountRole {
   const { user } = useAuth()
   const [accountType, setAccountType] = useState<string | null>(null)
+  const [proResidenceIds, setProResidenceIds] = useState<string[]>([])
   const [userLoading, setUserLoading] = useState(true)
   const [gerances, setGerances] = useState<Gerance[]>([])
   const [gerancesLoading, setGerancesLoading] = useState(true)
@@ -34,6 +39,7 @@ export function useAccountRole(): AccountRole {
   useEffect(() => {
     if (!user) {
       setAccountType(null)
+      setProResidenceIds([])
       setUserLoading(false)
       return
     }
@@ -42,10 +48,12 @@ export function useAccountRole(): AccountRole {
       user.uid,
       (konodalUser) => {
         setAccountType(konodalUser?.accountType ?? null)
+        setProResidenceIds(konodalUser?.proResidenceIds ?? [])
         setUserLoading(false)
       },
       () => {
         setAccountType(null)
+        setProResidenceIds([])
         setUserLoading(false)
       }
     )
@@ -94,6 +102,7 @@ export function useAccountRole(): AccountRole {
     isAgent,
     geranceId,
     serviceType,
+    proResidenceIds,
     loading: userLoading || (needsGerance && gerancesLoading),
   }
 }

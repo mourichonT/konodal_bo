@@ -25,8 +25,14 @@ export type ScopedResidenceIds = {
 // Interventions/Documents/Utilisateurs, seulement sur leurs lots précis
 // (Documents de lot, déjà scopé par sélection explicite du lot) - limitation
 // assumée pour cette première itération du RBAC.
-export function useScopedResidences(): { residences: Residence[]; isUnrestricted: boolean; loading: boolean } {
-  const { isSuperAdmin, isAgence, isAgent, geranceId, serviceType, loading: roleLoading } = useAccountRole()
+export function useScopedResidences(): {
+  residences: Residence[]
+  isUnrestricted: boolean
+  proResidenceIds: string[]
+  loading: boolean
+} {
+  const { isSuperAdmin, isAgence, isAgent, geranceId, serviceType, proResidenceIds, loading: roleLoading } =
+    useAccountRole()
   const [residences, setResidences] = useState<Residence[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -50,16 +56,20 @@ export function useScopedResidences(): { residences: Residence[]; isUnrestricted
       : subscribeToResidencesForGerance(geranceId!, onData, onError)
   }, [roleLoading, isSuperAdmin, isSyndicProfessional, geranceId])
 
-  return { residences, isUnrestricted: isSuperAdmin, loading: roleLoading || loading }
+  return { residences, isUnrestricted: isSuperAdmin, proResidenceIds, loading: roleLoading || loading }
 }
 
 // Ids du périmètre, pour filtrer ce qui ne part pas de la liste des
-// résidences (utilisateurs, contacts...).
+// résidences (utilisateurs, contacts...). Agence/agent : limités aux
+// résidences de proResidenceIds, seules que firestore.rules lui laisse
+// interroger dans users - une seule résidence hors liste ferait refuser
+// toute la requête array-contains-any.
 export function useScopedResidenceIds(): ScopedResidenceIds {
-  const { residences, isUnrestricted, loading } = useScopedResidences()
-  const scopedResidenceIds = useMemo(
-    () => (isUnrestricted && !loading ? null : new Set(residences.map((r) => r.id))),
-    [residences, isUnrestricted, loading]
-  )
+  const { residences, isUnrestricted, proResidenceIds, loading } = useScopedResidences()
+  const scopedResidenceIds = useMemo(() => {
+    if (isUnrestricted && !loading) return null
+    const allowed = new Set(proResidenceIds)
+    return new Set(residences.map((r) => r.id).filter((id) => allowed.has(id)))
+  }, [residences, isUnrestricted, proResidenceIds, loading])
   return { scopedResidenceIds, loading }
 }
