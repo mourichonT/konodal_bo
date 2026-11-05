@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/table"
 import { useAllCommunications, type CommunicationWithResidence } from "@/hooks/useAllCommunications"
 import { useCommentStats } from "@/hooks/useCommentCount"
+import { useTableSort } from "@/hooks/useTableSort"
+import { SortableTableHead } from "@/components/SortableTableHead"
 import { useUniqueViewCount } from "@/hooks/useUniqueViewCount"
 import { useAuth } from "@/lib/auth-context"
 import { createCommunication } from "@/lib/communications"
@@ -86,7 +88,17 @@ export default function CommunicationsPage() {
     )
   })
 
-  const groups = groupCommunications(filteredCommunications)
+  // Tri des groupes (lignes parentes) ; les résidences d'un groupe restent
+  // de la plus récente à la plus ancienne.
+  const { sortedRows: groups, headProps } = useTableSort(groupCommunications(filteredCommunications), {
+    title: (g) => g.title,
+    residence: (g) =>
+      g.items
+        .map((c) => c.residenceName)
+        .sort((a, b) => a.localeCompare(b, "fr"))
+        .join(", "),
+    date: (g) => g.creationDate,
+  })
 
   function toggleGroup(groupId: string) {
     setExpandedGroupIds((prev) => {
@@ -157,9 +169,9 @@ export default function CommunicationsPage() {
         <Table>
           <TableHeader className="bg-muted/40">
             <TableRow>
-              <TableHead>Titre</TableHead>
-              <TableHead>Résidence</TableHead>
-              <TableHead>Publiée le</TableHead>
+              <SortableTableHead {...headProps("title")}>Titre</SortableTableHead>
+              <SortableTableHead {...headProps("residence")}>Résidence</SortableTableHead>
+              <SortableTableHead {...headProps("date")}>Publiée le</SortableTableHead>
               <TableHead>Commentaires</TableHead>
               <TableHead>Vues uniques</TableHead>
               <TableHead className="text-right">Actions</TableHead>

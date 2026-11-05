@@ -3,15 +3,19 @@ import { Link, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { CheckCircle2, Clock, Eye, Inbox, Timer, XCircle } from "lucide-react"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
+import { SortableTableHead } from "@/components/SortableTableHead"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useTableSort } from "@/hooks/useTableSort"
 import {
   REQUEST_STATUS_BADGE_CLASS as STATUS_BADGE_CLASS,
   REQUEST_STATUS_LABEL as STATUS_LABEL,
   subscribeToResidenceRequests,
 } from "@/lib/residenceRequests"
 import type { ResidenceRequest, ResidenceRequestStatus } from "@/types/residenceRequest"
+
+const STATUS_ORDER: ResidenceRequestStatus[] = ["pending", "approved", "rejected"]
 
 function formatDate(request: ResidenceRequest): string {
   return request.createdAt ? request.createdAt.toDate().toLocaleDateString("fr-FR") : "—"
@@ -50,6 +54,18 @@ export default function ResidenceRequestsPage() {
   const sorted = [...requests]
     .filter((r) => statusFilter === null || r.status === statusFilter)
     .sort((a, b) => Number(a.status !== "pending") - Number(b.status !== "pending"))
+  const { sortedRows, headProps } = useTableSort(sorted, {
+    date: (r) => r.createdAt,
+    residence: (r) => r.residence.name,
+    city: (r) => r.residence.address.city,
+    requester: (r) => `${r.requester.firstName} ${r.requester.lastName}`,
+    lots: (r) => r.lots.length,
+    status: {
+      value: (r) => STATUS_ORDER.indexOf(r.status),
+      labels: { asc: "par statut (en attente d'abord)", desc: "par statut (refusées d'abord)" },
+      first: "asc",
+    },
+  })
   const countBy = (status: ResidenceRequestStatus) => requests.filter((r) => r.status === status).length
   const pendingCount = countBy("pending")
   const pendingLots = requests.filter((r) => r.status === "pending").reduce((sum, r) => sum + r.lots.length, 0)
@@ -121,17 +137,17 @@ export default function ResidenceRequestsPage() {
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Résidence</TableHead>
-                <TableHead>Ville</TableHead>
-                <TableHead>Demandeur</TableHead>
-                <TableHead>Lots</TableHead>
-                <TableHead>Statut</TableHead>
+                <SortableTableHead {...headProps("date")}>Date</SortableTableHead>
+                <SortableTableHead {...headProps("residence")}>Résidence</SortableTableHead>
+                <SortableTableHead {...headProps("city")}>Ville</SortableTableHead>
+                <SortableTableHead {...headProps("requester")}>Demandeur</SortableTableHead>
+                <SortableTableHead {...headProps("lots")}>Lots</SortableTableHead>
+                <SortableTableHead {...headProps("status")}>Statut</SortableTableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="bg-white">
-              {sorted.map((request) => (
+              {sortedRows.map((request) => (
                 <TableRow
                   key={request.id}
                   className="cursor-pointer"

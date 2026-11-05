@@ -22,11 +22,19 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
+import { SortableTableHead } from "@/components/SortableTableHead"
 import { SinistreThumbnail } from "@/components/SinistreThumbnail"
 import { SinistrePriorityIcon } from "@/components/SinistrePriorityIcon"
 import { useSignalementCount } from "@/hooks/useSignalementCount"
+import { useTableSort } from "@/hooks/useTableSort"
 import { updateSinistreArchived } from "@/lib/sinistres"
-import { sinistrePriorityLabels, sinistreStatusLabels, type SinistreStatus } from "@/types/sinistre"
+import {
+  SINISTRE_PRIORITIES,
+  SINISTRE_STATUSES,
+  sinistrePriorityLabels,
+  sinistreStatusLabels,
+  type SinistreStatus,
+} from "@/types/sinistre"
 import type { SinistresOutletContext } from "@/pages/SinistresPage"
 import type { SinistreWithResidence } from "@/hooks/useAllSinistres"
 
@@ -63,6 +71,22 @@ export default function SinistresListPage() {
       s.description.toLowerCase().includes(normalizedSearch) ||
       s.id.slice(-6).toLowerCase().includes(normalizedSearch)
     )
+  })
+
+  const { sortedRows, headProps } = useTableSort(filteredSinistres, {
+    ticket: (s) => s.id.slice(-6).toUpperCase(),
+    title: (s) => s.title,
+    residence: (s) => s.residenceName,
+    date: (s) => s.creationDate,
+    status: {
+      value: (s) => SINISTRE_STATUSES.indexOf((s.statut || "Non envoyé") as SinistreStatus),
+      labels: { asc: "par avancement (à venir d'abord)", desc: "par avancement (terminés d'abord)" },
+      first: "asc",
+    },
+    priority: {
+      value: (s) => SINISTRE_PRIORITIES.indexOf(s.priority),
+      labels: { desc: "de la plus haute à la plus basse", asc: "de la plus basse à la plus haute" },
+    },
   })
 
   return (
@@ -107,19 +131,19 @@ export default function SinistresListPage() {
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead>N° ticket</TableHead>
+                <SortableTableHead {...headProps("ticket")}>N° ticket</SortableTableHead>
                 <TableHead>Photo</TableHead>
-                <TableHead>Titre</TableHead>
-                <TableHead>Résidence</TableHead>
-                <TableHead>Déclaré le</TableHead>
+                <SortableTableHead {...headProps("title")}>Titre</SortableTableHead>
+                <SortableTableHead {...headProps("residence")}>Résidence</SortableTableHead>
+                <SortableTableHead {...headProps("date")}>Déclaré le</SortableTableHead>
                 <TableHead>Signalements</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Priorité</TableHead>
+                <SortableTableHead {...headProps("status")}>Statut</SortableTableHead>
+                <SortableTableHead {...headProps("priority")}>Priorité</SortableTableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="bg-white">
-              {filteredSinistres.map((sinistre) => (
+              {sortedRows.map((sinistre) => (
                 <SinistreRow key={`${sinistre.residenceId}-${sinistre.id}`} sinistre={sinistre} />
               ))}
               {!loading && filteredSinistres.length === 0 && (

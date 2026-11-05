@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { SortableTableHead } from "@/components/SortableTableHead"
+import { useTableSort } from "@/hooks/useTableSort"
 import { sendCsInvoice, type CsBillingAdmin, type CsInvoiceState } from "@/lib/csAvance"
 import { formatAmount, formatDate, formatShortDate } from "./format"
 
@@ -27,6 +29,13 @@ export function InvoicesCard({
   onChanged: () => Promise<void>
 }) {
   const [sending, setSending] = useState<string | null>(null)
+  const { sortedRows: invoices, headProps } = useTableSort(data.invoices, {
+    date: (i) => i.date,
+    number: (i) => i.number,
+    period: (i) => i.periodStart,
+    amount: (i) => i.amount,
+    state: (i) => (STATE[i.state] ?? STATE.pending).label,
+  })
 
   async function resend(invoiceId: string) {
     setSending(invoiceId)
@@ -57,16 +66,16 @@ export function InvoicesCard({
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Numéro</TableHead>
-                <TableHead>Période</TableHead>
-                <TableHead>Montant</TableHead>
-                <TableHead>Statut</TableHead>
+                <SortableTableHead {...headProps("date")}>Date</SortableTableHead>
+                <SortableTableHead {...headProps("number")}>Numéro</SortableTableHead>
+                <SortableTableHead {...headProps("period")}>Période</SortableTableHead>
+                <SortableTableHead {...headProps("amount")}>Montant</SortableTableHead>
+                <SortableTableHead {...headProps("state")}>Statut</SortableTableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="bg-white">
-              {data.invoices.map((invoice) => {
+              {invoices.map((invoice) => {
                 const state = STATE[invoice.state] ?? STATE.pending
                 return (
                   <TableRow key={invoice.id}>

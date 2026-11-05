@@ -28,7 +28,9 @@ import {
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table"
+import { SortableTableHead } from "@/components/SortableTableHead"
+import { useTableSort } from "@/hooks/useTableSort"
 import { Tooltip as InfoTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { getLicenseKpis } from "@/lib/billing"
 import {
@@ -244,6 +246,14 @@ function ForecastCard({ kpis }: { kpis: LicenseKpis | null }) {
     mrr: m.mrrCents / 100,
   }))
   const lastMonth = forecast?.monthly.at(-1)?.month
+  const { sortedRows: activations, headProps } = useTableSort(forecast?.activations ?? [], {
+    date: (a) => a.date,
+    name: (a) => a.name,
+    offer: (a) => (a.type === "cs" ? "CS avancé" : "Licences"),
+    source: (a) => activationSourceLabels[a.source],
+    volume: (a) => (a.type === "cs" ? a.lots : (a.serviceSeats ?? 0) + (a.agentSeats ?? 0)),
+    mrr: (a) => a.mrrCents,
+  })
 
   if (kpis && !forecast) return null
 
@@ -321,16 +331,18 @@ function ForecastCard({ kpis }: { kpis: LicenseKpis | null }) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Offre</TableHead>
-                      <TableHead>Origine</TableHead>
-                      <TableHead>Volume</TableHead>
-                      <TableHead className="text-right">CA mensuel</TableHead>
+                      <SortableTableHead {...headProps("date")}>Date</SortableTableHead>
+                      <SortableTableHead {...headProps("name")}>Client</SortableTableHead>
+                      <SortableTableHead {...headProps("offer")}>Offre</SortableTableHead>
+                      <SortableTableHead {...headProps("source")}>Origine</SortableTableHead>
+                      <SortableTableHead {...headProps("volume")}>Volume</SortableTableHead>
+                      <SortableTableHead {...headProps("mrr")} className="text-right">
+                        CA mensuel
+                      </SortableTableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {forecast.activations.map((a) => (
+                    {activations.map((a) => (
                       <TableRow key={`${a.type}-${a.id}-${a.source}`}>
                         <TableCell className="tabular-nums">
                           {a.date ? a.date.toLocaleDateString("fr-FR") : "—"}
@@ -377,6 +389,14 @@ function CsAvanceKpisCard({ kpis }: { kpis: LicenseKpis | null }) {
   const count = (n: number | undefined) => (t ? String(n ?? 0) : "…")
   const subscribed = t ? t.activeResidences + t.pastDueResidences : 0
   const monthly = (cs?.monthly ?? []).map((m) => ({ ...m, label: monthLabel(m.month), revenue: m.revenueCents / 100 }))
+  const { sortedRows: csResidences, headProps } = useTableSort(cs?.residences ?? [], {
+    name: (r) => r.name,
+    status: (r) => csStatusLabel(r.status),
+    lots: (r) => r.lots,
+    interval: (r) => (r.interval === "year" ? "Annuelle" : r.interval === "month" ? "Mensuelle" : null),
+    mrr: (r) => r.mrrCents,
+    periodEnd: (r) => r.currentPeriodEnd,
+  })
 
   return (
     <Card>
@@ -513,16 +533,20 @@ function CsAvanceKpisCard({ kpis }: { kpis: LicenseKpis | null }) {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Résidence</TableHead>
-                          <TableHead>Statut</TableHead>
-                          <TableHead className="text-right">Lots</TableHead>
-                          <TableHead>Formule</TableHead>
-                          <TableHead className="text-right">MRR</TableHead>
-                          <TableHead>Échéance</TableHead>
+                          <SortableTableHead {...headProps("name")}>Résidence</SortableTableHead>
+                          <SortableTableHead {...headProps("status")}>Statut</SortableTableHead>
+                          <SortableTableHead {...headProps("lots")} className="text-right">
+                            Lots
+                          </SortableTableHead>
+                          <SortableTableHead {...headProps("interval")}>Formule</SortableTableHead>
+                          <SortableTableHead {...headProps("mrr")} className="text-right">
+                            MRR
+                          </SortableTableHead>
+                          <SortableTableHead {...headProps("periodEnd")}>Échéance</SortableTableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {cs.residences.map((residence) => (
+                        {csResidences.map((residence) => (
                           <TableRow key={residence.residenceId}>
                             <TableCell className="font-medium">
                               <Link to={`/residences/${residence.residenceId}`} className="hover:underline">
@@ -589,6 +613,14 @@ export function LicenseKpisSection() {
     label: monthLabel(m.month),
     revenue: m.revenueCents / 100,
   }))
+  const { sortedRows: agencies, headProps } = useTableSort(kpis?.agencies ?? [], {
+    name: (a) => a.name,
+    status: (a) => billingStatusLabels[a.status] ?? a.status,
+    serviceSeats: (a) => a.serviceSeats,
+    agentSeats: (a) => a.agentSeats,
+    mrr: (a) => a.mrrCents,
+    periodEnd: (a) => a.currentPeriodEnd,
+  })
 
   return (
     <div className="flex flex-col gap-6">
@@ -760,16 +792,22 @@ export function LicenseKpisSection() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Agence</TableHead>
-                              <TableHead>Statut</TableHead>
-                              <TableHead className="text-right">Service</TableHead>
-                              <TableHead className="text-right">Agent</TableHead>
-                              <TableHead className="text-right">MRR</TableHead>
-                              <TableHead>Échéance</TableHead>
+                              <SortableTableHead {...headProps("name")}>Agence</SortableTableHead>
+                              <SortableTableHead {...headProps("status")}>Statut</SortableTableHead>
+                              <SortableTableHead {...headProps("serviceSeats")} className="text-right">
+                                Service
+                              </SortableTableHead>
+                              <SortableTableHead {...headProps("agentSeats")} className="text-right">
+                                Agent
+                              </SortableTableHead>
+                              <SortableTableHead {...headProps("mrr")} className="text-right">
+                                MRR
+                              </SortableTableHead>
+                              <SortableTableHead {...headProps("periodEnd")}>Échéance</SortableTableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {kpis.agencies.map((agency) => (
+                            {agencies.map((agency) => (
                               <TableRow key={agency.geranceId}>
                                 <TableCell className="font-medium">
                                   <Link to="/agences" className="hover:underline">

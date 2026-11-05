@@ -12,10 +12,17 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
+import { SortableTableHead } from "@/components/SortableTableHead"
+import { useTableSort } from "@/hooks/useTableSort"
 import type { EvenementsOutletContext } from "@/pages/EvenementsPage"
 import type { EventWithResidence } from "@/hooks/useAllEvents"
 
 type TermineFilter = "termine" | "encours" | null
+
+// Rang du statut affiché (EventRow) : programmé, reporté, annulé, terminé.
+function statusRank(e: EventWithResidence) {
+  return e.annule ? 2 : e.reporte ? 1 : e.termine ? 3 : 0
+}
 
 export default function EvenementsListPage() {
   const { events, loading, filters } = useOutletContext<EvenementsOutletContext>()
@@ -38,6 +45,23 @@ export default function EvenementsListPage() {
       e.description.toLowerCase().includes(normalizedSearch) ||
       e.prestaName.toLowerCase().includes(normalizedSearch)
     )
+  })
+
+  const { sortedRows, headProps } = useTableSort(filteredEvents, {
+    title: (e) => e.title,
+    residence: (e) => e.residenceName,
+    date: (e) => e.eventDate,
+    time: {
+      value: (e) => (e.eventDate ? e.eventDate.getHours() * 60 + e.eventDate.getMinutes() : null),
+      labels: { asc: "du plus tôt au plus tard", desc: "du plus tard au plus tôt" },
+      first: "asc",
+    },
+    presta: (e) => e.prestaName,
+    status: {
+      value: statusRank,
+      labels: { asc: "par statut (programmées d'abord)", desc: "par statut (terminées d'abord)" },
+      first: "asc",
+    },
   })
 
   const encoursCount = events.filter((e) => !e.termine).length
@@ -76,18 +100,18 @@ export default function EvenementsListPage() {
         <Table>
           <TableHeader className="bg-muted/40">
             <TableRow>
-              <TableHead>Titre</TableHead>
-              <TableHead>Résidence</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Heure</TableHead>
-              <TableHead>Prestataire</TableHead>
+              <SortableTableHead {...headProps("title")}>Titre</SortableTableHead>
+              <SortableTableHead {...headProps("residence")}>Résidence</SortableTableHead>
+              <SortableTableHead {...headProps("date")}>Date</SortableTableHead>
+              <SortableTableHead {...headProps("time")}>Heure</SortableTableHead>
+              <SortableTableHead {...headProps("presta")}>Prestataire</SortableTableHead>
               <TableHead>Description</TableHead>
-              <TableHead>Statut</TableHead>
+              <SortableTableHead {...headProps("status")}>Statut</SortableTableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody className="bg-white">
-            {filteredEvents.map((event) => (
+            {sortedRows.map((event) => (
               <EventRow key={`${event.residenceId}-${event.id}`} event={event} />
             ))}
             {!loading && filteredEvents.length === 0 && (

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import { MultiSelectFilter } from "@/components/MultiSelectFilter"
+import { SortableTableHead } from "@/components/SortableTableHead"
+import { useTableSort } from "@/hooks/useTableSort"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Table,
@@ -91,6 +93,16 @@ export default function PublicitesPage() {
     if (statusFilter.length > 0 && !statusFilter.includes(campaignStatus(c, today))) return false
     if (!normalizedSearch) return true
     return [c.name, c.advertiser].join(" ").toLowerCase().includes(normalizedSearch)
+  })
+
+  const { sortedRows: sortedCampaigns, headProps } = useTableSort(filteredCampaigns, {
+    name: (c) => c.name,
+    advertiser: (c) => c.advertiser,
+    targets: (c) => c.targetResidenceIds.length,
+    period: { value: (c) => c.startDate, kind: "date" },
+    status: (c) => campaignStatus(c, today),
+    impressions: (c) => c.impressionCount,
+    clicks: (c) => c.clickCount,
   })
 
   // Une résidence par badge devient illisible dès qu'une campagne cible
@@ -237,18 +249,18 @@ export default function PublicitesPage() {
           <TableHeader className="bg-muted/40">
             <TableRow>
               <TableHead>Image</TableHead>
-              <TableHead>Nom</TableHead>
-              <TableHead>Annonceur</TableHead>
-              <TableHead>Résidences ciblées</TableHead>
-              <TableHead>Période</TableHead>
-              <TableHead>Statut</TableHead>
-              <TableHead>Impressions</TableHead>
-              <TableHead>Clics</TableHead>
+              <SortableTableHead {...headProps("name")}>Nom</SortableTableHead>
+              <SortableTableHead {...headProps("advertiser")}>Annonceur</SortableTableHead>
+              <SortableTableHead {...headProps("targets")}>Résidences ciblées</SortableTableHead>
+              <SortableTableHead {...headProps("period")}>Période</SortableTableHead>
+              <SortableTableHead {...headProps("status")}>Statut</SortableTableHead>
+              <SortableTableHead {...headProps("impressions")}>Impressions</SortableTableHead>
+              <SortableTableHead {...headProps("clicks")}>Clics</SortableTableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody className="bg-white">
-            {filteredCampaigns.map((campaign) => (
+            {sortedCampaigns.map((campaign) => (
               <TableRow key={campaign.id}>
                 <TableCell>
                   <img

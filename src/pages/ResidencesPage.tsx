@@ -13,6 +13,8 @@ import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import { MultiSelectFilter } from "@/components/MultiSelectFilter"
 import { NumberRangeFilter } from "@/components/NumberRangeFilter"
+import { SortableTableHead } from "@/components/SortableTableHead"
+import { useTableSort } from "@/hooks/useTableSort"
 import { inNumberRange } from "@/lib/filters"
 import {
   Dialog,
@@ -153,6 +155,14 @@ export default function ResidencesPage() {
       ),
     [scopedResidences, search, lotMin, lotMax, cityFilter]
   )
+
+  const { sortedRows: sortedResidences, headProps } = useTableSort(filteredResidences, {
+    name: (r) => r.name,
+    street: (r) => r.address.street,
+    zipCode: (r) => r.address.zipCode,
+    city: (r) => r.address.city,
+    lots: (r) => r.totalLot ?? 0,
+  })
 
   // Géocodage paresseux : une résidence sans lat/lng est géocodée une seule
   // fois via l'API Adresse (gratuite, sans clé) puis les coordonnées sont
@@ -330,16 +340,16 @@ export default function ResidencesPage() {
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Adresse</TableHead>
-                <TableHead>Code postal</TableHead>
-                <TableHead>Ville</TableHead>
-                <TableHead>Lots</TableHead>
+                <SortableTableHead {...headProps("name")}>Nom</SortableTableHead>
+                <SortableTableHead {...headProps("street")}>Adresse</SortableTableHead>
+                <SortableTableHead {...headProps("zipCode")}>Code postal</SortableTableHead>
+                <SortableTableHead {...headProps("city")}>Ville</SortableTableHead>
+                <SortableTableHead {...headProps("lots")}>Lots</SortableTableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="bg-white">
-              {filteredResidences.map((residence) => (
+              {sortedResidences.map((residence) => (
                 <TableRow key={residence.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">

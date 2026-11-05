@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { RestrictedAccessBadge } from "@/components/RestrictedAccessBadge"
+import { SortableTableHead } from "@/components/SortableTableHead"
+import { useTableSort } from "@/hooks/useTableSort"
 import { DateInput } from "@/components/DateInput"
 import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import { subscribeToUsersInScope } from "@/lib/users"
@@ -224,6 +226,23 @@ export default function ResidentsPage() {
     return [...filtered.filter(needsAction), ...filtered.filter((u) => !needsAction(u))]
   }, [kpiResidents, statusFilter, certificationFilter, residenceIdsByUid, scopedResidenceIds, isSuperAdmin])
 
+  // Sans tri choisi, l'ordre ci-dessus (actions en attente en tête).
+  const { sortedRows: sortedResidents, headProps } = useTableSort(filteredResidents, {
+    name: (u) => `${u.name} ${u.surname}`,
+    email: (u) => u.email,
+    residences: (u) =>
+      residenceIdsOf(u)
+        .map((id) => residenceNameById.get(id) ?? id)
+        .sort((a, b) => a.localeCompare(b, "fr"))
+        .join(", "),
+    date: (u) => u.createdDate,
+    status: {
+      value: (u) => STATUS_ORDER.indexOf(statusOf(u)),
+      labels: { asc: "par statut (à traiter d'abord)", desc: "par statut (bloqués d'abord)" },
+      first: "asc",
+    },
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -360,16 +379,16 @@ export default function ResidentsPage() {
           <Table>
             <TableHeader className="[&_th]:text-[12.5px] [&_th]:font-extrabold [&_th]:tracking-[0.06em] [&_th]:text-[oklch(50%_0.01_150)] [&_th]:uppercase">
               <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Résidence(s)</TableHead>
-                <TableHead>Date de la demande</TableHead>
-                <TableHead>Statut</TableHead>
+                <SortableTableHead {...headProps("name")}>Nom</SortableTableHead>
+                <SortableTableHead {...headProps("email")}>Email</SortableTableHead>
+                <SortableTableHead {...headProps("residences")}>Résidence(s)</SortableTableHead>
+                <SortableTableHead {...headProps("date")}>Date de la demande</SortableTableHead>
+                <SortableTableHead {...headProps("status")}>Statut</SortableTableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="bg-white">
-              {filteredResidents.map((user) => (
+              {sortedResidents.map((user) => (
                 <TableRow key={user.uid}>
                   <TableCell className="font-bold">
                     <div className="flex items-center gap-3">

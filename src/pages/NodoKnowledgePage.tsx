@@ -26,6 +26,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { SortableTableHead } from "@/components/SortableTableHead"
+import { useTableSort } from "@/hooks/useTableSort"
 import {
   acceptKnowledgeProposal,
   addKnowledgeSource,
@@ -549,6 +551,13 @@ export default function NodoKnowledgePage() {
     () => new Set(sources.filter((s) => s.kind === "file" && s.fileName).map((s) => s.fileName!)),
     [sources]
   )
+  const { sortedRows: sortedSources, headProps } = useTableSort(sources, {
+    title: (s) => s.title,
+    category: (s) => s.category,
+    status: (s) => (STATUS_META[s.status] ?? STATUS_META.pending).label,
+    chunks: (s) => (s.status === "ready" ? s.chunkCount : null),
+    date: (s) => s.createdAt,
+  })
   // Sources rangées avant les domaines (Procédure, Article…).
   const legacyCount = sources.filter((s) => s.categoryVersion !== KNOWLEDGE_CATEGORY_VERSION).length
   const [reclassifying, setReclassifying] = useState(false)
@@ -636,16 +645,16 @@ export default function NodoKnowledgePage() {
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Domaine</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Passages</TableHead>
-                  <TableHead>Ajoutée le</TableHead>
+                  <SortableTableHead {...headProps("title")}>Source</SortableTableHead>
+                  <SortableTableHead {...headProps("category")}>Domaine</SortableTableHead>
+                  <SortableTableHead {...headProps("status")}>Statut</SortableTableHead>
+                  <SortableTableHead {...headProps("chunks")}>Passages</SortableTableHead>
+                  <SortableTableHead {...headProps("date")}>Ajoutée le</SortableTableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="bg-white">
-                {sources.map((source) => {
+                {sortedSources.map((source) => {
                   const Kind = KIND_META[source.kind]?.icon ?? FileText
                   const status = STATUS_META[source.status] ?? STATUS_META.pending
                   return (
@@ -1157,6 +1166,14 @@ function WebDomainsPanel() {
     }
   }
 
+  const { sortedRows: sortedDomains, headProps } = useTableSort(state?.domains ?? [], {
+    domain: (d) => d.domain,
+    search: (d) => (d.direct ? "Directe" : d.filet ? "Filet Anthropic" : "Lecture seule"),
+    scope: (d) => (d.localTo ? `Local ${d.localTo.join(", ")}` : "National"),
+    origin: (d) => ORIGIN_LABEL[d.origin] ?? d.origin,
+    date: (d) => d.addedAt,
+  })
+
   return (
     <div className={CARD_CLASS}>
       <div className="flex flex-wrap items-center justify-between gap-3 px-7 pt-[22px] pb-4">
@@ -1207,16 +1224,16 @@ function WebDomainsPanel() {
         <Table>
           <TableHeader className="bg-muted/40">
             <TableRow>
-              <TableHead>Site</TableHead>
-              <TableHead>Recherche</TableHead>
-              <TableHead>Portée</TableHead>
-              <TableHead>Origine</TableHead>
-              <TableHead>Ajouté le</TableHead>
+              <SortableTableHead {...headProps("domain")}>Site</SortableTableHead>
+              <SortableTableHead {...headProps("search")}>Recherche</SortableTableHead>
+              <SortableTableHead {...headProps("scope")}>Portée</SortableTableHead>
+              <SortableTableHead {...headProps("origin")}>Origine</SortableTableHead>
+              <SortableTableHead {...headProps("date")}>Ajouté le</SortableTableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody className="bg-white">
-            {state.domains.map((entry) => (
+            {sortedDomains.map((entry) => (
               <TableRow key={entry.domain}>
                 <TableCell>
                   <div className="flex items-center gap-3">

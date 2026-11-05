@@ -71,6 +71,8 @@ import {
 import { DeleteResidenceSection } from "@/components/DeleteResidenceSection"
 import { CsAvanceSection } from "@/components/CsAvanceSection"
 import { RestrictedAccessBadge } from "@/components/RestrictedAccessBadge"
+import { SortableTableHead } from "@/components/SortableTableHead"
+import { useTableSort } from "@/hooks/useTableSort"
 import { ResidenceBillingTab } from "@/components/residence-billing/ResidenceBillingTab"
 import { LotImportDialog } from "@/components/LotImportDialog"
 import { VoteFormDialog } from "@/components/VoteFormDialog"
@@ -1796,6 +1798,13 @@ function VotesSection({ residenceId }: { residenceId: string }) {
     return subscribeToLots(residenceId, setLots, () => {})
   }, [residenceId])
 
+  const { sortedRows: sortedVotes, headProps } = useTableSort(votes, {
+    title: (v) => v.title,
+    type: (v) => (v.type === VoteType.assembleeGenerale ? "Assemblée générale" : "Sondage"),
+    status: (v) => voteStatusLabel(v),
+    date: (v) => v.createdAt,
+  })
+
   async function handleDelete(vote: Vote) {
     if (!confirm(`Supprimer "${vote.title || "ce vote"}" ?`)) return
     try {
@@ -1826,15 +1835,15 @@ function VotesSection({ residenceId }: { residenceId: string }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Titre</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Créé le</TableHead>
+                <SortableTableHead {...headProps("title")}>Titre</SortableTableHead>
+                <SortableTableHead {...headProps("type")}>Type</SortableTableHead>
+                <SortableTableHead {...headProps("status")}>Statut</SortableTableHead>
+                <SortableTableHead {...headProps("date")}>Créé le</SortableTableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {votes.map((vote) => {
+              {sortedVotes.map((vote) => {
                 const isAG = vote.type === VoteType.assembleeGenerale
                 const deletable = isAG ? !isSessionFinished(vote) : !isVoteClosed(vote)
                 return (

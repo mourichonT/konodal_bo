@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
+import { SortableTableHead } from "@/components/SortableTableHead"
+import { useTableSort } from "@/hooks/useTableSort"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import { CheckCircle2, Clock3, Merge, Pencil, Phone, Plus, Search, Trash2, Users, X } from "lucide-react"
@@ -81,6 +83,23 @@ export default function ContactsPage() {
     if (approvalFilter === "approved" && !c.isApproved) return false
     if (!search.trim()) return true
     return matchesSearch(c, search)
+  })
+
+  const { sortedRows: sortedContacts, headProps } = useTableSort(filteredContacts, {
+    name: (c) => c.name,
+    service: (c) => c.service,
+    phone: (c) => c.phone,
+    mail: (c) => c.mail,
+    residences: (c) =>
+      residenceIdsForContact(residences, c.id)
+        .map((id) => residenceNameById.get(id) ?? id)
+        .sort((a, b) => a.localeCompare(b, "fr"))
+        .join(", "),
+    status: {
+      value: (c) => Number(c.isApproved),
+      labels: { asc: "par statut (en attente d'abord)", desc: "par statut (approuvés d'abord)" },
+      first: "asc",
+    },
   })
 
   // Chaque paire n'est affichée qu'une fois (id < autreId) - les groupes de
@@ -240,17 +259,17 @@ export default function ContactsPage() {
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Service</TableHead>
-                <TableHead>Téléphone</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Résidences</TableHead>
-                <TableHead>Statut</TableHead>
+                <SortableTableHead {...headProps("name")}>Nom</SortableTableHead>
+                <SortableTableHead {...headProps("service")}>Service</SortableTableHead>
+                <SortableTableHead {...headProps("phone")}>Téléphone</SortableTableHead>
+                <SortableTableHead {...headProps("mail")}>Email</SortableTableHead>
+                <SortableTableHead {...headProps("residences")}>Résidences</SortableTableHead>
+                <SortableTableHead {...headProps("status")}>Statut</SortableTableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="bg-white">
-              {filteredContacts.map((contact) => {
+              {sortedContacts.map((contact) => {
                 const contactResidenceIds = residenceIdsForContact(residences, contact.id)
                 return (
                 <TableRow key={contact.id}>

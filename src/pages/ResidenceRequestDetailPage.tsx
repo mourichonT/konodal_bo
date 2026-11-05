@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { SortableTableHead } from "@/components/SortableTableHead"
+import { useTableSort } from "@/hooks/useTableSort"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
 import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import { useAuth } from "@/lib/auth-context"
@@ -390,6 +392,17 @@ function BuildingsTab({ request }: { request: ResidenceRequest }) {
 function LotsTab({ request }: { request: ResidenceRequest }) {
   const refs = useMemo(() => lotRefs(request.lots), [request.lots])
   const linkedCount = request.lots.filter((l) => l.parent).length
+  const { sortedRows, headProps } = useTableSort(
+    request.lots.map((lot, i) => ({ lot, ref: refs[i] })),
+    {
+      batiment: ({ lot }) => lot.batiment,
+      lot: ({ lot }) => lot.lot,
+      ref: ({ ref }) => ref,
+      type: ({ lot }) => lot.typeLot,
+      linkable: ({ lot }) => (defaultIsLinkableForType(lot.typeLot) ? "Oui" : "Non"),
+      parent: ({ lot }) => (lot.parent ? `${lot.parent.batiment} ${lot.parent.lot}` : null),
+    }
+  )
   return (
     <Card>
       <CardHeader>
@@ -403,20 +416,20 @@ function LotsTab({ request }: { request: ResidenceRequest }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Bâtiment</TableHead>
-              <TableHead>N°</TableHead>
-              <TableHead>Référence</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Rattachable</TableHead>
-              <TableHead>Rattaché à</TableHead>
+              <SortableTableHead {...headProps("batiment")}>Bâtiment</SortableTableHead>
+              <SortableTableHead {...headProps("lot")}>N°</SortableTableHead>
+              <SortableTableHead {...headProps("ref")}>Référence</SortableTableHead>
+              <SortableTableHead {...headProps("type")}>Type</SortableTableHead>
+              <SortableTableHead {...headProps("linkable")}>Rattachable</SortableTableHead>
+              <SortableTableHead {...headProps("parent")}>Rattaché à</SortableTableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {request.lots.map((lot, i) => (
+            {sortedRows.map(({ lot, ref }) => (
               <TableRow key={`${lot.batiment}|${lot.lot}`}>
                 <TableCell>{lot.batiment}</TableCell>
                 <TableCell className="font-medium">{lot.lot}</TableCell>
-                <TableCell className="text-muted-foreground">{refs[i]}</TableCell>
+                <TableCell className="text-muted-foreground">{ref}</TableCell>
                 <TableCell>{lot.typeLot}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {defaultIsLinkableForType(lot.typeLot) ? "Oui" : "Non"}
@@ -440,7 +453,11 @@ function formatSize(bytes: number): string {
 function DocumentsTab({ request }: { request: ResidenceRequest }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
-  const attachments = request.attachments ?? []
+  const { sortedRows: attachments, headProps } = useTableSort(request.attachments ?? [], {
+    name: (a) => a.name,
+    size: (a) => a.size,
+    addedBy: (a) => (a.addedBy === "requester" ? "Demandeur (formulaire)" : "Backoffice"),
+  })
 
   async function open(attachment: ResidenceRequestAttachment) {
     try {
@@ -480,9 +497,9 @@ function DocumentsTab({ request }: { request: ResidenceRequest }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Taille</TableHead>
-                <TableHead>Ajouté par</TableHead>
+                <SortableTableHead {...headProps("name")}>Nom</SortableTableHead>
+                <SortableTableHead {...headProps("size")}>Taille</SortableTableHead>
+                <SortableTableHead {...headProps("addedBy")}>Ajouté par</SortableTableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>

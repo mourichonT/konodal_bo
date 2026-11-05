@@ -47,6 +47,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FilterKpiCard } from "@/components/FilterKpiCard";
+import { SortableTableHead } from "@/components/SortableTableHead";
+import { useTableSort } from "@/hooks/useTableSort";
 import { NodoQuotaSummary } from "@/components/nodo/NodoQuotaSummary";
 import { NodoMailFilterSection } from "@/components/NodoMailFilterSection";
 import { InAppRepliesSection } from "@/components/InAppRepliesSection";
@@ -189,6 +191,23 @@ export default function AgencesPage() {
     [gerances, search, serviceFilter],
   );
 
+  const primaryContactOf = (gerance: (typeof gerances)[number]) =>
+    serviceTypes.map((type) => gerance.services[type]?.mail).find((mail) => mail);
+  const { sortedRows: sortedGerances, headProps } = useTableSort(
+    filteredGerances,
+    {
+      name: (g) => g.name,
+      street: (g) => g.address.street,
+      city: (g) => g.address.city,
+      services: (g) =>
+        serviceTypes
+          .filter((type) => g.services[type])
+          .map((type) => serviceTypeLabels[type])
+          .join(", "),
+      contact: primaryContactOf,
+    },
+  );
+
   const totalSyndics = gerances.filter(
     (gerance) => gerance.services.serviceSyndic,
   ).length;
@@ -289,22 +308,20 @@ export default function AgencesPage() {
               <Table>
                 <TableHeader className="bg-muted/40">
                   <TableRow>
-                    <TableHead>Agence</TableHead>
-                    <TableHead>Adresse</TableHead>
-                    <TableHead>Ville</TableHead>
-                    <TableHead>Services</TableHead>
-                    <TableHead>Contact</TableHead>
+                    <SortableTableHead {...headProps("name")}>Agence</SortableTableHead>
+                    <SortableTableHead {...headProps("street")}>Adresse</SortableTableHead>
+                    <SortableTableHead {...headProps("city")}>Ville</SortableTableHead>
+                    <SortableTableHead {...headProps("services")}>Services</SortableTableHead>
+                    <SortableTableHead {...headProps("contact")}>Contact</SortableTableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="bg-white">
-                  {filteredGerances.map((gerance) => {
+                  {sortedGerances.map((gerance) => {
                     const activeServices = serviceTypes.filter(
                       (type) => gerance.services[type],
                     );
-                    const primaryContact = activeServices
-                      .map((type) => gerance.services[type]?.mail)
-                      .find((mail) => mail);
+                    const primaryContact = primaryContactOf(gerance);
                     return (
                       <TableRow key={gerance.id}>
                         <TableCell className="font-medium">

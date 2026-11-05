@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { SortableTableHead } from "@/components/SortableTableHead"
+import { useTableSort } from "@/hooks/useTableSort"
 import {
   addResidenceAdmin,
   removeResidenceAdmin,
@@ -100,6 +102,15 @@ export default function AccesPage() {
 
   const removingUser = removing ? users.get(removing) : undefined
 
+  const { sortedRows: sortedUids, headProps } = useTableSort(uids, {
+    account: (uid) => {
+      const user = users.get(uid)
+      return user ? userLabel(user) : null
+    },
+    uid: (uid) => uid,
+    type: (uid) => users.get(uid)?.accountType,
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Accès</h1>
@@ -138,14 +149,14 @@ export default function AccesPage() {
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead>Compte</TableHead>
-                <TableHead>UID</TableHead>
-                <TableHead>Type</TableHead>
+                <SortableTableHead {...headProps("account")}>Compte</SortableTableHead>
+                <SortableTableHead {...headProps("uid")}>UID</SortableTableHead>
+                <SortableTableHead {...headProps("type")}>Type</SortableTableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="bg-white">
-              {uids.map((uid) => {
+              {sortedUids.map((uid) => {
                 const user = users.get(uid)
                 return (
                   <TableRow key={uid}>
