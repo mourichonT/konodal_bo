@@ -1057,6 +1057,7 @@ function LotRow({
   const [detachingLotId, setDetachingLotId] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [confirmApply, setConfirmApply] = useState(false)
+  const [confirmSuspect, setConfirmSuspect] = useState(false)
   const [childrenReload, setChildrenReload] = useState(0)
   const [documents, setDocuments] = useState<UserDocument[]>([])
   const [ownerLabel, setOwnerLabel] = useState<string | null>(null)
@@ -1216,6 +1217,8 @@ function LotRow({
 
   const analysis = lot.proofAnalysis
   const showAnalysis = showDocuments && !lot.isApprovedLot
+  // Justificatif d'exemple ou fictif : carte en rouge, approbation confirmée.
+  const suspect = !lot.isApprovedLot && analysis?.status === "suspect"
 
   async function handleAnalyze() {
     setAnalyzing(true)
@@ -1279,13 +1282,17 @@ function LotRow({
     <div
       className={cn(
         "overflow-hidden rounded-[18px] border bg-white",
-        lot.isApprovedLot ? "border-[oklch(93%_0.005_100)]" : "border-amber-300 ring-2 ring-amber-100"
+        lot.isApprovedLot
+          ? "border-[oklch(93%_0.005_100)]"
+          : suspect
+            ? "border-red-300 ring-2 ring-red-100"
+            : "border-amber-300 ring-2 ring-amber-100"
       )}
     >
       <div
         className={cn(
           "flex flex-wrap items-center justify-between gap-4 p-[18px_20px]",
-          lot.isApprovedLot ? "bg-[oklch(98%_0.003_100)]" : "bg-amber-50"
+          lot.isApprovedLot ? "bg-[oklch(98%_0.003_100)]" : suspect ? "bg-red-50" : "bg-amber-50"
         )}
       >
         <div className="min-w-0">
@@ -1331,12 +1338,18 @@ function LotRow({
               Validé automatiquement
             </span>
           )}
+          {suspect && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-[5px] text-xs font-bold text-red-800">
+              <TriangleAlert className="size-3.5" />
+              Justificatif suspect
+            </span>
+          )}
           {canApprove && !lot.isApprovedLot && (
             <Button
               size="sm"
               disabled={approving || !userApproved}
               title={!userApproved ? "Approuve d'abord l'identité pour que la synchronisation fonctionne" : undefined}
-              onClick={handleApprove}
+              onClick={() => (suspect ? setConfirmSuspect(true) : handleApprove())}
               className={cn("rounded-[10px] font-bold", PRIMARY_CTA_CLASS)}
             >
               <Check />
@@ -1372,6 +1385,33 @@ function LotRow({
                 </Button>
               </div>
               {!analysis && <p className="text-muted-foreground">Pas encore analysé.</p>}
+              {analysis?.status === "suspect" && (
+                <>
+                  <div className="flex items-start gap-2 rounded-[10px] bg-red-50 p-[10px_12px] text-red-900">
+                    <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                    <span>
+                      <span className="font-semibold">
+                        Justificatif suspect : mention « {analysis.markLabel || "SPÉCIMEN"} »
+                      </span>
+                      . Document d'exemple ou fictif, sans valeur justificative : validation automatique bloquée.
+                      Demandez le justificatif original avant d'approuver.
+                    </span>
+                  </div>
+                  <ul className="list-disc pl-5 text-red-900">
+                    {analysis.findings.map((finding) => (
+                      <li key={finding}>{finding}</li>
+                    ))}
+                  </ul>
+                  {analysis.mail && (
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => onPrepareMail(analysis.mail as MailDraft)}>
+                        <Mail />
+                        Préparer le mail
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
               {analysis?.status === "match" && <p className="text-emerald-700">Le justificatif correspond à la demande.</p>}
               {(analysis?.status === "no_lots" || analysis?.status === "error") && (
                 <p className={analysis.status === "error" ? "text-red-700" : "text-muted-foreground"}>
@@ -1574,6 +1614,23 @@ function LotRow({
             </div>
           )}
         </div>
+      )}
+
+      {suspect && (
+        <ConfirmActionDialog
+          open={confirmSuspect}
+          onOpenChange={setConfirmSuspect}
+          title="Approuver malgré un justificatif suspect ?"
+          description={
+            <>
+              Le justificatif porte la mention « {analysis?.markLabel || "SPÉCIMEN"} » : c'est un document d'exemple ou
+              fictif. N'approuvez que si vous avez vérifié l'accès autrement (justificatif original reçu, par exemple).
+            </>
+          }
+          confirmLabel="Approuver quand même"
+          destructive
+          onConfirm={handleApprove}
+        />
       )}
 
       {analysis?.proposal?.applicable && (

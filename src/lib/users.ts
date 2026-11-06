@@ -451,8 +451,12 @@ export type UserLot = {
 
 export type MailDraft = { subject: string; body: string }
 
+// suspect : document d'exemple ou fictif (mention « SPÉCIMEN »…), la demande
+// reste en vérification au BO (lot_proof_analysis.py, FAKE_TEXT).
 export type ProofAnalysis = {
-  status: "match" | "mismatch" | "no_lots" | "error"
+  status: "match" | "mismatch" | "no_lots" | "error" | "suspect"
+  suspectMarks?: string[]
+  markLabel?: string
   documentType: string
   holders: string[]
   findings: string[]
