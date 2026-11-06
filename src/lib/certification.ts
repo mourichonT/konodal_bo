@@ -18,6 +18,9 @@ export type CertificationRequest = {
   selfiePath: string | null
   faceScore: number | null
   faceMatch: boolean | null
+  // Mentions apposées sur la pièce : suspect = document d'exemple ou fictif
+  // (« SPÉCIMEN »…), error = contrôle impossible ; null avant le 06/11/2026.
+  documentCheck: { status: "ok" | "suspect" | "error"; suspectMarks: string[]; markLabel: string } | null
   extracted: Record<string, string>
   submittedAt: Date | null
   decidedAt: Date | null
@@ -55,6 +58,13 @@ export function subscribeToCertificationRequest(
         selfiePath: data.selfiePath ?? null,
         faceScore: typeof data.faceScore === "number" ? data.faceScore : null,
         faceMatch: typeof data.faceMatch === "boolean" ? data.faceMatch : null,
+        documentCheck: data.documentCheck
+          ? {
+              status: data.documentCheck.status,
+              suspectMarks: data.documentCheck.suspectMarks ?? [],
+              markLabel: data.documentCheck.markLabel ?? "",
+            }
+          : null,
         extracted: data.extracted ?? {},
         submittedAt: toDate(data.submittedAt),
         decidedAt: toDate(data.decidedAt),

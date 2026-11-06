@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { BadgeCheck, Ban, Check } from "lucide-react"
+import { BadgeCheck, Ban, Check, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DocumentThumbnail } from "@/components/DocumentThumbnail"
+import { ConfirmActionDialog } from "@/components/residence-billing/ConfirmActionDialog"
 import { useAuth } from "@/lib/auth-context"
 import { setUserCertified, subscribeToUserDocuments, type UserDocument } from "@/lib/users"
 import {
@@ -73,6 +74,7 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
   const [saving, setSaving] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState("")
+  const [confirmSuspect, setConfirmSuspect] = useState(false)
 
   useEffect(
     () =>
@@ -100,6 +102,19 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
   // demande.
   const pending = request?.status === "pending" && !isCertified
   const hasLegacy = !request && legacyDocuments.length > 0
+  // Pièce d'exemple ou fictive (submit_certification_request) : carte en
+  // rouge, motif de refus prérempli, certification confirmée.
+  const suspect = request?.documentCheck?.status === "suspect"
+  const markLabel = request?.documentCheck?.markLabel || "SPÉCIMEN"
+
+  function startReject() {
+    if (suspect && !reason.trim()) {
+      setReason(
+        `La pièce d'identité envoyée est un document d'exemple (mention « ${markLabel} ») : envoyez une photo de votre propre pièce d'identité.`
+      )
+    }
+    setRejecting(true)
+  }
 
   async function approve() {
     if (!request || !authUser) return
@@ -161,7 +176,7 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
   const extracted = request ? Object.entries(request.extracted).filter(([, v]) => v) : []
 
   return (
-    <Card className="[--card-spacing:--spacing(7)]">
+    <Card className={cn("[--card-spacing:--spacing(7)]", suspect && pending && "ring-2 ring-red-300")}>
       <CardHeader>
         <CardTitle className="text-lg font-extrabold text-[oklch(22%_0.01_150)]">Demande de certification</CardTitle>
         <CardDescription className="max-w-[520px] leading-normal">{description}</CardDescription>
@@ -207,6 +222,24 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
             <ScoreBadge request={request} />
             <span className="text-sm text-[oklch(52%_0.01_150)]">{request.idType}</span>
           </div>
+        )}
+
+        {suspect && request?.documentCheck && (
+          <div className="flex items-start gap-2 rounded-[12px] bg-red-50 p-[12px_14px] text-sm text-red-900">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+            <div className="flex flex-col gap-1">
+              <span>
+                <span className="font-semibold">Pièce d'identité suspecte : mention « {markLabel} »</span>. Document
+                d'exemple ou fictif : ne certifiez pas sans l'avoir vérifié autrement.
+              </span>
+              <span className="text-xs">Mentions relevées : {request.documentCheck.suspectMarks.join(" ; ")}</span>
+            </div>
+          </div>
+        )}
+        {pending && request?.documentCheck?.status === "error" && (
+          <p className="text-xs text-[oklch(52%_0.01_150)]">
+            Contrôle des mentions de la pièce impossible (filigrane « spécimen »…) : vérifiez-la à l'œil.
+          </p>
         )}
 
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,200px),1fr))] justify-items-center gap-4">
@@ -274,7 +307,7 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={saving}
-              onClick={approve}
+              onClick={() => (suspect ? setConfirmSuspect(true) : approve())}
               className={cn(ACTION_BUTTON_CLASS, "bg-blue-600 text-white hover:bg-blue-700")}
             >
               <BadgeCheck />
@@ -284,7 +317,7 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
               variant="outline"
               disabled={saving}
               className={cn(ACTION_BUTTON_CLASS, "border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700")}
-              onClick={() => setRejecting(true)}
+              onClick={startReject}
             >
               <Ban />
               Refuser
@@ -314,6 +347,22 @@ export function CertificationRequestCard({ uid, isCertified }: { uid: string; is
               </Button>
             </div>
           </div>
+        )}
+        {pending && suspect && (
+          <ConfirmActionDialog
+            open={confirmSuspect}
+            onOpenChange={setConfirmSuspect}
+            title="Certifier malgré une pièce suspecte ?"
+            description={
+              <>
+                La pièce porte la mention « {markLabel} » : c'est un document d'exemple ou fictif. Ne certifiez que si
+                vous avez vérifié l'identité autrement.
+              </>
+            }
+            confirmLabel="Certifier quand même"
+            destructive
+            onConfirm={approve}
+          />
         )}
       </CardContent>
     </Card>
