@@ -243,6 +243,12 @@ export async function linkLot(residenceId: string, childLotId: string, parentLot
   })
 }
 
+// Case « Masqué » (LotsSection) - fonction à part de updateLot pour n'écrire
+// le champ que sur les lots réellement masqués ou démasqués.
+export async function setLotHidden(residenceId: string, lotId: string, isHidden: boolean) {
+  await updateDoc(doc(db, "residences", residenceId, "lots", lotId), { isHidden })
+}
+
 // Détache un lot dépendant de son lot principal ET le libère (superAdmin,
 // bouton « Détacher » de LotDetailPage) : sync_lot_tenants ne retire pas de
 // lui-même les propriétaires/locataires recopiés du parent quand le lien

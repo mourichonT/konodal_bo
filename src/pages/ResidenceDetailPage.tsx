@@ -64,6 +64,7 @@ import {
   importLots,
   linkLot,
   reorderLots,
+  setLotHidden,
   subscribeToLots,
   updateLot,
   type LotInput,
@@ -1278,6 +1279,7 @@ type LotRow = {
   // Tantième général du lot (loi de 1965) - édité inline comme les autres
   // champs.
   tantiemes: number
+  isHidden: boolean
 }
 
 function matchesLotSearch(row: LotRow, search: string): boolean {
@@ -1355,6 +1357,7 @@ function LotsSection({
             idProprietaire: lot.idProprietaire,
             parentLotId: lot.parentLotId ?? null,
             tantiemes: lot.tantiemes,
+            isHidden: lot.isHidden === true,
           }))
         )
         setLoading(false)
@@ -1456,6 +1459,7 @@ function LotsSection({
         idProprietaire: [],
         parentLotId: null,
         tantiemes: 0,
+        isHidden: false,
       }]))
     } catch (err) {
       toast.error("Échec de la création : " + (err as Error).message)
@@ -1515,6 +1519,23 @@ function LotsSection({
     }
   }
 
+  async function handleToggleHidden(row: LotRow, isHidden: boolean) {
+    if (!row.id) return
+    const applyHidden = (value: boolean) =>
+      setRows((prev) => {
+        const next = prev.map((r) => (r.key === row.key ? { ...r, isHidden: value } : r))
+        rowsRef.current = next
+        return next
+      })
+    applyHidden(isHidden)
+    try {
+      await setLotHidden(residenceId, row.id, isHidden)
+    } catch (err) {
+      toast.error("Échec de l'enregistrement : " + (err as Error).message)
+      applyHidden(!isHidden)
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -1552,6 +1573,9 @@ function LotsSection({
                 <TableHead>Tantièmes</TableHead>
                 <TableHead>Rattachable</TableHead>
                 <TableHead>Rattaché à</TableHead>
+                <TableHead title="Lot invisible dans l'app. Si tous les lots d'un bâtiment sont masqués, ses sinistres ne remontent plus dans l'app.">
+                  Masqué
+                </TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -1568,20 +1592,21 @@ function LotsSection({
                       updateRow={updateRow}
                       removeRow={removeRow}
                       onLink={handleLinkLot}
+                      onToggleHidden={handleToggleHidden}
                     />
                   ))}
                 </SortableContext>
               </DndContext>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
                     Aucun lot pour l'instant.
                   </TableCell>
                 </TableRow>
               )}
               {!loading && rows.length > 0 && filteredRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
                     Aucun lot ne correspond à la recherche.
                   </TableCell>
                 </TableRow>
@@ -1619,6 +1644,7 @@ function SortableLotRow({
   updateRow,
   removeRow,
   onLink,
+  onToggleHidden,
 }: {
   residenceId: string
   row: LotRow
@@ -1627,6 +1653,7 @@ function SortableLotRow({
   updateRow: (key: string, patch: Partial<LotRow>, options?: { immediate?: boolean }) => void
   removeRow: (row: LotRow) => void
   onLink: (row: LotRow, parentLotId: string | null) => void
+  onToggleHidden: (row: LotRow, isHidden: boolean) => void
 }) {
   // Lots "principaux" (isLinkable non coché) pouvant servir de parent -
   // jamais la ligne elle-même.
@@ -1724,6 +1751,15 @@ function SortableLotRow({
             ]}
           />
         )}
+      </TableCell>
+      <TableCell>
+        <input
+          type="checkbox"
+          className="size-4 rounded border-input"
+          aria-label="Masquer ce lot dans l'app"
+          checked={row.isHidden}
+          onChange={(e) => onToggleHidden(row, e.target.checked)}
+        />
       </TableCell>
       <TableCell className="text-right">
         <DropdownMenu>

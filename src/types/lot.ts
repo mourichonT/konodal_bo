@@ -86,4 +86,10 @@ export type Lot = {
   // miroir de Lot.tantiemes/toJsonForDb côté app mobile (connectkasa,
   // lib/models/pages_models/lot.dart).
   tantiemes: number
+  // Masqué dans l'app (case « Masqué » de LotsSection, ex. lots d'un bailleur
+  // social à la gestion distincte) : plus proposé à l'inscription ni listé,
+  // toujours compté dans les votes. Si tous les lots d'un bâtiment le sont,
+  // ses déclarations ne remontent plus dans l'app - cf. HiddenLotBuildings
+  // côté app (konodal_app). Absent = visible.
+  isHidden?: boolean
 }

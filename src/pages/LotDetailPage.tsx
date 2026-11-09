@@ -196,6 +196,10 @@ export default function LotDetailPage() {
                 <span className="text-muted-foreground">Rattachable : </span>
                 {lot.isLinkable ? "Oui" : "Non"}
               </div>
+              <div>
+                <span className="text-muted-foreground">Masqué dans l'app : </span>
+                {lot.isHidden ? "Oui" : "Non"}
+              </div>
               {lot.isLinkable && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span>
