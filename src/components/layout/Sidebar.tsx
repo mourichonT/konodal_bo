@@ -53,59 +53,105 @@ type NavItem = {
   children?: { to: string; label: string; end?: boolean }[]
 }
 
-const navItems: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+// Menu par thèmes, chacun annoncé par un petit titre (Dashboard seul en tête,
+// sans titre). Les adresses et sous-menus ne dépendent pas du thème.
+type NavGroup = { title?: string; items: NavItem[] }
+
+const navGroups: NavGroup[] = [
+  { items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard, end: true }] },
   {
-    to: "/sinistres",
-    label: "Sinistres",
-    icon: TriangleAlert,
-    children: [
-      { to: "/sinistres/kanban", label: "Tableau Kanban" },
-      { to: "/sinistres/liste", label: "Liste des sinistres" },
+    title: "Suivi",
+    items: [
+      {
+        to: "/sinistres",
+        label: "Sinistres",
+        icon: TriangleAlert,
+        children: [
+          { to: "/sinistres/kanban", label: "Tableau Kanban" },
+          { to: "/sinistres/liste", label: "Liste des sinistres" },
+        ],
+      },
+      {
+        to: "/evenements",
+        label: "Interventions",
+        icon: Wrench,
+        children: [
+          { to: "/evenements/calendrier", label: "Calendrier" },
+          { to: "/evenements/liste", label: "Liste des interventions" },
+        ],
+      },
     ],
   },
   {
-    to: "/evenements",
-    label: "Interventions",
-    icon: Wrench,
-    children: [
-      { to: "/evenements/calendrier", label: "Calendrier" },
-      { to: "/evenements/liste", label: "Liste des interventions" },
+    title: "Échanges",
+    items: [
+      // Mails des résidents au syndic et filtre de Nodo (MessagesPage).
+      { to: "/messages", label: "Messages", icon: Mail },
+      { to: "/communications", label: "Communication", icon: Newspaper },
     ],
   },
-  { to: "/communications", label: "Communication", icon: Newspaper },
-  // Mails des résidents au syndic et filtre de Nodo (MessagesPage).
-  { to: "/messages", label: "Messages", icon: Mail },
-  { to: "/residences", label: "Résidences", icon: Building2 },
-  { to: "/residents", label: "Utilisateurs", icon: Users },
-  { to: "/agences", label: "Agences", icon: Briefcase },
-  { to: "/contacts", label: "Contacts", icon: BookUser },
-  { to: "/documents", label: "Documents", icon: FileText },
+  {
+    title: "Copropriétés",
+    items: [
+      { to: "/residences", label: "Résidences", icon: Building2 },
+      { to: "/documents", label: "Documents", icon: FileText },
+    ],
+  },
+  {
+    title: "Annuaire",
+    items: [
+      { to: "/residents", label: "Utilisateurs", icon: Users },
+      { to: "/contacts", label: "Contacts", icon: BookUser },
+      { to: "/agences", label: "Agences", icon: Briefcase },
+    ],
+  },
 ]
 
-const superAdminNavItems: NavItem[] = [
-  {
-    to: "/contenus",
-    label: "Contenus",
-    icon: ShieldAlert,
-    children: [
-      { to: "/contenus/posts", label: "Posts" },
-      { to: "/contenus/moderation", label: "Modération" },
-    ],
-  },
-  { to: "/publicites", label: "Publicités", icon: Megaphone, end: true },
-  { to: "/acces", label: "Accès", icon: ShieldCheck },
-  {
-    to: "/nodo/connaissances",
-    label: "Base Nodo",
-    icon: Library,
-    children: [
-      { to: "/nodo/connaissances/sources", label: "Sources" },
-      { to: "/nodo/connaissances/sites", label: "Sites web autorisés" },
-      { to: "/nodo/connaissances/propositions", label: "Propositions" },
-    ],
-  },
-]
+const superAdminNavGroup: NavGroup = {
+  title: "Administration Konodal",
+  items: [
+    {
+      to: "/contenus",
+      label: "Contenus",
+      icon: ShieldAlert,
+      children: [
+        { to: "/contenus/posts", label: "Posts" },
+        { to: "/contenus/moderation", label: "Modération" },
+      ],
+    },
+    { to: "/publicites", label: "Publicités", icon: Megaphone, end: true },
+    {
+      to: "/nodo/connaissances",
+      label: "Base Nodo",
+      icon: Library,
+      children: [
+        { to: "/nodo/connaissances/sources", label: "Sources" },
+        { to: "/nodo/connaissances/sites", label: "Sites web autorisés" },
+        { to: "/nodo/connaissances/propositions", label: "Propositions" },
+      ],
+    },
+    { to: "/acces", label: "Accès", icon: ShieldCheck },
+  ],
+}
+
+// Sous-menus réservés au superAdmin, seul à traiter les demandes
+// (inscriptions konodal.com, retraits, doublons) ou à écrire dans la
+// conversation Konodal (konodalNews) - liens simples pour les autres.
+const superAdminChildren: Record<string, NavItem["children"]> = {
+  "/communications": [
+    { to: "/communications/fil", label: "Fil d'actualité" },
+    { to: "/communications/chat", label: "Chat Konodal" },
+  ],
+  "/residences": [
+    { to: "/residences", label: "Actives", end: true },
+    { to: "/residences/demandes", label: "Demandes" },
+  ],
+  "/residents": [
+    { to: "/residents", label: "Annuaire", end: true },
+    { to: "/residents/retraits", label: "Demandes de retrait" },
+    { to: "/residents/unificateur", label: "Unificateur" },
+  ],
+}
 
 function initialsFor(name?: string | null, email?: string | null): string {
   if (name) {
@@ -216,36 +262,19 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
   // une Agence (la page pointe alors sur sa propre fiche, pas un annuaire -
   // cf. AgencesPage.tsx, OwnAgencyPage) et disparaît entièrement pour un
   // Agent (consultation retirée du menu, cf. demande explicite).
-  const baseNavItems: NavItem[] = isAgent
-    ? navItems.filter((item) => item.to !== "/agences")
-    : isAgence
-      ? navItems.map((item) => (item.to === "/agences" ? { ...item, label: "Agence" } : item))
-      : navItems
-  // Résidences : sous-menu Actives / Demandes (inscriptions konodal.com) et
-  // Utilisateurs : Annuaire / Demandes de retrait / Unificateur, pour le superAdmin, seul
-  // à traiter ces demandes - liens simples pour les autres.
-  const withResidenceChildren: NavItem[] = isSuperAdmin
-    ? baseNavItems.map((item) =>
-        item.to === "/residences"
-          ? {
-              ...item,
-              children: [
-                { to: "/residences", label: "Actives", end: true },
-                { to: "/residences/demandes", label: "Demandes" },
-              ],
-            }
-          : item.to === "/residents"
-            ? {
-                ...item,
-                children: [
-                  { to: "/residents", label: "Annuaire", end: true },
-                  { to: "/residents/retraits", label: "Demandes de retrait" },
-                  { to: "/residents/unificateur", label: "Unificateur" },
-                ],
-              }
-            : item
-      )
-    : baseNavItems
+  // Sous-menus superAdmin (superAdminChildren) ajoutés à Communication,
+  // Résidences et Utilisateurs ; thème Administration Konodal en plus.
+  const adaptItem = (item: NavItem): NavItem[] => {
+    if (item.to === "/agences") {
+      if (isAgent) return []
+      if (isAgence) return [{ ...item, label: "Agence" }]
+    }
+    const children = isSuperAdmin ? superAdminChildren[item.to] : undefined
+    return [children ? { ...item, children } : item]
+  }
+  const groups: NavGroup[] = [...navGroups, ...(isSuperAdmin ? [superAdminNavGroup] : [])]
+    .map((group) => ({ ...group, items: group.items.flatMap(adaptItem) }))
+    .filter((group) => group.items.length > 0)
   // Pastilles d'une section rétractable : sur chaque sous-lien, et leur
   // somme sur le parent quand la section est fermée.
   const childBadgeCount: Record<string, number> = {
@@ -257,8 +286,95 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
     "/nodo/connaissances/propositions": pendingKnowledgeProposalsCount,
   }
   const childReplyCount: Record<string, number> = { "/residents": unreadRepliesCount }
-  const allNavItems: NavItem[] = isSuperAdmin ? [...withResidenceChildren, ...superAdminNavItems] : baseNavItems
-  const [openSections, toggleSection] = useOpenSections(allNavItems)
+  const [openSections, toggleSection] = useOpenSections(groups.flatMap((group) => group.items))
+
+  const renderItem = (item: NavItem) => {
+    if (item.children) {
+      const isParentActive = location.pathname.startsWith(item.to)
+      // Section ajoutée après le premier rendu (sous-menu Résidences, dépendant
+      // du rôle chargé ensuite) : ouverte si son chemin est actif.
+      const isOpen = openSections[item.to] ?? location.pathname.startsWith(item.to)
+      return (
+        <div key={item.to} className="flex flex-col">
+          <div
+            className={cn(
+              "group flex items-center gap-3 rounded-xl py-[11px] pr-3 pl-3.5 text-sm font-semibold",
+              isParentActive ? "bg-white/14 text-white" : "text-white/80 hover:bg-white/8 hover:text-white"
+            )}
+          >
+            <NavLink to={item.to} className="flex flex-1 items-center gap-3">
+              <item.icon className="size-4.5" />
+              {item.label}
+              {!isOpen && (
+                <NavBadges
+                  count={item.children.reduce((sum, child) => sum + (childBadgeCount[child.to] ?? 0), 0)}
+                  replies={item.children.reduce((sum, child) => sum + (childReplyCount[child.to] ?? 0), 0)}
+                />
+              )}
+            </NavLink>
+            <button
+              type="button"
+              aria-label={isOpen ? "Réduire" : "Développer"}
+              onClick={() => toggleSection(item.to)}
+              className="shrink-0 cursor-pointer"
+            >
+              <ChevronDown className={cn("size-4 transition-transform", isOpen && "rotate-180")} />
+            </button>
+          </div>
+          {isOpen && (
+            <div className="flex flex-col gap-1 py-2 pl-8">
+              {item.children.map((child) => (
+                <NavLink
+                  key={child.to}
+                  to={child.to}
+                  end={child.end}
+                  title={child.label}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex min-w-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm",
+                      isActive ? "font-medium text-white" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <span
+                        aria-hidden
+                        className={cn("size-1.5 shrink-0 rounded-full bg-white", isActive ? "opacity-100" : "opacity-0")}
+                      />
+                      <span className="truncate">{child.label}</span>
+                      <NavBadges count={childBadgeCount[child.to]} replies={childReplyCount[child.to]} />
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    const { to, label, icon: Icon, end } = item
+    return (
+      <NavLink
+        key={to}
+        to={to}
+        end={end}
+        className={({ isActive }) =>
+          cn(
+            "flex items-center gap-3 rounded-xl py-[11px] pr-3 pl-3.5 text-sm font-semibold",
+            isActive ? "bg-white/14 text-white" : "text-white/80 hover:bg-white/8 hover:text-white"
+          )
+        }
+      >
+        <Icon className="size-4.5" />
+        {label}
+        {to === "/residents" && <NavBadges count={pendingUsersCount} />}
+        {to === "/messages" && <NavBadges count={unreadMessagesCount} />}
+        {to === "/contacts" && <NavBadges count={pendingContactsCount} />}
+      </NavLink>
+    )
+  }
 
   return (
     <aside
@@ -292,101 +408,17 @@ export function Sidebar({ pageRef }: { pageRef?: RefObject<HTMLElement | null> }
           <EnvBadge />
         </div>
 
-        <nav className="relative mt-[34px] flex flex-1 flex-col gap-0.5 px-3 py-1">
-          {allNavItems.map((item) => {
-            if (item.children) {
-              const isParentActive = location.pathname.startsWith(item.to)
-              // Section ajoutée après le premier rendu (sous-menu Résidences, dépendant
-              // du rôle chargé ensuite) : ouverte si son chemin est actif.
-              const isOpen = openSections[item.to] ?? location.pathname.startsWith(item.to)
-              return (
-                <div key={item.to} className="flex flex-col">
-                  <div
-                    className={cn(
-                      "group flex items-center gap-3 rounded-xl py-[11px] pr-3 pl-3.5 text-sm font-semibold",
-                      isParentActive
-                        ? "bg-white/14 text-white"
-                        : "text-white/80 hover:bg-white/8 hover:text-white"
-                    )}
-                  >
-                    <NavLink to={item.to} className="flex flex-1 items-center gap-3">
-                      <item.icon className="size-4.5" />
-                      {item.label}
-                      {!isOpen && (
-                        <NavBadges
-                          count={item.children.reduce((sum, child) => sum + (childBadgeCount[child.to] ?? 0), 0)}
-                          replies={item.children.reduce((sum, child) => sum + (childReplyCount[child.to] ?? 0), 0)}
-                        />
-                      )}
-                    </NavLink>
-                    <button
-                      type="button"
-                      aria-label={isOpen ? "Réduire" : "Développer"}
-                      onClick={() => toggleSection(item.to)}
-                      className="shrink-0 cursor-pointer"
-                    >
-                      <ChevronDown className={cn("size-4 transition-transform", isOpen && "rotate-180")} />
-                    </button>
-                  </div>
-                  {isOpen && (
-                    <div className="flex flex-col gap-1 py-2 pl-8">
-                      {item.children.map((child) => (
-                        <NavLink
-                          key={child.to}
-                          to={child.to}
-                          end={child.end}
-                          title={child.label}
-                          className={({ isActive }) =>
-                            cn(
-                              "flex min-w-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm",
-                              isActive
-                                ? "font-medium text-white"
-                                : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
-                            )
-                          }
-                        >
-                          {({ isActive }) => (
-                            <>
-                              <span
-                                aria-hidden
-                                className={cn(
-                                  "size-1.5 shrink-0 rounded-full bg-white",
-                                  isActive ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              <span className="truncate">{child.label}</span>
-                              <NavBadges count={childBadgeCount[child.to]} replies={childReplyCount[child.to]} />
-                            </>
-                          )}
-                        </NavLink>
-                      ))}
-                    </div>
-                  )}
+        <nav className="relative mt-[34px] flex flex-1 flex-col gap-3 px-3 py-1">
+          {groups.map((group) => (
+            <div key={group.title ?? "accueil"} className="flex flex-col gap-0.5">
+              {group.title && (
+                <div className="px-3.5 pb-1 text-[10.5px] font-bold tracking-[0.1em] text-white/45 uppercase">
+                  {group.title}
                 </div>
-              )
-            }
-
-            const { to, label, icon: Icon, end } = item
-            return (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 rounded-xl py-[11px] pr-3 pl-3.5 text-sm font-semibold",
-                    isActive ? "bg-white/14 text-white" : "text-white/80 hover:bg-white/8 hover:text-white"
-                  )
-                }
-              >
-                <Icon className="size-4.5" />
-                {label}
-                {to === "/residents" && <NavBadges count={pendingUsersCount} />}
-                {to === "/messages" && <NavBadges count={unreadMessagesCount} />}
-                {to === "/contacts" && <NavBadges count={pendingContactsCount} />}
-              </NavLink>
-            )
-          })}
+              )}
+              {group.items.map(renderItem)}
+            </div>
+          ))}
         </nav>
 
         <div className="relative m-3.5 rounded-[14px] bg-white/8">

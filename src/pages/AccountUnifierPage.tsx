@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { BadgeCheck, CheckCircle2, Eye, GitMerge, RefreshCw, UserX, Users } from "lucide-react"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
-import { UsersSectionToggle } from "@/components/UsersSectionToggle"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -172,11 +171,7 @@ export default function AccountUnifierPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[30px] font-extrabold tracking-tight text-[oklch(20%_0.02_150)]">Utilisateurs</h1>
-        <UsersSectionToggle current="unificateur" />
-      </div>
-
+      {/* Titre et bascule : en-tête commun de UsersLayout. */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg">Unificateur de comptes</h2>

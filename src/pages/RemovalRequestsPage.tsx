@@ -3,7 +3,6 @@ import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import { Ban, Clock, Inbox, XCircle } from "lucide-react"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
-import { UsersSectionToggle } from "@/components/UsersSectionToggle"
 import { DocumentThumbnail } from "@/components/DocumentThumbnail"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -88,10 +87,8 @@ export default function RemovalRequestsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-[30px] font-extrabold tracking-tight text-[oklch(20%_0.02_150)]">Demandes de retrait</h1>
-        <UsersSectionToggle current="retraits" />
-      </div>
+      {/* Titre et bascule : en-tête commun de UsersLayout. */}
+      <h2 className="text-lg">Demandes de retrait</h2>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <FilterKpiCard

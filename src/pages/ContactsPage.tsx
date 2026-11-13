@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ContactFormDialog } from "@/components/ContactFormDialog"
+import { PageHeader } from "@/components/PageHeader"
 import { EmergencyContactFormDialog } from "@/components/EmergencyContactFormDialog"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { useAllContacts } from "@/hooks/useAllContacts"
@@ -164,13 +165,15 @@ export default function ContactsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Contacts</h1>
-        <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
-          <Plus />
-          Ajouter un contact
-        </Button>
-      </div>
+      <PageHeader
+        title="Contacts"
+        actions={
+          <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
+            <Plus />
+            Ajouter un contact
+          </Button>
+        }
+      />
 
       {duplicatePairs.length > 0 && (
         <Card>

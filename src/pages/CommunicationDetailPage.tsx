@@ -64,11 +64,11 @@ export default function CommunicationDetailPage() {
     <div className="-mt-[20px] flex flex-col gap-8">
       <div className="flex flex-col gap-3">
         <Link
-          to="/communications"
+          to="/communications/fil"
           className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
-          Communication
+          Fil d'actualité
         </Link>
         <h1 className="text-2xl font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
           {communication ? communication.title || "Sans titre" : loading ? "…" : "Communication introuvable"}
@@ -119,6 +119,20 @@ export default function CommunicationDetailPage() {
                     {communication.description || "Aucune description."}
                   </span>
                 </div>
+                {/* Photo jointe (isPhoto), ou capture du texte mis en forme
+                    dans l'app (fond coloré ou image). */}
+                {communication.pathImage && !communication.isVideo && (
+                  <div className="flex flex-col gap-1 border-t pt-3">
+                    <span className="text-muted-foreground">{communication.isPhoto ? "Photo :" : "Visuel :"}</span>
+                    <a href={communication.pathImage} target="_blank" rel="noreferrer" title="Ouvrir en grand">
+                      <img
+                        src={communication.pathImage}
+                        alt=""
+                        className="max-h-80 w-full rounded-[12px] bg-[oklch(97%_0.003_100)] object-contain"
+                      />
+                    </a>
+                  </div>
+                )}
                 {communication.link && (
                   <div className="flex flex-col gap-1 border-t pt-3">
                     <span className="text-muted-foreground">Lien :</span>

@@ -15,6 +15,10 @@ export type Communication = {
   description: string
   pathImage: string
   isVideo: boolean
+  // pathImage est une vraie photo, affichée avec le texte (cf. Post.isPhoto
+  // côté app). Sinon, pathImage est la capture du texte mis en forme dans
+  // l'app (fond coloré ou image), qui contient déjà le texte.
+  isPhoto: boolean
   creationDate: Date | null
   user: string
   audience: CommunicationAudience

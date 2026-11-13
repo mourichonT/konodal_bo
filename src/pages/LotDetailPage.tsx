@@ -14,6 +14,7 @@ import { subscribeToResidence } from "@/lib/residences"
 import { subscribeToLot, grantLotRole, revokeLotRole, type LotRole } from "@/lib/lots"
 import { DetachLotDialog } from "@/components/DetachLotDialog"
 import { RestrictedAccessBadge } from "@/components/RestrictedAccessBadge"
+import { NodoLotCreditsCard } from "@/components/nodo/NodoCreditsCard"
 import { createLotDocument } from "@/lib/lotDocuments"
 import { getUserLotAttribution, resolveUsersByUids, subscribeToUsers } from "@/lib/users"
 import type { Residence } from "@/types/residence"
@@ -240,6 +241,8 @@ export default function LotDetailPage() {
               destinationLabel="Type de bail"
               users={tenants}
             />
+            {/* Usage de Nodo par les occupants : superAdmin seul. */}
+            {isSuperAdmin && <NodoLotCreditsCard residenceId={residenceId} lotId={lotId} />}
           </div>
         </div>
       )}

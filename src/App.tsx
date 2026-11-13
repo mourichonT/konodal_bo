@@ -6,13 +6,10 @@ import LoginPage from "@/pages/LoginPage"
 import RegisterPage from "@/pages/RegisterPage"
 import ResetPasswordPage from "@/pages/ResetPasswordPage"
 import DashboardPage from "@/pages/DashboardPage"
-import ResidencesPage from "@/pages/ResidencesPage"
 import ResidenceDetailPage from "@/pages/ResidenceDetailPage"
 import LotDetailPage from "@/pages/LotDetailPage"
 import VoteDetailPage from "@/pages/VoteDetailPage"
-import ResidentsPage from "@/pages/ResidentsPage"
-import RemovalRequestsPage from "@/pages/RemovalRequestsPage"
-import AccountUnifierPage from "@/pages/AccountUnifierPage"
+import UsersLayout from "@/pages/UsersLayout"
 import ResidentDetailPage from "@/pages/ResidentDetailPage"
 import SinistresPage from "@/pages/SinistresPage"
 import SinistresKanbanPage from "@/pages/SinistresKanbanPage"
@@ -36,11 +33,9 @@ import PublicitesPage from "@/pages/PublicitesPage"
 import AccesPage from "@/pages/AccesPage"
 import NodoKnowledgePage from "@/pages/NodoKnowledgePage"
 import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
-import ResidenceRequestsPage from "@/pages/ResidenceRequestsPage"
 import ResidencesLayout from "@/pages/ResidencesLayout"
 import ResidenceRequestDetailPage from "@/pages/ResidenceRequestDetailPage"
-import ContentPostsPage from "@/pages/ContentPostsPage"
-import ModerationPage from "@/pages/ModerationPage"
+import ContentsLayout from "@/pages/ContentsLayout"
 
 // Ancienne page Facturation : devenue l'onglet Abonnement de la page Agence.
 // Les retours Stripe (Checkout, portail) arrivent encore ici, avec ?checkout=.
@@ -79,18 +74,18 @@ function App() {
           <Route path="calendrier" element={<EvenementsCalendarPage />} />
         </Route>
         <Route path="evenements/:residenceId/:postId" element={<EvenementDetailPage />} />
-        <Route path="communications" element={<CommunicationsPage />} />
+        {/* Communication : fil d'actualité (posts) et messages par le chat. */}
+        <Route path="communications" element={<Navigate to="/communications/fil" replace />} />
+        {/* Une seule page pour fil et chat (comme nodo/connaissances/:vue) :
+            l'en-tête reste en place à la bascule. Chat réservé au superAdmin
+            (contrôlé dans la page). */}
+        <Route path="communications/:vue" element={<CommunicationsPage />} />
         <Route path="communications/:residenceId/:postId" element={<CommunicationDetailPage />} />
+        {/* Vues affichées par ResidencesLayout (KeepAliveViews) ; Demandes
+            réservée au superAdmin (contrôlé dans le layout). */}
         <Route path="residences" element={<ResidencesLayout />}>
-          <Route index element={<ResidencesPage />} />
-          <Route
-            path="demandes"
-            element={
-              <RequireSuperAdmin>
-                <ResidenceRequestsPage />
-              </RequireSuperAdmin>
-            }
-          />
+          <Route index element={null} />
+          <Route path="demandes" element={null} />
         </Route>
         <Route
           path="residences/demandes/:id"
@@ -103,41 +98,28 @@ function App() {
         <Route path="residences/:id" element={<ResidenceDetailPage />} />
         <Route path="residences/:id/lots/:lotId" element={<LotDetailPage />} />
         <Route path="residences/:id/votes/:voteId" element={<VoteDetailPage />} />
-        <Route path="residents" element={<ResidentsPage />} />
-        <Route
-          path="residents/retraits"
-          element={
-            <RequireSuperAdmin>
-              <RemovalRequestsPage />
-            </RequireSuperAdmin>
-          }
-        />
-        <Route
-          path="residents/unificateur"
-          element={
-            <RequireSuperAdmin>
-              <AccountUnifierPage />
-            </RequireSuperAdmin>
-          }
-        />
+        {/* Sections à onglets : la page parente garde l'en-tête et affiche
+            elle-même la vue (KeepAliveViews) ; les sous-routes ne servent
+            qu'à reconnaître l'adresse. Retraits et Unificateur réservés au
+            superAdmin (contrôlé dans UsersLayout). */}
+        <Route path="residents" element={<UsersLayout />}>
+          <Route index element={null} />
+          <Route path="retraits" element={null} />
+          <Route path="unificateur" element={null} />
+        </Route>
         <Route path="residents/:uid" element={<ResidentDetailPage />} />
-        <Route path="contenus" element={<Navigate to="/contenus/posts" replace />} />
         <Route
-          path="contenus/posts"
+          path="contenus"
           element={
             <RequireSuperAdmin>
-              <ContentPostsPage />
+              <ContentsLayout />
             </RequireSuperAdmin>
           }
-        />
-        <Route
-          path="contenus/moderation"
-          element={
-            <RequireSuperAdmin>
-              <ModerationPage />
-            </RequireSuperAdmin>
-          }
-        />
+        >
+          <Route index element={null} />
+          <Route path="posts" element={null} />
+          <Route path="moderation" element={null} />
+        </Route>
         <Route path="agences" element={<AgencesPage />} />
         <Route
           path="agences/:id"

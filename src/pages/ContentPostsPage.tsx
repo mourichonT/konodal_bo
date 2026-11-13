@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { EyeOff, Heart, ImageIcon, Search } from "lucide-react"
 import { ClearFiltersButton } from "@/components/ClearFiltersButton"
-import { ContentsSectionToggle } from "@/components/ContentsSectionToggle"
 import { ContentPostDialog, type ContentPostRef } from "@/components/contents/ContentPostDialog"
 import { MultiSelectFilter } from "@/components/MultiSelectFilter"
 import { Badge } from "@/components/ui/badge"
@@ -75,11 +74,7 @@ export default function ContentPostsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[30px] font-extrabold tracking-tight text-[oklch(20%_0.02_150)]">Contenus</h1>
-        <ContentsSectionToggle current="posts" />
-      </div>
-
+      {/* Titre et bascule : en-tête commun de ContentsLayout. */}
       <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
         <div className="px-7 pt-[26px] pb-5">
           <h2 className="mb-1 text-[17px] font-bold text-[oklch(22%_0.01_150)]">Toutes les publications</h2>

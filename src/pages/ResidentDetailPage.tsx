@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { db } from "@/firebase"
 import { CertificationRequestCard } from "@/components/CertificationRequestCard"
+import { NodoUserCreditsCard } from "@/components/nodo/NodoCreditsCard"
 import { DocumentThumbnail } from "@/components/DocumentThumbnail"
 import { UserEmailsCard } from "@/components/UserEmailsCard"
 import { DetachLotDialog } from "@/components/DetachLotDialog"
@@ -435,7 +436,12 @@ export default function ResidentDetailPage() {
             )}
           </div>
 
-          <div className={cn("grid items-start gap-5", openTodo.length > 0 && "lg:grid-cols-[minmax(0,1fr)_320px]")}>
+          <div
+            className={cn(
+              "grid items-start gap-5",
+              (openTodo.length > 0 || isSuperAdmin) && "lg:grid-cols-[minmax(0,1fr)_320px]"
+            )}
+          >
             <div className="flex min-w-0 flex-col gap-4">
               <div
                 role="tablist"
@@ -568,31 +574,43 @@ export default function ResidentDetailPage() {
               </div>
             </div>
 
-            {openTodo.length > 0 && (
-              <div className="order-first rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-[22px] shadow-[0_14px_34px_-24px_oklch(20%_0_0/0.12)] lg:sticky lg:top-6 lg:order-none">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[15px] font-extrabold text-[oklch(22%_0.01_150)]">À traiter</h3>
-                  <span className="rounded-full bg-[oklch(94%_0.06_75)] px-2.5 py-[3px] text-[11.5px] font-extrabold text-[oklch(45%_0.12_65)]">
-                    {openTodo.length} / {todo.length}
-                  </span>
-                </div>
-                <div className="mt-3.5 flex flex-col gap-1">
-                  {openTodo.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => setTab(item.tab)}
-                      className="flex items-center gap-3 rounded-[14px] px-2.5 py-[11px] text-left hover:bg-[oklch(97%_0.006_100)]"
-                    >
-                      <span className="size-[22px] shrink-0 rounded-full border-2 border-[oklch(80%_0.06_75)]" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[13.5px] font-bold text-[oklch(26%_0.01_150)]">{item.title}</span>
-                        <span className="mt-px block text-xs text-[oklch(54%_0.01_150)]">{item.hint}</span>
+            {/* Colonne de droite : « À traiter », puis les crédits Nodo de la
+                personne (superAdmin seul). */}
+            {(openTodo.length > 0 || isSuperAdmin) && (
+              <div
+                className={cn(
+                  "flex flex-col gap-5 lg:sticky lg:top-6",
+                  openTodo.length > 0 && "order-first lg:order-none"
+                )}
+              >
+                {openTodo.length > 0 && (
+                  <div className="rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white p-[22px] shadow-[0_14px_34px_-24px_oklch(20%_0_0/0.12)]">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[15px] font-extrabold text-[oklch(22%_0.01_150)]">À traiter</h3>
+                      <span className="rounded-full bg-[oklch(94%_0.06_75)] px-2.5 py-[3px] text-[11.5px] font-extrabold text-[oklch(45%_0.12_65)]">
+                        {openTodo.length} / {todo.length}
                       </span>
-                      <ChevronRight className="size-3.5 shrink-0 text-[oklch(65%_0.01_150)]" />
-                    </button>
-                  ))}
-                </div>
+                    </div>
+                    <div className="mt-3.5 flex flex-col gap-1">
+                      {openTodo.map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => setTab(item.tab)}
+                          className="flex items-center gap-3 rounded-[14px] px-2.5 py-[11px] text-left hover:bg-[oklch(97%_0.006_100)]"
+                        >
+                          <span className="size-[22px] shrink-0 rounded-full border-2 border-[oklch(80%_0.06_75)]" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[13.5px] font-bold text-[oklch(26%_0.01_150)]">{item.title}</span>
+                            <span className="mt-px block text-xs text-[oklch(54%_0.01_150)]">{item.hint}</span>
+                          </span>
+                          <ChevronRight className="size-3.5 shrink-0 text-[oklch(65%_0.01_150)]" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {isSuperAdmin && <NodoUserCreditsCard uid={user.uid} />}
               </div>
             )}
           </div>

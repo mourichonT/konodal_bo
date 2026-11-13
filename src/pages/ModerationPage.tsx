@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import { CheckCircle2, Eye, EyeOff, ShieldAlert, Trash2, Undo2 } from "lucide-react"
-import { ContentsSectionToggle } from "@/components/ContentsSectionToggle"
 import { ContentPostDialog, type ContentPostRef } from "@/components/contents/ContentPostDialog"
 import { DeleteContentDialog } from "@/components/contents/DeleteContentDialog"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
@@ -96,11 +95,7 @@ export default function ModerationPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[30px] font-extrabold tracking-tight text-[oklch(20%_0.02_150)]">Contenus</h1>
-        <ContentsSectionToggle current="moderation" />
-      </div>
-
+      {/* Titre et bascule : en-tête commun de ContentsLayout. */}
       <div className="flex flex-col gap-1">
         <h2 className="text-lg">Modération</h2>
         <p className="max-w-[720px] text-sm text-muted-foreground">

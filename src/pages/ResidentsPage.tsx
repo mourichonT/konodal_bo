@@ -29,7 +29,6 @@ import { useTableSort } from "@/hooks/useTableSort"
 import { DateInput } from "@/components/DateInput"
 import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import { subscribeToUsersInScope } from "@/lib/users"
-import { UsersSectionToggle } from "@/components/UsersSectionToggle"
 import { useScopedResidenceIds } from "@/hooks/useScopedResidenceIds"
 import { useAccountRole } from "@/hooks/useAccountRole"
 import { useAllLots } from "@/hooks/useAllLots"
@@ -245,10 +244,7 @@ export default function ResidentsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[30px] font-extrabold tracking-tight text-[oklch(20%_0.02_150)]">Utilisateurs</h1>
-        {isSuperAdmin && <UsersSectionToggle current="annuaire" />}
-      </div>
+      {/* Titre et bascule : en-tête commun de UsersLayout. */}
 
       {/* Cliquer sur une carte pilote le même état que le filtre "Statut"
           ci-dessous (deux affordances pour le même filtre). Certification à

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from "react"
-import { Save } from "lucide-react"
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+import { CalendarClock, ImagePlus, Save, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -7,8 +7,14 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { DescriptionTextarea } from "@/components/DescriptionTextarea"
-import type { CommunicationInput } from "@/lib/communications"
+import {
+  COMMUNICATION_PHOTO_MAX_BYTES,
+  COMMUNICATION_PHOTO_TYPES,
+  type CommunicationInput,
+} from "@/lib/communications"
 import { fetchLinkPreview } from "@/lib/linkPreview"
+import { PublishAtFields } from "@/components/PublishAtFields"
+import { formatPublishAt, nextFullHour, publishAtError, toDateField, toPublishAt, toTimeField } from "@/lib/publishAt"
 import {
   COMMUNICATION_AUDIENCES,
   communicationAudienceLabels,
@@ -23,8 +29,9 @@ type CommunicationFormDialogProps = {
   residences: ResidenceOption[]
   // Une résidence choisie -> un post créé dans cette résidence (pas de post
   // partagé entre résidences côté connectkasa) - appelé une fois par
-  // résidence sélectionnée.
-  onSubmit: (residenceId: string, input: CommunicationInput) => Promise<void>
+  // résidence sélectionnée. publishAt : publication programmée (null =
+  // maintenant).
+  onSubmit: (residenceId: string, input: CommunicationInput, publishAt: Date | null) => Promise<void>
 }
 
 // Même patron que EventFormDialog : le contenu (et son état) n'est monté que
@@ -52,7 +59,7 @@ function CommunicationFormDialogContent({
   onDone,
 }: {
   residences: ResidenceOption[]
-  onSubmit: (residenceId: string, input: CommunicationInput) => Promise<void>
+  onSubmit: (residenceId: string, input: CommunicationInput, publishAt: Date | null) => Promise<void>
   onDone: () => void
 }) {
   const [selectedResidenceIds, setSelectedResidenceIds] = useState<Set<string>>(new Set())
@@ -60,7 +67,34 @@ function CommunicationFormDialogContent({
   const [description, setDescription] = useState("")
   const [link, setLink] = useState("")
   const [audience, setAudience] = useState<CommunicationAudience>("all")
+  const [photo, setPhoto] = useState<File | null>(null)
+  // Publication programmée : date et heure locales, prochaine heure pleine
+  // par défaut.
+  const [scheduled, setScheduled] = useState(false)
+  const [publishDate, setPublishDate] = useState(() => toDateField(nextFullHour()))
+  const [publishTime, setPublishTime] = useState(() => toTimeField(nextFullHour()))
   const [submitting, setSubmitting] = useState(false)
+
+  const photoPreview = useMemo(() => (photo ? URL.createObjectURL(photo) : null), [photo])
+  useEffect(
+    () => () => {
+      if (photoPreview) URL.revokeObjectURL(photoPreview)
+    },
+    [photoPreview]
+  )
+
+  function handlePhotoSelected(file: File | undefined) {
+    if (!file) return
+    if (!COMMUNICATION_PHOTO_TYPES.includes(file.type)) {
+      toast.error("Format non pris en charge : JPG, PNG, WebP ou GIF")
+      return
+    }
+    if (file.size > COMMUNICATION_PHOTO_MAX_BYTES) {
+      toast.error("Photo trop lourde : 10 Mo maximum")
+      return
+    }
+    setPhoto(file)
+  }
 
   function toggleResidence(id: string) {
     setSelectedResidenceIds((prev) => {
@@ -96,6 +130,12 @@ function CommunicationFormDialogContent({
       toast.error("Choisissez au moins une résidence")
       return
     }
+    const publishAt = scheduled ? toPublishAt(publishDate, publishTime) : null
+    const scheduleError = scheduled ? publishAtError(publishAt) : null
+    if (scheduleError) {
+      toast.error(scheduleError)
+      return
+    }
     setSubmitting(true)
     try {
       // Résolu une seule fois pour toute la soumission (partagé par toutes
@@ -111,9 +151,10 @@ function CommunicationFormDialogContent({
         audience,
         groupId: crypto.randomUUID(),
         link: linkPreview,
+        photo: photo ?? undefined,
       }
-      await Promise.all([...selectedResidenceIds].map((residenceId) => onSubmit(residenceId, input)))
-      toast.success("Communication publiée")
+      await Promise.all([...selectedResidenceIds].map((residenceId) => onSubmit(residenceId, input, publishAt)))
+      toast.success(publishAt ? `Communication programmée le ${formatPublishAt(publishAt)}` : "Communication publiée")
       onDone()
     } catch (err) {
       toast.error("Échec de l'enregistrement : " + (err as Error).message)
@@ -160,6 +201,52 @@ function CommunicationFormDialogContent({
               onChange={(e) => setLink(e.target.value)}
             />
           </div>
+          {/* Une photo, comme dans l'app (affichée sous le texte). Pas de
+              vidéo : l'app n'en affiche pas dans une communication. */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="communication-photo">Photo (optionnel)</Label>
+            {photo && photoPreview ? (
+              <div className="flex items-center gap-3 rounded-[14px] border border-[oklch(93%_0.005_100)] p-3">
+                <img src={photoPreview} alt="" className="size-16 shrink-0 rounded-[10px] object-cover" />
+                <span className="min-w-0 flex-1 truncate text-sm">{photo.name}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled={submitting}
+                  onClick={() => setPhoto(null)}
+                  aria-label="Retirer la photo"
+                  title="Retirer la photo"
+                >
+                  <X />
+                </Button>
+              </div>
+            ) : (
+              <label
+                htmlFor="communication-photo"
+                className="flex cursor-pointer items-center gap-3 rounded-[14px] border-[1.5px] border-dashed border-input p-4 text-muted-foreground hover:border-primary/50 hover:bg-[oklch(98%_0.003_100)]"
+              >
+                <div className="flex size-[44px] shrink-0 items-center justify-center rounded-[12px] bg-[oklch(93%_0.05_150)]">
+                  <ImagePlus className="size-5 text-[oklch(38%_0.09_155)]" />
+                </div>
+                <div className="text-[12.5px] font-semibold">
+                  Ajouter une photo
+                  <br />
+                  <span className="font-medium text-muted-foreground">JPG, PNG, WebP ou GIF, 10 Mo max</span>
+                </div>
+              </label>
+            )}
+            <input
+              id="communication-photo"
+              type="file"
+              accept={COMMUNICATION_PHOTO_TYPES.join(",")}
+              className="hidden"
+              onChange={(e) => {
+                handlePhotoSelected(e.target.files?.[0])
+                e.target.value = ""
+              }}
+            />
+          </div>
           <div className="flex flex-col gap-2">
             <Label>Destinataires</Label>
             <div className="flex flex-col gap-2">
@@ -176,6 +263,47 @@ function CommunicationFormDialogContent({
                   {communicationAudienceLabels[value]}
                 </label>
               ))}
+            </div>
+          </div>
+          {/* Programmée : publiée par le serveur à l'heure choisie (cf.
+              scheduleCommunication), notification des résidents comprise. */}
+          <div className="flex flex-col gap-2">
+            <Label>Publication</Label>
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="communication-publication"
+                  checked={!scheduled}
+                  onChange={() => setScheduled(false)}
+                  className="size-4 border-input accent-primary"
+                />
+                Maintenant
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="communication-publication"
+                  checked={scheduled}
+                  onChange={() => setScheduled(true)}
+                  className="size-4 border-input accent-primary"
+                />
+                Programmer
+              </label>
+              {scheduled && (
+                <div className="flex flex-col gap-1.5 pl-6">
+                  <PublishAtFields
+                    date={publishDate}
+                    time={publishTime}
+                    onDateChange={setPublishDate}
+                    onTimeChange={setPublishTime}
+                    disabled={submitting}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Rien n'est visible dans l'app avant cette heure ; les résidents sont notifiés à la publication.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -220,8 +348,8 @@ function CommunicationFormDialogContent({
           Annuler
         </Button>
         <Button type="submit" disabled={submitting} className={PRIMARY_CTA_CLASS}>
-          <Save />
-          Publier
+          {scheduled ? <CalendarClock /> : <Save />}
+          {scheduled ? (submitting ? "Programmation…" : "Programmer") : submitting ? "Publication…" : "Publier"}
         </Button>
       </DialogFooter>
     </form>

@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Link } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { Link, Navigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 import { ChevronDown, ChevronRight, Eye, MessageCircle, Plus, Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { CommunicationFormDialog } from "@/components/CommunicationFormDialog"
+import { CommunicationTabs } from "@/components/CommunicationTabs"
+import { PageHeader } from "@/components/PageHeader"
 import { SearchableSelect } from "@/components/SearchableSelect"
 import { DateInput } from "@/components/DateInput"
 import { ClearFiltersButton } from "@/components/ClearFiltersButton"
@@ -25,7 +27,16 @@ import { useTableSort } from "@/hooks/useTableSort"
 import { SortableTableHead } from "@/components/SortableTableHead"
 import { useUniqueViewCount } from "@/hooks/useUniqueViewCount"
 import { useAuth } from "@/lib/auth-context"
-import { createCommunication } from "@/lib/communications"
+import { createCommunication, scheduleCommunication } from "@/lib/communications"
+import {
+  useScheduledCommunications,
+  type ScheduledCommunicationWithResidence,
+} from "@/hooks/useScheduledCommunications"
+import { ScheduledCommunicationsCard } from "@/components/ScheduledCommunicationsCard"
+import { KonodalNewsView } from "@/components/KonodalNewsView"
+import { KonodalNewsFormDialog } from "@/components/KonodalNewsFormDialog"
+import { subscribeToKonodalNews, type KonodalNews } from "@/lib/konodalNews"
+import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 import type { CommunicationAudience } from "@/types/communication"
 
@@ -65,14 +76,119 @@ function groupCommunications(list: CommunicationWithResidence[]): CommunicationG
     .sort((a, b) => (b.creationDate?.getTime() ?? 0) - (a.creationDate?.getTime() ?? 0))
 }
 
+type CommunicationView = "fil" | "chat"
+
+// Communication : fil d'actualité (posts, agences et agents dans leurs
+// résidences) et Chat Konodal (konodalNews, superAdmin seul). Une seule page
+// pour les deux vues (/communications/:vue), comme la Base de connaissances
+// Nodo : l'en-tête reste en place à la bascule, et les deux vues restent
+// montées avec leurs données (rien n'est rechargé ni reconstruit).
 export default function CommunicationsPage() {
+  const { vue } = useParams()
   const { user } = useAuth()
+  const { isSuperAdmin, loading: roleLoading } = useIsSuperAdmin()
+  const view: CommunicationView = vue === "chat" ? "chat" : "fil"
   const { communications, residences, loading } = useAllCommunications((message) => toast.error(message))
+  const scheduledCommunications = useScheduledCommunications()
+  const [communicating, setCommunicating] = useState(false)
+
+  // Chat Konodal : superAdmin seulement (règle Firestore : liste complète,
+  // brouillons compris, réservée au superAdmin).
+  const [news, setNews] = useState<KonodalNews[]>([])
+  const [newsLoading, setNewsLoading] = useState(true)
+  const [newsError, setNewsError] = useState<string | null>(null)
+  const [newsForm, setNewsForm] = useState<{ open: boolean; news: KonodalNews | null }>({ open: false, news: null })
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    return subscribeToKonodalNews(
+      (list) => {
+        setNews(list)
+        setNewsError(null)
+        setNewsLoading(false)
+      },
+      (err) => {
+        setNewsError(err.message)
+        setNewsLoading(false)
+      }
+    )
+  }, [isSuperAdmin])
+
+  if (vue !== "fil" && vue !== "chat") return <Navigate to="/communications/fil" replace />
+  if (view === "chat" && !roleLoading && !isSuperAdmin) return <Navigate to="/communications/fil" replace />
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Communication"
+        toggle={<CommunicationTabs />}
+        actions={
+          view === "chat" ? (
+            isSuperAdmin && (
+              <Button onClick={() => setNewsForm({ open: true, news: null })} className={PRIMARY_CTA_CLASS}>
+                <Plus />
+                Nouveau message
+              </Button>
+            )
+          ) : (
+            <Button onClick={() => setCommunicating(true)} className={PRIMARY_CTA_CLASS}>
+              <Plus />
+              Communiquer
+            </Button>
+          )
+        }
+      />
+
+      <div className={cn(view !== "fil" && "hidden")}>
+        <FeedView communications={communications} loading={loading} scheduledCommunications={scheduledCommunications} />
+      </div>
+      {isSuperAdmin && (
+        <div className={cn(view !== "chat" && "hidden")}>
+          <KonodalNewsView
+            news={news}
+            loading={newsLoading}
+            error={newsError}
+            onEdit={(item) => setNewsForm({ open: true, news: item })}
+          />
+        </div>
+      )}
+
+      <CommunicationFormDialog
+        open={communicating}
+        onOpenChange={setCommunicating}
+        residences={residences}
+        onSubmit={async (residenceId, input, publishAt) => {
+          if (!user) return
+          if (publishAt) {
+            await scheduleCommunication(residenceId, user.uid, input, publishAt)
+          } else {
+            await createCommunication(residenceId, user.uid, input)
+          }
+        }}
+      />
+      {isSuperAdmin && (
+        <KonodalNewsFormDialog
+          open={newsForm.open}
+          news={newsForm.news}
+          onOpenChange={(open) => setNewsForm((prev) => ({ ...prev, open }))}
+        />
+      )}
+    </div>
+  )
+}
+
+function FeedView({
+  communications,
+  loading,
+  scheduledCommunications,
+}: {
+  communications: CommunicationWithResidence[]
+  loading: boolean
+  scheduledCommunications: ScheduledCommunicationWithResidence[]
+}) {
   const [search, setSearch] = useState("")
   const [residenceFilter, setResidenceFilter] = useState("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
-  const [communicating, setCommunicating] = useState(false)
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set())
 
   const normalizedSearch = search.trim().toLowerCase()
@@ -114,14 +230,6 @@ export default function CommunicationsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Communication</h1>
-        <Button onClick={() => setCommunicating(true)} className={PRIMARY_CTA_CLASS}>
-          <Plus />
-          Communiquer
-        </Button>
-      </div>
-
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3">
           <div className="relative max-w-sm flex-1">
@@ -165,6 +273,8 @@ export default function CommunicationsPage() {
         </CardContent>
       </Card>
 
+      <ScheduledCommunicationsCard items={scheduledCommunications} />
+
       <div className="overflow-hidden rounded-[24px] border border-[oklch(93%_0.005_100)] bg-white shadow-[0_1px_2px_oklch(20%_0_0/0.03),0_14px_34px_-22px_oklch(20%_0_0/0.12)]">
         <Table>
           <TableHeader className="bg-muted/40">
@@ -204,16 +314,6 @@ export default function CommunicationsPage() {
           </TableBody>
         </Table>
       </div>
-
-      <CommunicationFormDialog
-        open={communicating}
-        onOpenChange={setCommunicating}
-        residences={residences}
-        onSubmit={async (residenceId, input) => {
-          if (!user) return
-          await createCommunication(residenceId, user.uid, input)
-        }}
-      />
     </div>
   )
 }
@@ -317,6 +417,7 @@ function CommunicationRow({
         <Button
           variant="outline"
           size="sm"
+          nativeButton={false}
           render={<Link to={`/communications/${communication.residenceId}/${communication.id}`} />}
         >
           Gérer

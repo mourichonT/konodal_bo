@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/table"
 import { AdCampaignFormDialog } from "@/components/AdCampaignFormDialog"
 import { AdCampaignConfigDialog } from "@/components/AdCampaignConfigDialog"
+import { PageHeader } from "@/components/PageHeader"
 import { subscribeToResidences } from "@/lib/residences"
 import { departmentCodeFromZip } from "@/lib/departments"
 import {
@@ -146,19 +147,21 @@ export default function PublicitesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">Publicités</h1>
-        <div className="flex gap-2.5">
-          <Button variant="outline" onClick={() => setConfiguring(true)}>
-            <Settings />
-            Réglage global
-          </Button>
-          <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
-            <Plus />
-            Ajouter une campagne
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Publicités"
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setConfiguring(true)}>
+              <Settings />
+              Réglage global
+            </Button>
+            <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
+              <Plus />
+              Ajouter une campagne
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="rounded-[18px] border border-[oklch(93%_0.005_100)] bg-white p-[18px_20px]">

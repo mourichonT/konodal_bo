@@ -7,6 +7,7 @@ import { useScopedResidences } from "@/hooks/useScopedResidenceIds"
 import { useAuth } from "@/lib/auth-context"
 import {
   deleteNodoConversation,
+  formatNodoCredits,
   listenNodoConversations,
   listenNodoMessages,
   newNodoConversationId,
@@ -281,6 +282,11 @@ export function NodoPanel({ onClose }: { onClose: () => void }) {
                         <div className="mt-1 flex items-center gap-2 text-xs font-medium text-[oklch(50%_0.05_155)]">
                           <LoaderCircle className="size-3.5 animate-spin" />
                           {message.activity || "Nodo écrit…"}
+                          {message.credits != null && (
+                            <span className="font-normal text-muted-foreground tabular-nums">
+                              · {formatNodoCredits(message.credits)}
+                            </span>
+                          )}
                         </div>
                       )}
                       {message.status === "error" && (

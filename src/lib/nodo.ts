@@ -62,9 +62,19 @@ export type NodoMessage = {
   text: string
   status?: "streaming" | "done" | "error"
   activity?: string | null
+  // Crédits consommés par la réponse (1 crédit = une question moyenne,
+  // NODO_CREDIT_TOKENS de nodo.py), mis à jour en direct par le serveur.
+  credits?: number | null
   actions: NodoAction[]
   error?: string
   createdAt: Date | null
+}
+
+const creditsFormatter = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+
+// « 0,4 crédit », « 1,5 crédit », « 2,0 crédits ».
+export function formatNodoCredits(credits: number): string {
+  return `${creditsFormatter.format(credits)} crédit${credits >= 2 ? "s" : ""}`
 }
 
 export type NodoConversation = {
@@ -126,6 +136,7 @@ export function listenNodoMessages(
             text: (data.text as string) ?? "",
             status: data.status as NodoMessage["status"],
             activity: (data.activity as string | null) ?? null,
+            credits: typeof data.credits === "number" ? data.credits : null,
             actions: (data.actions as NodoAction[] | undefined) ?? [],
             error: data.error as string | undefined,
             createdAt: toDate(data.createdAt),
@@ -175,6 +186,38 @@ export async function reportNodoActionResult(
     { ok: boolean }
   >(functions, "nodo_send_message", { timeout: 60_000 })
   await call({ conversationId, actionResult: { messageId, actionId, status, detail, edits } })
+}
+
+// Crédits Nodo du mois en cours (callable nodo_credits_usage, superAdmin
+// seul) : pot du lot (150 par mois, commun à ses occupants) et limite de
+// chaque personne (100 par mois). Une dépendance rattachée puise dans le pot
+// de son logement (potLabel).
+export type NodoLotCredits = {
+  month: string
+  potLabel: string | null
+  used: number
+  limit: number
+  occupants: { uid: string; name: string; role: string; used: number; limit: number }[]
+}
+
+export type NodoUserCredits = {
+  month: string
+  used: number
+  limit: number
+  // Usage du jour en nombre de questions (pas en crédits), seuil non
+  // bloquant nominalDaily ; remis à zéro à 00h00, heure de Paris.
+  todayQuestions: number
+  nominalDaily: number
+}
+
+export async function fetchLotNodoCredits(residenceId: string, lotId: string): Promise<NodoLotCredits> {
+  const call = httpsCallable<{ residenceId: string; lotId: string }, NodoLotCredits>(functions, "nodo_credits_usage")
+  return (await call({ residenceId, lotId })).data
+}
+
+export async function fetchUserNodoCredits(uid: string): Promise<NodoUserCredits> {
+  const call = httpsCallable<{ uid: string }, NodoUserCredits>(functions, "nodo_credits_usage")
+  return (await call({ uid })).data
 }
 
 export async function deleteNodoConversation(uid: string, conversationId: string) {

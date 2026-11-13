@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { SortableTableHead } from "@/components/SortableTableHead"
+import { PageHeader } from "@/components/PageHeader"
 import { useTableSort } from "@/hooks/useTableSort"
 import {
   acceptKnowledgeProposal,
@@ -588,27 +589,19 @@ export default function NodoKnowledgePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Aligné en haut : la bascule reste à la même place, avec ou sans le bouton dessous. */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[26px] font-extrabold tracking-tight text-[oklch(22%_0.01_150)]">
-            Base de connaissances Nodo
-          </h1>
-          <p className="mt-1 max-w-[640px] text-[13.5px] text-muted-foreground">
-            Articles, textes juridiques et procédures communs à toutes les agences. Nodo y cherche les passages
-            utiles à une question, en plus des données de chaque résidence.
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-3">
-          <ViewToggle view={view} onChange={setView} proposalCount={proposals.length} />
-          {view === "sources" && (
+      <PageHeader
+        title="Base de connaissances Nodo"
+        description="Articles, textes juridiques et procédures communs à toutes les agences. Nodo y cherche les passages utiles à une question, en plus des données de chaque résidence."
+        toggle={<ViewToggle view={view} onChange={setView} proposalCount={proposals.length} />}
+        actions={
+          view === "sources" && (
             <Button onClick={() => setAdding(true)} className={PRIMARY_CTA_CLASS}>
               <Plus />
               Ajouter une source
             </Button>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
       {view === "web" ? (
         <WebDomainsPanel />
