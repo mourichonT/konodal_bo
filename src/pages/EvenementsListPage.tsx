@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
+import { ClickableTableRow } from "@/components/ClickableTableRow"
 import { SortableTableHead } from "@/components/SortableTableHead"
 import { useTableSort } from "@/hooks/useTableSort"
 import type { EvenementsOutletContext } from "@/pages/EvenementsPage"
@@ -130,7 +131,7 @@ export default function EvenementsListPage() {
 
 function EventRow({ event }: { event: EventWithResidence }) {
   return (
-    <TableRow>
+    <ClickableTableRow to={`/evenements/${event.residenceId}/${event.id}`} state={{ from: "liste" }}>
       <TableCell className="font-medium">{event.title || "Sans titre"}</TableCell>
       <TableCell>{event.residenceName}</TableCell>
       <TableCell className="text-muted-foreground">
@@ -174,6 +175,6 @@ function EventRow({ event }: { event: EventWithResidence }) {
           Voir
         </Button>
       </TableCell>
-    </TableRow>
+    </ClickableTableRow>
   )
 }

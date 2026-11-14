@@ -24,6 +24,7 @@ import {
 import { useAllCommunications, type CommunicationWithResidence } from "@/hooks/useAllCommunications"
 import { useCommentStats } from "@/hooks/useCommentCount"
 import { useTableSort } from "@/hooks/useTableSort"
+import { ClickableTableRow } from "@/components/ClickableTableRow"
 import { SortableTableHead } from "@/components/SortableTableHead"
 import { useUniqueViewCount } from "@/hooks/useUniqueViewCount"
 import { useAuth } from "@/lib/auth-context"
@@ -383,7 +384,10 @@ function CommunicationRow({
   const uniqueViewCount = useUniqueViewCount(communication.residenceId, communication.id)
 
   return (
-    <TableRow className={cn(nested && "bg-muted/10")}>
+    <ClickableTableRow
+      className={cn(nested && "bg-muted/10")}
+      to={`/communications/${communication.residenceId}/${communication.id}`}
+    >
       {showTitle && (
         <TableCell className="font-medium">
           <div className="flex items-center gap-1.5">
@@ -423,6 +427,6 @@ function CommunicationRow({
           Gérer
         </Button>
       </TableCell>
-    </TableRow>
+    </ClickableTableRow>
   )
 }

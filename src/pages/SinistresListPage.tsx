@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
+import { ClickableTableRow } from "@/components/ClickableTableRow"
 import { SortableTableHead } from "@/components/SortableTableHead"
 import { SinistreThumbnail } from "@/components/SinistreThumbnail"
 import { SinistrePriorityIcon } from "@/components/SinistrePriorityIcon"
@@ -173,8 +174,13 @@ function SinistreRow({ sinistre }: { sinistre: SinistreWithResidence }) {
     }
   }
 
+  // « Archiver » n'apparaît que pour un sinistre terminé ou archivé : seule la
+  // ligne qui n'a que « Voir » s'ouvre au clic.
+  const archivable = statut === "Terminé" || sinistre.archived
+  const href = `/sinistres/${sinistre.residenceId}/${sinistre.id}`
+
   return (
-    <TableRow>
+    <ClickableTableRow to={archivable ? undefined : href} state={{ from: "liste" }}>
       <TableCell className="font-mono text-xs text-muted-foreground">
         #{sinistre.id.slice(-6).toUpperCase()}
       </TableCell>
@@ -214,7 +220,7 @@ function SinistreRow({ sinistre }: { sinistre: SinistreWithResidence }) {
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
-          {(statut === "Terminé" || sinistre.archived) && (
+          {archivable && (
             <Button variant="outline" size="sm" onClick={handleToggleArchived}>
               {sinistre.archived ? <ArchiveRestore /> : <Archive />}
               {sinistre.archived ? "Désarchiver" : "Archiver"}
@@ -223,15 +229,13 @@ function SinistreRow({ sinistre }: { sinistre: SinistreWithResidence }) {
           <Button
             variant="outline"
             size="sm"
-            render={
-              <Link to={`/sinistres/${sinistre.residenceId}/${sinistre.id}`} state={{ from: "liste" }} />
-            }
+            render={<Link to={href} state={{ from: "liste" }} />}
           >
             <Eye />
             Voir
           </Button>
         </div>
       </TableCell>
-    </TableRow>
+    </ClickableTableRow>
   )
 }

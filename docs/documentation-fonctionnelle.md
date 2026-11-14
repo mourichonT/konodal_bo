@@ -425,6 +425,8 @@ Le menu du compte, en bas de la barre latérale, donne accès au Profil, à la F
 
 La plupart des tableaux se trient au clic sur l'en-tête : un clic dans le sens naturel de la colonne, un deuxième dans le sens inverse, un troisième revient à l'ordre par défaut. Les valeurs vides restent en fin de liste. Le tableau des lots d'une résidence garde son ordre manuel.
 
+Quand une ligne n'a qu'une action (Gérer, Voir, Modifier, Ouvrir), un clic n'importe où sur la ligne la déclenche. Cela vaut pour les résidences, les utilisateurs, les agences, les communications, les interventions, les sinistres en cours, les demandes de résidence et leurs documents. Ctrl-clic (⌘-clic sur Mac) ou le clic molette ouvrent un nouvel onglet. Les liens, boutons et badges de la ligne gardent leur propre effet, et sélectionner du texte n'ouvre rien. Une ligne qui a plusieurs actions ne réagit qu'à ses boutons : contacts, publicités, votes, messages du Chat Konodal, factures, sites de Nodo, et sinistres terminés ou archivés (« Archiver » s'ajoute à « Voir »). C'est aussi le cas quand la seule action est une suppression : accès superAdmin, sources de Nodo.
+
 ---
 
 ## 16. Contenus (Super Admin)

@@ -13,6 +13,7 @@ import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import { MultiSelectFilter } from "@/components/MultiSelectFilter"
 import { NumberRangeFilter } from "@/components/NumberRangeFilter"
+import { ClickableTableRow } from "@/components/ClickableTableRow"
 import { SortableTableHead } from "@/components/SortableTableHead"
 import { useTableSort } from "@/hooks/useTableSort"
 import { inNumberRange } from "@/lib/filters"
@@ -350,7 +351,7 @@ export default function ResidencesPage() {
             </TableHeader>
             <TableBody className="bg-white">
               {sortedResidences.map((residence) => (
-                <TableRow key={residence.id}>
+                <ClickableTableRow key={residence.id} to={`/residences/${residence.id}`}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-3">
                       {/* Même couleur que les badges résidence de la liste
@@ -379,7 +380,7 @@ export default function ResidencesPage() {
                       Gérer
                     </Button>
                   </TableCell>
-                </TableRow>
+                </ClickableTableRow>
               ))}
               {!loading && !scopeLoading && filteredResidences.length === 0 && (
                 <TableRow>

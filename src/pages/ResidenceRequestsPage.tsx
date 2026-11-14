@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import { CheckCircle2, Clock, Eye, Inbox, Timer, XCircle } from "lucide-react"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
+import { ClickableTableRow } from "@/components/ClickableTableRow"
 import { SortableTableHead } from "@/components/SortableTableHead"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -32,7 +33,6 @@ function averageProcessingDays(requests: ResidenceRequest[]): number | null {
 }
 
 export default function ResidenceRequestsPage() {
-  const navigate = useNavigate()
   const [requests, setRequests] = useState<ResidenceRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<ResidenceRequestStatus | null>(null)
@@ -148,11 +148,7 @@ export default function ResidenceRequestsPage() {
             </TableHeader>
             <TableBody className="bg-white">
               {sortedRows.map((request) => (
-                <TableRow
-                  key={request.id}
-                  className="cursor-pointer"
-                  onClick={() => navigate(`/residences/demandes/${request.id}`)}
-                >
+                <ClickableTableRow key={request.id} to={`/residences/demandes/${request.id}`}>
                   <TableCell className="text-muted-foreground">{formatDate(request)}</TableCell>
                   <TableCell className="font-medium">{request.residence.name}</TableCell>
                   <TableCell className="text-muted-foreground">
@@ -169,7 +165,7 @@ export default function ResidenceRequestsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-end gap-2">
                       {request.status === "approved" && request.residenceId && (
                         <Button variant="outline" size="sm" render={<Link to={`/residences/${request.residenceId}`} />}>
                           Résidence
@@ -181,7 +177,7 @@ export default function ResidenceRequestsPage() {
                       </Button>
                     </div>
                   </TableCell>
-                </TableRow>
+                </ClickableTableRow>
               ))}
             </TableBody>
           </Table>

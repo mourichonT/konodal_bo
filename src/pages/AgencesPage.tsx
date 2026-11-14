@@ -47,6 +47,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FilterKpiCard } from "@/components/FilterKpiCard";
+import { ClickableTableRow } from "@/components/ClickableTableRow";
 import { SortableTableHead } from "@/components/SortableTableHead";
 import { useTableSort } from "@/hooks/useTableSort";
 import { NodoQuotaSummary } from "@/components/nodo/NodoQuotaSummary";
@@ -323,7 +324,7 @@ export default function AgencesPage() {
                     );
                     const primaryContact = primaryContactOf(gerance);
                     return (
-                      <TableRow key={gerance.id}>
+                      <ClickableTableRow key={gerance.id} to={`/agences/${gerance.id}`}>
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-3">
                             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
@@ -358,7 +359,7 @@ export default function AgencesPage() {
                             Modifier
                           </Button>
                         </TableCell>
-                      </TableRow>
+                      </ClickableTableRow>
                     );
                   })}
                   {!loading && filteredGerances.length === 0 && (

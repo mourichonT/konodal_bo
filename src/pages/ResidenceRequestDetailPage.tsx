@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ClickableTableRow } from "@/components/ClickableTableRow"
 import { SortableTableHead } from "@/components/SortableTableHead"
 import { useTableSort } from "@/hooks/useTableSort"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
@@ -505,7 +506,7 @@ function DocumentsTab({ request }: { request: ResidenceRequest }) {
             </TableHeader>
             <TableBody>
               {attachments.map((a) => (
-                <TableRow key={a.path}>
+                <ClickableTableRow key={a.path} onActivate={() => open(a)}>
                   <TableCell className="max-w-[360px] truncate font-medium">{a.name}</TableCell>
                   <TableCell className="text-muted-foreground">{formatSize(a.size)}</TableCell>
                   <TableCell className="text-muted-foreground">
@@ -517,7 +518,7 @@ function DocumentsTab({ request }: { request: ResidenceRequest }) {
                       Ouvrir
                     </Button>
                   </TableCell>
-                </TableRow>
+                </ClickableTableRow>
               ))}
             </TableBody>
           </Table>

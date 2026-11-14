@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
 import { RestrictedAccessBadge } from "@/components/RestrictedAccessBadge"
+import { ClickableTableRow } from "@/components/ClickableTableRow"
 import { SortableTableHead } from "@/components/SortableTableHead"
 import { useTableSort } from "@/hooks/useTableSort"
 import { DateInput } from "@/components/DateInput"
@@ -385,7 +386,7 @@ export default function ResidentsPage() {
             </TableHeader>
             <TableBody className="bg-white">
               {sortedResidents.map((user) => (
-                <TableRow key={user.uid}>
+                <ClickableTableRow key={user.uid} to={`/residents/${user.uid}`}>
                   <TableCell className="font-bold">
                     <div className="flex items-center gap-3">
                       <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[oklch(94%_0.05_155)] text-[oklch(38%_0.08_155)]">
@@ -483,7 +484,7 @@ export default function ResidentsPage() {
                       Voir la fiche
                     </Button>
                   </TableCell>
-                </TableRow>
+                </ClickableTableRow>
               ))}
               {!loading && filteredResidents.length === 0 && (
                 <TableRow>
