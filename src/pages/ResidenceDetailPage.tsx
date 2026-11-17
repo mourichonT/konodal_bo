@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, ChevronDown, Eye, GripVertical, Home, Info, MapPin, MoreVertical, Plus, Receipt, Search, Settings2, ShieldOff, Trash2, Upload, UserPlus, Vote as VoteIcon, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Eye, GripVertical, Home, Info, LayoutDashboard, MapPin, MoreVertical, Plus, Receipt, Search, Settings2, ShieldOff, Trash2, Upload, UserPlus, Vote as VoteIcon, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -75,6 +75,7 @@ import { RestrictedAccessBadge } from "@/components/RestrictedAccessBadge"
 import { SortableTableHead } from "@/components/SortableTableHead"
 import { useTableSort } from "@/hooks/useTableSort"
 import { ResidenceBillingTab } from "@/components/residence-billing/ResidenceBillingTab"
+import { ResidenceDashboardTab } from "@/components/residence-dashboard/ResidenceDashboardTab"
 import { LotImportDialog } from "@/components/LotImportDialog"
 import { VoteFormDialog } from "@/components/VoteFormDialog"
 import { saveResidenceAccessPoint, setStructureAccessPoint, subscribeToResidenceAccessPoint } from "@/lib/accessPoints"
@@ -105,6 +106,9 @@ import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 // SinistresPage) : tout vit déjà dans ce même composant, pas besoin d'URLs
 // dédiées par onglet.
 const residenceTabs = [
+  // Mêmes indicateurs que le tableau de bord du CS dans l'app, pour tous les
+  // rôles qui voient la résidence (16/11/2026).
+  { key: "tableau-de-bord", label: "Tableau de bord", icon: LayoutDashboard },
   { key: "information", label: "Information", icon: Info },
   { key: "configuration", label: "Configuration", icon: Settings2 },
   { key: "lots", label: "Configuration des lots", icon: Home },
@@ -119,7 +123,7 @@ export default function ResidenceDetailPage() {
   const [residence, setResidence] = useState<Residence | null>(null)
   const [loading, setLoading] = useState(true)
   const [structures, setStructures] = useState<StructureResidence[]>([])
-  const [activeTab, setActiveTab] = useState<ResidenceTabKey>("information")
+  const [activeTab, setActiveTab] = useState<ResidenceTabKey>("tableau-de-bord")
   const { isSuperAdmin } = useIsSuperAdmin()
 
   useEffect(() => {
@@ -186,6 +190,8 @@ export default function ResidenceDetailPage() {
               </button>
             ))}
           </div>
+
+          {activeTab === "tableau-de-bord" && <ResidenceDashboardTab residenceId={id} />}
 
           {activeTab === "information" && (
             <div className="flex flex-col gap-5">

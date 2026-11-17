@@ -207,7 +207,15 @@ Conversation officielle « Konodal » de la messagerie de l'app, présentée com
 - **Ajout d'une résidence** : réservé aux Super Admin et aux Agences de type syndic (jamais aux Agents). Une résidence créée par une Agence lui est automatiquement rattachée.
 
 ### 7.2 Fiche détail d'une résidence
-Cinq onglets : Information, Configuration, Configuration des lots, Votes & assemblées générales et, pour le Super Admin, Facturation.
+Six onglets : Tableau de bord (ouvert par défaut), Information, Configuration, Configuration des lots, Votes & assemblées générales et, pour le Super Admin, Facturation.
+
+**Tableau de bord** : les mêmes indicateurs que le tableau de bord du conseil syndical dans l'app, ouverts à tous les rôles qui ont accès à la résidence (Super Admin, Agence, Agent), en lecture seule. Les chiffres portent sur les 12 derniers mois et sont calculés à l'ouverture de l'onglet ; « Actualiser » les recalcule. Ils sont regroupés en quatre blocs :
+- **Résidence** : part des lots d'habitation avec un occupant inscrit, par bâtiment ; portée des communications du CS (part des résidents qui les ont vues) ; participation aux votes en tantièmes, ou en lots quand les tantièmes ne sont pas renseignés.
+- **Sinistres** : sinistres en attente chez le syndic (transmis ou en cours), avec ceux de priorité haute et ceux qui attendent depuis plus de 30 jours ; points noirs, c'est-à-dire les lieux qui cumulent le plus de déclarants.
+- **Syndic** : délai médian de traitement d'un sinistre, en jours ouvrés, de la transmission à la clôture ; délai médian de réponse aux mails des résidents et messages sans réponse après 7 jours (seulement des chiffres, jamais le contenu des mails).
+- **Prestataires** : prestataires dont des interventions ont été reprogrammées ou sont restées sans compte-rendu.
+
+Un sinistre, une communication ou un vote de la liste ouvre sa fiche.
 
 **Information** : nom, adresse, code postal, ville, email de contact et adresses alternatives. Le rattachement à une gérance (qui détermine quel compte Agence/Agent a accès à la résidence) est réservé aux Super Admin. La carte **Conseil Syndical** liste les propriétaires éligibles (déduits des lots de la résidence, avec recherche) et les membres actuels ; invitation par email et retrait possibles, accessibles à tous les rôles ayant accès à la résidence. « Inviter au CS » est désactivé pour un résident à l'accès restreint. Une Agence ou un Agent voit aussi la carte **Option CS avancé** (statut, « Souscrire pour la résidence » ou « Gérer l'abonnement »). Le Super Admin voit la carte **Charte & règles de vie** (version en vigueur, signatures, PDF des signataires) et **Supprimer la résidence** : bilan préalable, saisie du nom exact, suppression bloquée si un abonnement CS avancé est en cours.
 
