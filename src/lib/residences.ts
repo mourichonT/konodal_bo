@@ -22,6 +22,16 @@ import { APP_URL, emailButtonHtml, emailContactHtml, escapeHtml, konodalEmailHtm
 
 const residencesCollection = collection(db, "residences")
 
+// Résidence de démonstration de l'app (demo: true, 17/11/2026) : ses faux
+// voisins, posts et sondages ne doivent fausser ni les statistiques ni les
+// listes du BO. Retirée ici, à la source de toutes les listes de résidences
+// (useScopedResidences, pages superAdmin, gérances) : tout ce que le BO lit
+// d'une résidence part de ces listes. subscribeToResidence (une résidence
+// par son id) n'est pas filtré.
+function withoutDemo(residences: Residence[]): Residence[] {
+  return residences.filter((r) => r.demo !== true)
+}
+
 export function subscribeToResidences(
   onData: (residences: Residence[]) => void,
   onError: (error: Error) => void
@@ -34,7 +44,9 @@ export function subscribeToResidences(
       // (lib/lots.ts) - un champ `id` stocké dans le document divergent du
       // vrai id Firestore écraserait sinon silencieusement la valeur fiable.
       onData(
-        snapshot.docs.map((d) => ({ ...(d.data() as Omit<Residence, "id">), id: d.id }))
+        withoutDemo(
+          snapshot.docs.map((d) => ({ ...(d.data() as Omit<Residence, "id">), id: d.id }))
+        )
       )
     },
     onError
@@ -72,7 +84,11 @@ export function subscribeToResidencesForGerance(
   return onSnapshot(
     q,
     (snapshot) =>
-      onData(snapshot.docs.map((d) => ({ ...(d.data() as Omit<Residence, "id">), id: d.id }))),
+      onData(
+        withoutDemo(
+          snapshot.docs.map((d) => ({ ...(d.data() as Omit<Residence, "id">), id: d.id }))
+        )
+      ),
     onError
   )
 }

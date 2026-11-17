@@ -44,6 +44,10 @@ export type Residence = {
   // par champ, un tableau de résidences exposé sur un contact partagé
   // ferait fuiter les résidences des autres agences à chacune d'elles.
   contactRefs?: Record<string, boolean>
+  // Résidence de démonstration de l'app (posé par le script de démo,
+  // 17/11/2026) : jamais montrée dans le BO, cf. withoutDemo
+  // (lib/residences.ts).
+  demo?: boolean
 }
 
 export const emptyAddress: Address = {
