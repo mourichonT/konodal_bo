@@ -9,12 +9,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useScopedResidences } from "@/hooks/useScopedResidenceIds"
 import { POST_TYPE_LABELS, subscribeToResidencePosts, type ContentPost } from "@/lib/contentPosts"
-import { resolveUserLabels } from "@/lib/users"
+import { resolveUserInfos } from "@/lib/users"
 
 // Contenus > Posts (superAdmin) : toutes les publications de toutes les
 // résidences, tous types confondus, les plus récentes d'abord. Un clic
 // ouvre la publication avec ses commentaires, supprimables par la
-// modération (ContentPostDialog).
+// modération (ContentPostDialog). Les publications des comptes superAdmin
+// n'y figurent pas (demande de l'utilisateur, 2026-11-18) : une publication
+// n'apparaît qu'une fois le type de compte de son auteur connu.
 
 const PAGE_SIZE = 50
 
@@ -22,6 +24,8 @@ export default function ContentPostsPage() {
   const { residences, loading } = useScopedResidences()
   const [byResidence, setByResidence] = useState<Record<string, ContentPost[]>>({})
   const [authors, setAuthors] = useState<Map<string, string>>(new Map())
+  const [superAdmins, setSuperAdmins] = useState<Set<string>>(new Set())
+  const [resolvedKey, setResolvedKey] = useState("")
   const [search, setSearch] = useState("")
   const [residenceFilter, setResidenceFilter] = useState<string[]>([])
   const [typeFilter, setTypeFilter] = useState<string[]>([])
@@ -40,7 +44,7 @@ export default function ContentPostsPage() {
   }, [residences])
 
   const residenceName = useMemo(() => new Map(residences.map((r) => [r.id, r.name])), [residences])
-  const posts = useMemo(
+  const allPosts = useMemo(
     () =>
       Object.values(byResidence)
         .flat()
@@ -48,10 +52,26 @@ export default function ContentPostsPage() {
     [byResidence]
   )
 
-  const authorKey = [...new Set(posts.map((p) => p.user).filter(Boolean))].sort().join(",")
+  const authorKey = [...new Set(allPosts.map((p) => p.user).filter(Boolean))].sort().join(",")
   useEffect(() => {
-    if (authorKey) resolveUserLabels(authorKey.split(",")).then(setAuthors)
+    if (!authorKey) return
+    resolveUserInfos(authorKey.split(","))
+      .then((infos) => {
+        setAuthors(new Map([...infos].map(([uid, info]) => [uid, info.label])))
+        setSuperAdmins(new Set([...infos].filter(([, info]) => info.accountType === "superAdmin").map(([uid]) => uid)))
+        setResolvedKey(authorKey)
+      })
+      .catch((error: Error) => toast.error("Auteurs des publications illisibles : " + error.message))
   }, [authorKey])
+
+  // Sans les publications des superAdmins ; une publication dont l'auteur
+  // n'est pas encore résolu attend (sinon celles des superAdmins
+  // clignoteraient au chargement).
+  const resolving = !!authorKey && resolvedKey !== authorKey
+  const posts = useMemo(
+    () => allPosts.filter((p) => !p.user || (authors.has(p.user) && !superAdmins.has(p.user))),
+    [allPosts, authors, superAdmins]
+  )
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -122,7 +142,7 @@ export default function ContentPostsPage() {
         </div>
 
         <div className="flex flex-col border-t border-[oklch(95%_0.003_100)]">
-          {loading ? (
+          {loading || (resolving && filtered.length === 0) ? (
             <p className="px-7 py-6 text-sm text-muted-foreground">Chargement…</p>
           ) : filtered.length === 0 ? (
             <p className="px-7 py-6 text-sm text-muted-foreground">Aucune publication.</p>

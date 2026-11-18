@@ -573,13 +573,20 @@ export async function getUserLotAttribution(
 // Résout uid -> "Prénom Nom" (ou pseudo/email/uid à défaut) pour
 // l'affichage - ex: destinataires d'un document de lot (DocumentsPage).
 export async function resolveUserLabels(uids: string[]): Promise<Map<string, string>> {
+  const infos = await resolveUserInfos(uids)
+  return new Map([...infos].map(([uid, info]) => [uid, info.label]))
+}
+
+// Libellé et type de compte de chaque uid (accountType vide si le compte est
+// introuvable) : Contenus > Posts écarte ainsi les publications des superAdmins.
+export async function resolveUserInfos(uids: string[]): Promise<Map<string, { label: string; accountType: string }>> {
   const unique = [...new Set(uids)]
   const users = new Map((await resolveUsersByUids(unique)).map((u) => [u.uid, u]))
   return new Map(
     unique.map((uid) => {
       const user = users.get(uid)
       const name = [user?.name, user?.surname].filter(Boolean).join(" ").trim()
-      return [uid, name || user?.pseudo || user?.email || uid]
+      return [uid, { label: name || user?.pseudo || user?.email || uid, accountType: user?.accountType ?? "" }]
     })
   )
 }
