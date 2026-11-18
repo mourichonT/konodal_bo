@@ -95,6 +95,25 @@ export function downloadLotImportTemplateCsv() {
   downloadBlob(new Blob([UTF8_BOM + csv], { type: "text/csv;charset=utf-8" }), "modele_lots.csv")
 }
 
+// Lots déjà remplis au format du modèle d'import (colonnes LOT_IMPORT_HEADERS,
+// dans l'ordre), réimportables tels quels : sert à corriger dans Excel une
+// proposition d'import de résidence (lib/residenceImport.ts).
+export async function downloadLotRowsXlsx(rows: (string | number)[][], filename: string) {
+  const ExcelJS = await import("exceljs")
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet("Lots")
+  sheet.addRow(lotImportTemplateHeaders())
+  sheet.getRow(1).font = { bold: true }
+  for (const row of rows) sheet.addRow(row)
+  sheet.columns = [{ width: 22 }, { width: 10 }, { width: 12 }, { width: 20 }, { width: 12 }, { width: 12 }, { width: 22 }, { width: 10 }]
+  sheet.views = [{ state: "frozen", ySplit: 1 }]
+  const buffer = await workbook.xlsx.writeBuffer()
+  downloadBlob(
+    new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    filename
+  )
+}
+
 // exceljs chargé à la demande (uniquement quand ce fichier sert vraiment) -
 // même raison que ResidencesMap/maplibre-gl : évite d'alourdir le bundle
 // principal pour une fonctionnalité utilisée occasionnellement.

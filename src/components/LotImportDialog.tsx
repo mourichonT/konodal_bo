@@ -170,86 +170,7 @@ function LotImportDialogContent({
           </div>
         )}
 
-        {validation && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-              <CheckCircle2 className="size-4 shrink-0" />
-              {validation.toCreate.length} lot{validation.toCreate.length > 1 ? "s" : ""} prêt
-              {validation.toCreate.length > 1 ? "s" : ""} à importer
-              {validation.linkedCount > 0 &&
-                `, dont ${validation.linkedCount} rattaché${validation.linkedCount > 1 ? "s" : ""} à un lot principal`}
-            </div>
-
-            {validation.exampleRowsIgnored > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {validation.exampleRowsIgnored} ligne{validation.exampleRowsIgnored > 1 ? "s" : ""} d'exemple
-                ignorée{validation.exampleRowsIgnored > 1 ? "s" : ""} (référence commençant par « {EXAMPLE_REF_PREFIX} »).
-              </p>
-            )}
-
-            {validation.structuresToCreate.length > 0 && (
-              <div className="rounded-lg border p-3 text-sm font-medium text-amber-700">
-                Bâtiment{validation.structuresToCreate.length > 1 ? "s" : ""} créé
-                {validation.structuresToCreate.length > 1 ? "s" : ""} à l'import :{" "}
-                {validation.structuresToCreate
-                  .map((s) => {
-                    const floors = s.etage.filter((e) => e.startsWith("étage ")).length
-                    const basements = s.etage.filter((e) => e.startsWith("Sous-sol")).length
-                    if (s.etage.length === 0) return s.label
-                    const detail = s.etage.includes("RDC")
-                      ? [`RDC${floors ? ` + ${floors} étage${floors > 1 ? "s" : ""}` : ""}`]
-                      : []
-                    if (basements) detail.push(`${basements} sous-sol${basements > 1 ? "s" : ""}`)
-                    return `${s.label} (${detail.join(", ")})`
-                  })
-                  .join(", ")}
-              </div>
-            )}
-
-            {validation.duplicatesExisting.length > 0 && (
-              <details className="rounded-lg border p-3 text-sm">
-                <summary className="cursor-pointer font-medium text-muted-foreground">
-                  {validation.duplicatesExisting.length} doublon
-                  {validation.duplicatesExisting.length > 1 ? "s" : ""} ignoré
-                  {validation.duplicatesExisting.length > 1 ? "s" : ""} (déjà en base)
-                </summary>
-                <ul className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
-                  {validation.duplicatesExisting.map((d) => (
-                    <li key={d}>{d}</li>
-                  ))}
-                </ul>
-              </details>
-            )}
-
-            {validation.duplicatesInFile.length > 0 && (
-              <details className="rounded-lg border p-3 text-sm">
-                <summary className="cursor-pointer font-medium text-muted-foreground">
-                  {validation.duplicatesInFile.length} doublon
-                  {validation.duplicatesInFile.length > 1 ? "s" : ""} ignoré
-                  {validation.duplicatesInFile.length > 1 ? "s" : ""} (dans le fichier)
-                </summary>
-                <ul className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
-                  {validation.duplicatesInFile.map((d) => (
-                    <li key={d}>{d}</li>
-                  ))}
-                </ul>
-              </details>
-            )}
-
-            {validation.errors.length > 0 && (
-              <details className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" open>
-                <summary className="cursor-pointer font-medium">
-                  {validation.errors.length} ligne{validation.errors.length > 1 ? "s" : ""} en erreur
-                </summary>
-                <ul className="mt-2 flex flex-col gap-1 text-xs">
-                  {validation.errors.map((e) => (
-                    <li key={e}>{e}</li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </div>
-        )}
+        {validation && <LotImportPreview validation={validation} />}
       </div>
 
       <DialogFooter>
@@ -266,6 +187,92 @@ function LotImportDialogContent({
           Importer{validation && validation.toCreate.length > 0 ? ` (${validation.toCreate.length})` : ""}
         </Button>
       </DialogFooter>
+    </div>
+  )
+}
+
+// Bilan d'une validation d'import (validateLotImportRows) : lots prêts,
+// bâtiments créés, doublons et lignes en erreur. Partagé avec la page d'un
+// import de résidence par Nodo (ResidenceImportPage).
+export function LotImportPreview({ validation }: { validation: LotImportValidation }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+        <CheckCircle2 className="size-4 shrink-0" />
+        {validation.toCreate.length} lot{validation.toCreate.length > 1 ? "s" : ""} prêt
+        {validation.toCreate.length > 1 ? "s" : ""} à importer
+        {validation.linkedCount > 0 &&
+          `, dont ${validation.linkedCount} rattaché${validation.linkedCount > 1 ? "s" : ""} à un lot principal`}
+      </div>
+
+      {validation.exampleRowsIgnored > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {validation.exampleRowsIgnored} ligne{validation.exampleRowsIgnored > 1 ? "s" : ""} d'exemple
+          ignorée{validation.exampleRowsIgnored > 1 ? "s" : ""} (référence commençant par « {EXAMPLE_REF_PREFIX} »).
+        </p>
+      )}
+
+      {validation.structuresToCreate.length > 0 && (
+        <div className="rounded-lg border p-3 text-sm font-medium text-amber-700">
+          Bâtiment{validation.structuresToCreate.length > 1 ? "s" : ""} créé
+          {validation.structuresToCreate.length > 1 ? "s" : ""} à l'import :{" "}
+          {validation.structuresToCreate
+            .map((s) => {
+              const floors = s.etage.filter((e) => e.startsWith("étage ")).length
+              const basements = s.etage.filter((e) => e.startsWith("Sous-sol")).length
+              if (s.etage.length === 0) return s.label
+              const detail = s.etage.includes("RDC")
+                ? [`RDC${floors ? ` + ${floors} étage${floors > 1 ? "s" : ""}` : ""}`]
+                : []
+              if (basements) detail.push(`${basements} sous-sol${basements > 1 ? "s" : ""}`)
+              return `${s.label} (${detail.join(", ")})`
+            })
+            .join(", ")}
+        </div>
+      )}
+
+      {validation.duplicatesExisting.length > 0 && (
+        <details className="rounded-lg border p-3 text-sm">
+          <summary className="cursor-pointer font-medium text-muted-foreground">
+            {validation.duplicatesExisting.length} doublon
+            {validation.duplicatesExisting.length > 1 ? "s" : ""} ignoré
+            {validation.duplicatesExisting.length > 1 ? "s" : ""} (déjà en base)
+          </summary>
+          <ul className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+            {validation.duplicatesExisting.map((d) => (
+              <li key={d}>{d}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {validation.duplicatesInFile.length > 0 && (
+        <details className="rounded-lg border p-3 text-sm">
+          <summary className="cursor-pointer font-medium text-muted-foreground">
+            {validation.duplicatesInFile.length} doublon
+            {validation.duplicatesInFile.length > 1 ? "s" : ""} ignoré
+            {validation.duplicatesInFile.length > 1 ? "s" : ""} (dans le fichier)
+          </summary>
+          <ul className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+            {validation.duplicatesInFile.map((d) => (
+              <li key={d}>{d}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {validation.errors.length > 0 && (
+        <details className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" open>
+          <summary className="cursor-pointer font-medium">
+            {validation.errors.length} ligne{validation.errors.length > 1 ? "s" : ""} en erreur
+          </summary>
+          <ul className="mt-2 flex flex-col gap-1 text-xs">
+            {validation.errors.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   )
 }

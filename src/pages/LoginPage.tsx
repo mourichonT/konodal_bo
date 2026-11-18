@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import { sendPasswordResetEmail } from "@/lib/passwordReset"
@@ -47,9 +47,17 @@ function firebaseAuthErrorMessage(error: unknown): string {
   }
 }
 
+// Page interne où revenir après la connexion (?next=/connexion-claude?…),
+// jamais une adresse externe.
+function safeNext(value: string | null): string {
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : "/"
+}
+
 export default function LoginPage() {
   const { signInWithEmail, signInWithGoogle } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const next = safeNext(searchParams.get("next"))
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -62,7 +70,7 @@ export default function LoginPage() {
     setSubmitting(true)
     try {
       await signInWithEmail(email, password)
-      navigate("/", { replace: true })
+      navigate(next, { replace: true })
     } catch (err) {
       setError(firebaseAuthErrorMessage(err))
     } finally {
@@ -75,7 +83,7 @@ export default function LoginPage() {
     setSubmitting(true)
     try {
       await signInWithGoogle()
-      navigate("/", { replace: true })
+      navigate(next, { replace: true })
     } catch (err) {
       setError(firebaseAuthErrorMessage(err))
     } finally {

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { Building2, Pencil, Plus, Save, Search } from "lucide-react"
+import { Building2, Pencil, Plus, Save, Search, Sparkles } from "lucide-react"
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ import { ClearFiltersButton } from "@/components/ClearFiltersButton"
 import { MultiSelectFilter } from "@/components/MultiSelectFilter"
 import { NumberRangeFilter } from "@/components/NumberRangeFilter"
 import { ClickableTableRow } from "@/components/ClickableTableRow"
+import { ResidenceImportDialog } from "@/components/residence-import/ResidenceImportDialog"
 import { SortableTableHead } from "@/components/SortableTableHead"
 import { useTableSort } from "@/hooks/useTableSort"
 import { inNumberRange } from "@/lib/filters"
@@ -98,6 +99,7 @@ export default function ResidencesPage() {
   const [residences, setResidences] = useState<Residence[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [search, setSearch] = useState("")
   const [lotMin, setLotMin] = useState("")
   const [lotMax, setLotMax] = useState("")
@@ -296,12 +298,20 @@ export default function ResidencesPage() {
         <h2 className="text-lg">Répertoire des résidences</h2>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">Rechercher, filtrer et gérer toutes les résidences.</p>
-          {canCreateResidence && (
-            <Button className={PRIMARY_CTA_CLASS} onClick={() => setCreating(true)}>
-              <Plus />
-              Ajouter une résidence
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {isSuperAdmin && (
+              <Button variant="outline" onClick={() => setImporting(true)}>
+                <Sparkles />
+                Créer avec Nodo
+              </Button>
+            )}
+            {canCreateResidence && (
+              <Button className={PRIMARY_CTA_CLASS} onClick={() => setCreating(true)}>
+                <Plus />
+                Ajouter une résidence
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -395,6 +405,8 @@ export default function ResidencesPage() {
           </Table>
         </div>
       </div>
+
+      {isSuperAdmin && <ResidenceImportDialog open={importing} onOpenChange={setImporting} />}
 
       <ResidenceFormDialog
         open={creating}

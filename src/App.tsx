@@ -36,6 +36,8 @@ import AdCampaignDetailPage from "@/pages/AdCampaignDetailPage"
 import ResidencesLayout from "@/pages/ResidencesLayout"
 import ResidenceRequestDetailPage from "@/pages/ResidenceRequestDetailPage"
 import ContentsLayout from "@/pages/ContentsLayout"
+import ResidenceImportPage from "@/pages/ResidenceImportPage"
+import ClaudeConnectPage from "@/pages/ClaudeConnectPage"
 
 // Ancienne page Facturation : devenue l'onglet Abonnement de la page Agence.
 // Les retours Stripe (Checkout, portail) arrivent encore ici, avec ?checkout=.
@@ -54,6 +56,9 @@ function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/partage/:token" element={<SharedInterventionPage />} />
       <Route path="/offre/:token" element={<OfferPage />} />
+      {/* Autorisation du connecteur Konodal dans Claude (OAuth) : gère
+          elle-même la connexion, pour revenir ici après /login. */}
+      <Route path="/connexion-claude" element={<ClaudeConnectPage />} />
       <Route
         element={
           <ProtectedRoute>
@@ -92,6 +97,14 @@ function App() {
           element={
             <RequireSuperAdmin>
               <ResidenceRequestDetailPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="residences/import/:id"
+          element={
+            <RequireSuperAdmin>
+              <ResidenceImportPage />
             </RequireSuperAdmin>
           }
         />

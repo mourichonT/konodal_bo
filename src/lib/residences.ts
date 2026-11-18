@@ -97,6 +97,9 @@ export type ResidenceInput = {
   name: string
   address: Address
   mail_contact?: string
+  // Autres entrées ou voies (création depuis un import de documents, cf.
+  // lib/residenceImport.ts) ; le formulaire de création ne les saisit pas.
+  alternateAddresses?: Address[]
 }
 
 // geranceRef : requis côté règle Firestore pour qu'une Agence (pas un
@@ -106,12 +109,15 @@ export type ResidenceInput = {
 // ni Professionnel tant que geranceRef est absent). Absent pour une
 // création Super Admin (assignation de gérance faite séparément depuis la
 // fiche résidence, cf. updateResidenceGeranceRef).
-export async function createResidence(input: ResidenceInput, geranceRef?: GeranceRef) {
-  await addDoc(residencesCollection, {
+// Renvoie l'id de la résidence créée (la création depuis un import y
+// enchaîne l'import des lots).
+export async function createResidence(input: ResidenceInput, geranceRef?: GeranceRef): Promise<string> {
+  const ref = await addDoc(residencesCollection, {
     ...input,
     totalLot: 0,
     ...(geranceRef ? { geranceRef } : {}),
   })
+  return ref.id
 }
 
 export async function updateResidence(id: string, input: ResidenceInput) {

@@ -205,6 +205,7 @@ Conversation officielle « Konodal » de la messagerie de l'app, présentée com
 - Nombre total de résidences, classement des villes les plus représentées, carte géographique des résidences (localisation automatique par adresse).
 - Annuaire filtrable par nom, adresse, code postal, ville ou email de contact.
 - **Ajout d'une résidence** : réservé aux Super Admin et aux Agences de type syndic (jamais aux Agents). Une résidence créée par une Agence lui est automatiquement rattachée.
+- **Créer avec Nodo** (Super Admin) : création d'une résidence et de tous ses lots à partir de ses documents de copropriété. Voir la section 7.7.
 
 ### 7.2 Fiche détail d'une résidence
 Six onglets : Tableau de bord (ouvert par défaut), Information, Configuration, Configuration des lots, Votes & assemblées générales et, pour le Super Admin, Facturation.
@@ -259,6 +260,39 @@ Gestion de l'option CS avancé de la résidence :
 - **Factures** : date, numéro, période, montant, statut, PDF, lien de paiement, renvoi.
 - **Syndicat des copropriétaires** : nom, email, adresse et SIRET figurant sur les factures. Pré-rempli « SDC <résidence> c/o <gérance> » avec l'adresse de la gérance et l'email de son service syndic. Permet un abonnement annuel sur facture (virement sous 30 jours) quand ces informations sont complètes.
 - **Historique** : 100 derniers événements.
+
+### 7.7 Créer avec Nodo (`/residences/import/:id`, Super Admin)
+Création d'une résidence et de tous ses lots à partir de ses documents de copropriété : règlement de copropriété, état descriptif de division, modificatifs. Les documents sont lus par Claude avec le **connecteur Konodal**, sur l'abonnement Claude du Super Admin, depuis claude.ai ou l'application Claude, sur ordinateur comme sur téléphone. Le BO n'appelle aucune IA payante.
+
+1. **Résidences > Créer avec Nodo** : dépôt des PDF (10 au plus, 60 Mo chacun) et nom facultatif. La page de l'import affiche la phrase à donner à Claude, avec un bouton pour la copier.
+2. **Dans Claude**, avec le connecteur Konodal activé, Claude :
+   - suit la méthode Konodal : le règlement est la source de vérité et le modificatif le plus récent prévaut ;
+   - repère les pages, lit chaque désignation de lot et le tableau récapitulatif séparément ;
+   - fait vérifier sa lecture par Konodal : conventions, total des tantièmes et base, doublons, lots du règlement non modifiés ;
+   - envoie une **proposition**.
+
+   L'avancement s'affiche en direct sur la page de l'import, en général pendant 10 à 20 minutes.
+3. **Vérification** :
+   - nom et adresse modifiables ;
+   - documents reconnus ;
+   - état retenu, « après modificatifs » ou « règlement seul », quand un modificatif change les lots ;
+   - points à vérifier : écarts relevés par Konodal, anomalies des documents, lots supprimés et hypothèses de lecture ;
+   - bâtiments créés ;
+   - tableau des lots avec la page source ;
+   - « Télécharger en Excel », au format du modèle d'import des lots.
+4. **Créer la résidence** : mêmes écritures que l'ajout d'une résidence puis l'import des lots. Avertissement si une résidence porte déjà ce nom. Aucun document joint, aucune gérance, aucun rattachement de lots : ils se règlent ensuite sur la fiche.
+
+Conventions appliquées automatiquement :
+- N° sans la lettre de la cage (A101 devient 101) et places sans le P (P26 devient 26) ;
+- référence = n° de lot du règlement ;
+- bâtiments au format « type nom » (Bâtiment A, Souterrain Parking, Local Activité) ;
+- tantièmes généraux seulement, sans clés de charges.
+
+**Ajouter le connecteur dans Claude** (une fois par compte Claude) :
+1. Dans claude.ai, Paramètres > Plug-ins, ajouter un connecteur personnalisé avec l'adresse du connecteur Konodal (adresse de la fonction `residence_import_mcp`, suivie de `/mcp`).
+2. Choisir « Se connecter ». Claude ouvre la page **Connecter Claude à Konodal** du BO (`/connexion-claude`) : se connecter si besoin, puis **Autoriser**.
+
+Seuls les Super Admin peuvent autoriser. L'accès est revérifié à chaque appel et s'arrête si le compte n'est plus Super Admin. Le connecteur ne peut ni créer ni modifier une résidence : il ne lit que les documents déposés dans « Créer avec Nodo » et n'écrit que la proposition.
 
 ---
 
