@@ -12,6 +12,7 @@ import {
   listenNodoMessages,
   newNodoConversationId,
   sendNodoMessage,
+  warmUpNodo,
   type NodoConversation,
   type NodoMessage,
 } from "@/lib/nodo"
@@ -69,6 +70,11 @@ export function NodoPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (!uid) return
     return listenNodoConversations(uid, setConversations)
+  }, [uid])
+
+  // Serveur préparé pendant que la question est tapée (lib/nodo.ts).
+  useEffect(() => {
+    if (uid) warmUpNodo()
   }, [uid])
 
   useEffect(() => {
@@ -331,6 +337,7 @@ export function NodoPanel({ onClose }: { onClose: () => void }) {
                 rows={1}
                 value={input}
                 placeholder="Demandez à Nodo…"
+                onFocus={warmUpNodo}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

@@ -151,6 +151,26 @@ export function listenNodoMessages(
 // défaut du SDK (la fonction a timeout_sec=300).
 const NODO_CALL_TIMEOUT_MS = 310_000
 
+// Préchauffage (2026-11-18, réponses de 22 à 28 s au Cabinet Pecoul) : à
+// l'ouverture de Nodo et au retour dans la zone de saisie, le serveur charge
+// la bibliothèque Claude et la base de connaissances pendant que la question
+// est tapée. Sans crédit ni appel au modèle (nodo._warm_up) ; au plus un
+// appel toutes les 8 minutes (une instance inactive s'arrête au bout d'une
+// quinzaine de minutes).
+const NODO_WARMUP_INTERVAL_MS = 8 * 60_000
+let lastNodoWarmup = 0
+
+export function warmUpNodo() {
+  if (Date.now() - lastNodoWarmup < NODO_WARMUP_INTERVAL_MS) return
+  lastNodoWarmup = Date.now()
+  const call = httpsCallable<{ warmup: true }, { warm: boolean }>(functions, "nodo_send_message", {
+    timeout: 60_000,
+  })
+  call({ warmup: true }).catch(() => {
+    lastNodoWarmup = 0
+  })
+}
+
 export async function sendNodoMessage(conversationId: string, message: string) {
   const call = httpsCallable<{ conversationId: string; message: string }, { messageId: string }>(
     functions,
