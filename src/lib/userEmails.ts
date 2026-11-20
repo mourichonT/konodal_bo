@@ -77,6 +77,8 @@ const KIND_LABELS: Record<string, string> = {
   offer_invite: "Offre Konodal",
   password_reset: "Mot de passe oublié",
   sinistre: "Sinistre déclaré",
+  intervention_rapport: "Compte-rendu d'intervention",
+  intervention_reschedule: "Intervention reprogrammée",
   lot_modification_request: "Demande de modification de lot",
   radiation_request: "Demande de radiation",
   manual: "Envoi manuel",
