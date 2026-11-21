@@ -6,7 +6,6 @@ import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
-  CalendarPlus,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -26,7 +25,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { EventFormDialog } from "@/components/EventFormDialog"
-import { MandateDialog } from "@/components/pro/MandateDialog"
 import { SinistreMissionsCard } from "@/components/pro/SinistreMissionsCard"
 import { PostCommentsCard } from "@/components/PostCommentsCard"
 import { SinistreMediaViewer } from "@/components/SinistreMediaViewer"
@@ -34,6 +32,7 @@ import { SinistrePriorityIcon } from "@/components/SinistrePriorityIcon"
 import { db } from "@/firebase"
 import { useAuth } from "@/lib/auth-context"
 import { createEvent, findInterventionEventId, KONODAL_LOGO_HORIZONTAL_URL } from "@/lib/events"
+import { isAwaitingResponse, subscribeToSinistreMissions, type ProMission } from "@/lib/proAccounts"
 import {
   subscribeToSinistre,
   subscribeToSinistreSignalements,
@@ -81,8 +80,9 @@ export default function SinistreDetailPage() {
   const [geranceRef, setGeranceRef] = useState<GeranceRef | undefined>(undefined)
   const [csmembers, setCsmembers] = useState<string[] | undefined>(undefined)
   const [schedulingIntervention, setSchedulingIntervention] = useState(false)
-  // Mission confiée à un prestataire Konodal Pro (MandateDialog).
-  const [mandating, setMandating] = useState(false)
+  // Demandes d'intervention du sinistre (missions, lien ou Konodal Pro) :
+  // une seule à la fois en attente de réponse (pro_create_mission).
+  const [missions, setMissions] = useState<ProMission[]>([])
   const [interventionEventId, setInterventionEventId] = useState<string | undefined>(undefined)
   const [mediaIndex, setMediaIndex] = useState(0)
   const [exportingPdf, setExportingPdf] = useState(false)
@@ -105,6 +105,12 @@ export default function SinistreDetailPage() {
       }
     )
   }, [residenceId, postId])
+
+  useEffect(() => {
+    if (!residenceId || !postId) return
+    return subscribeToSinistreMissions(residenceId, postId, setMissions)
+  }, [residenceId, postId])
+  const pendingDemand = missions.find((m) => isAwaitingResponse(m))
 
   useEffect(() => {
     if (!residenceId || !postId || !sinistre?.interventionDate) {
@@ -283,29 +289,21 @@ export default function SinistreDetailPage() {
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
-                disabled={sinistre.statut === "Terminé" || !!sinistre.interventionDate}
+                disabled={sinistre.statut === "Terminé" || !!sinistre.interventionDate || !!pendingDemand}
                 title={
                   sinistre.statut === "Terminé"
                     ? "Ticket terminé : plus d'intervention à programmer"
                     : sinistre.interventionDate
                       ? "Une intervention est déjà programmée pour ce ticket"
-                      : undefined
+                      : pendingDemand
+                        ? `${pendingDemand.contactName || "Le prestataire"} n'a pas encore répondu : annulez sa demande pour en mandater un autre`
+                        : "Demander l'intervention d'un prestataire (lien par mail, ou Konodal Pro)"
                 }
                 onClick={() => setSchedulingIntervention(true)}
                 className="bg-sky-500 hover:bg-sky-600 dark:bg-sky-600 dark:hover:bg-sky-700"
               >
-                <CalendarPlus />
-                Programmer une intervention
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={sinistre.statut === "Terminé"}
-                title={sinistre.statut === "Terminé" ? "Ticket terminé" : "Confier le sinistre à un prestataire Konodal Pro"}
-                onClick={() => setMandating(true)}
-              >
                 <HardHat />
-                Mandater
+                Mandater un prestataire
               </Button>
               <Button
                 size="sm"
@@ -648,19 +646,10 @@ export default function SinistreDetailPage() {
         </DialogContent>
       </Dialog>
 
-      <MandateDialog
-        open={mandating}
-        onOpenChange={setMandating}
-        residenceId={residenceId}
-        sinistreId={postId}
-        contactRefs={contactRefs}
-        csmembers={csmembers}
-      />
-
       <EventFormDialog
         open={schedulingIntervention}
         onOpenChange={setSchedulingIntervention}
-        title="Programmer une intervention"
+        title="Mandater un prestataire"
         residences={
           residenceName ? [{ id: residenceId, name: residenceName, contactRefs, geranceRef, csmembers }] : []
         }

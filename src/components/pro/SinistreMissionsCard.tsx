@@ -10,6 +10,7 @@ import {
   cancelProMission,
   decideProDevis,
   markProMissionRead,
+  missionStatusLine,
   PRO_MISSION_LABELS,
   sendProMessage,
   setProFactureStatut,
@@ -48,7 +49,7 @@ export function SinistreMissionsCard({ residenceId, sinistreId }: { residenceId:
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Missions Konodal Pro</CardTitle>
+        <CardTitle className="text-base">Demandes d'intervention</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
         {missions.map((m) => (
@@ -61,35 +62,40 @@ export function SinistreMissionsCard({ residenceId, sinistreId }: { residenceId:
 
 function MissionRow({ mission: m, open, onToggle }: { mission: ProMission; open: boolean; onToggle: () => void }) {
   async function handleCancel() {
-    const reason = window.prompt(`Annuler la mission de ${m.contactName} ? Motif (envoyé au prestataire) :`)
+    const reason = window.prompt(
+      `Annuler la demande faite à ${m.contactName} ? Motif (envoyé au prestataire, facultatif) :`
+    )
     if (reason === null) return
     try {
       await cancelProMission(m.id, reason)
-      toast.success("Mission annulée")
+      toast.success("Demande annulée")
     } catch (err) {
       toast.error((err as Error).message)
     }
   }
 
+  // Devis, facture et messages n'existent que dans Konodal Pro.
+  const expandable = m.canal === "pro"
+  const statusLine = missionStatusLine(m)
   return (
     <div className="flex flex-col gap-2 border-b pb-3 last:border-0 last:pb-0">
       <div className="flex items-start justify-between gap-3">
-        <button type="button" className="flex flex-col gap-0.5 text-left" onClick={onToggle}>
+        <button
+          type="button"
+          className="flex flex-col gap-0.5 text-left disabled:cursor-default"
+          onClick={onToggle}
+          disabled={!expandable}
+        >
           <span className="flex items-center gap-1.5 font-medium">
             {m.contactName}
             {m.numero && <span className="text-xs text-muted-foreground">{m.numero}</span>}
-            {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+            {expandable && (open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />)}
           </span>
-          {m.eventDate && (
-            <span className="text-muted-foreground">
-              Intervention le {m.eventDate.toLocaleDateString("fr-FR")} à{" "}
-              {m.eventDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          )}
-          {m.statut === "refusee" && m.refusalReason && (
-            <span className="text-muted-foreground">Refusée : {m.refusalReason}</span>
-          )}
-          {m.createdByName && <span className="text-xs text-muted-foreground">Mandatée par {m.createdByName}</span>}
+          {statusLine && <span className="text-muted-foreground">{statusLine}</span>}
+          <span className="text-xs text-muted-foreground">
+            {m.canal === "lien" ? `Par mail${m.contactMail ? ` (${m.contactMail})` : ""}` : "Konodal Pro"}
+            {m.createdByName ? ` · mandatée par ${m.createdByName}` : ""}
+          </span>
         </button>
         <div className="flex flex-col items-end gap-2">
           <div className="flex flex-wrap justify-end gap-1">
@@ -112,7 +118,7 @@ function MissionRow({ mission: m, open, onToggle }: { mission: ProMission; open:
           )}
         </div>
       </div>
-      {open && <MissionDetail mission={m} />}
+      {open && expandable && <MissionDetail mission={m} />}
     </div>
   )
 }

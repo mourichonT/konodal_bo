@@ -8,6 +8,9 @@ import {
   query,
   serverTimestamp,
   where,
+  type DocumentData,
+  type Query,
+  type QueryDocumentSnapshot,
   type Unsubscribe,
 } from "firebase/firestore"
 import { db, functions } from "@/firebase"
@@ -56,45 +59,159 @@ export function inviteProContact(contactId: string, email?: string): Promise<{ o
   return call("pro_invite_contact", { contactId, ...(email ? { email } : {}) })
 }
 
-export function createProMission(input: {
+// Demande d'intervention (formulaire d'intervention du BO, 2026-11-21) :
+// prestataire Konodal Pro (mission dans sa webapp, depuis un sinistre) ou
+// tout autre contact ayant un mail (demande par mail avec un lien de
+// partage, avec ou sans sinistre) - le serveur choisit le canal. Le
+// prestataire accepte ou refuse avant repondreAvant, puis fixe lui-même la
+// date et le créneau : l'intervention n'est publiée qu'à ce moment-là.
+export type InterventionDemandInput = {
   residenceId: string
-  sinistreId: string
+  sinistreId?: string
   contactId: string
+  repondreAvant: string
+  title: string
+  description?: string
+  pathImage?: string
+  locationElement?: string
+  locationFloor?: string
+  audience?: "all" | "proprietaires"
+  contactCsMemberIds?: string[]
   message?: string
   urgence?: boolean
-  contactCsMemberIds?: string[]
-}): Promise<{ missionId: string }> {
-  return call("pro_create_mission", input)
+}
+
+export function createProMission(
+  input: InterventionDemandInput
+): Promise<{ missionId: string; canal: ProMissionCanal; numero: string; repondreAvant: string }> {
+  // Adresse de ce BO, pour le lien envoyé au prestataire hors prod (le
+  // serveur ne l'accepte que pour des adresses locales connues).
+  const linkBase = `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, "")
+  return call("pro_create_mission", { ...input, linkBase })
 }
 
 export function cancelProMission(missionId: string, reason: string): Promise<{ statut: string }> {
   return call("pro_cancel_mission", { missionId, reason })
 }
 
-export type ProMissionStatut = "proposee" | "acceptee" | "refusee" | "planifiee" | "realisee" | "annulee"
+export type ProMissionStatut =
+  | "proposee"
+  | "acceptee"
+  | "refusee"
+  | "sans_reponse"
+  | "planifiee"
+  | "realisee"
+  | "annulee"
 
 export const PRO_MISSION_LABELS: Record<ProMissionStatut, string> = {
-  proposee: "Proposée",
+  proposee: "En attente de réponse",
   acceptee: "Acceptée",
   refusee: "Refusée",
+  sans_reponse: "Sans réponse",
   planifiee: "Planifiée",
   realisee: "Réalisée",
   annulee: "Annulée",
 }
 
+// « pro » : entreprise Konodal Pro ; « lien » : prestataire sans compte,
+// par mail et lien de partage.
+export type ProMissionCanal = "pro" | "lien"
+
 export type ProMission = {
   id: string
   numero: string
+  canal: ProMissionCanal
   devisStatut: "envoye" | "accepte" | "refuse" | null
   factureStatut: "envoyee" | "bon_a_payer" | "payee" | null
   unreadSyndic: number
   statut: ProMissionStatut
+  title: string
   contactName: string
+  contactMail: string
   entrepriseId: string
+  residenceId: string
+  sinistreId: string
+  repondreAvant: Date | null
   eventDate: Date | null
+  eventEnd: Date | null
+  currentEventId: string
   refusalReason: string
+  cancelReason: string
   createdByName: string
   createdAt: Date | null
+  updatedAt: Date | null
+}
+
+// En attente de réponse et dans le délai : bloque toute autre demande sur
+// le même sinistre (règle du serveur, pro_create_mission).
+export function isAwaitingResponse(m: ProMission, now = new Date()): boolean {
+  return m.statut === "proposee" && (!m.repondreAvant || m.repondreAvant > now)
+}
+
+const formatDateTime = (date: Date) => date.toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })
+const formatTime = (date: Date) => date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+
+// Ce que la demande attend ou ce qui s'est passé, en une ligne.
+export function missionStatusLine(m: ProMission): string | null {
+  if (m.statut === "proposee" && m.repondreAvant) {
+    return m.repondreAvant > new Date()
+      ? `Réponse attendue avant le ${formatDateTime(m.repondreAvant)}`
+      : `Délai de réponse dépassé (${formatDateTime(m.repondreAvant)})`
+  }
+  if (m.statut === "sans_reponse") {
+    const deadline = m.repondreAvant ? ` avant le ${formatDateTime(m.repondreAvant)}` : ""
+    return `Pas de réponse${deadline} : vous pouvez mandater un autre prestataire`
+  }
+  if (m.statut === "refusee") return `Refusée${m.refusalReason ? ` : ${m.refusalReason}` : ""}`
+  if (m.statut === "annulee") return `Annulée${m.cancelReason ? ` : ${m.cancelReason}` : ""}`
+  if (m.eventDate) {
+    return `Passage le ${formatDateTime(m.eventDate)}${m.eventEnd ? ` – ${formatTime(m.eventEnd)}` : ""}`
+  }
+  return null
+}
+
+function toProMission(d: QueryDocumentSnapshot<DocumentData>): ProMission {
+  const data = d.data()
+  return {
+    id: d.id,
+    numero: (data.numero as string) ?? "",
+    canal: data.canal === "lien" ? "lien" : "pro",
+    devisStatut: (data.devisStatut as ProMission["devisStatut"]) ?? null,
+    factureStatut: (data.factureStatut as ProMission["factureStatut"]) ?? null,
+    unreadSyndic: (data.unread?.syndic as number) ?? 0,
+    statut: (data.statut as ProMissionStatut) ?? "proposee",
+    title: (data.intervention?.title as string) || (data.sinistre?.title as string) || "",
+    contactName: (data.contactName as string) ?? "",
+    contactMail: (data.contactMail as string) ?? "",
+    entrepriseId: (data.entrepriseId as string) ?? "",
+    residenceId: (data.residenceId as string) ?? "",
+    sinistreId: (data.sinistreId as string) ?? "",
+    repondreAvant: data.repondreAvant?.toDate?.() ?? null,
+    eventDate: data.eventDate?.toDate?.() ?? null,
+    eventEnd: data.eventEnd?.toDate?.() ?? null,
+    currentEventId: (data.currentEventId as string) ?? "",
+    refusalReason: (data.refusalReason as string) ?? "",
+    cancelReason: (data.cancelReason as string) ?? "",
+    createdByName: (data.createdByName as string) ?? "",
+    createdAt: data.createdAt?.toDate?.() ?? null,
+    updatedAt: data.updatedAt?.toDate?.() ?? null,
+  }
+}
+
+function subscribeToMissions(
+  q: Query<DocumentData>,
+  onData: (missions: ProMission[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    q,
+    (snap) => {
+      const missions = snap.docs.map(toProMission)
+      missions.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+      onData(missions)
+    },
+    (error) => onError?.(error)
+  )
 }
 
 // Missions d'un sinistre (lecture permise au syndic de la résidence,
@@ -110,31 +227,17 @@ export function subscribeToSinistreMissions(
     where("residenceId", "==", residenceId),
     where("sinistreId", "==", sinistreId)
   )
-  return onSnapshot(
-    q,
-    (snap) => {
-      const missions = snap.docs.map((d) => {
-        const data = d.data()
-        return {
-          id: d.id,
-          numero: (data.numero as string) ?? "",
-          devisStatut: (data.devisStatut as ProMission["devisStatut"]) ?? null,
-          factureStatut: (data.factureStatut as ProMission["factureStatut"]) ?? null,
-          unreadSyndic: (data.unread?.syndic as number) ?? 0,
-          statut: (data.statut as ProMissionStatut) ?? "proposee",
-          contactName: (data.contactName as string) ?? "",
-          entrepriseId: (data.entrepriseId as string) ?? "",
-          eventDate: data.eventDate?.toDate?.() ?? null,
-          refusalReason: (data.refusalReason as string) ?? "",
-          createdByName: (data.createdByName as string) ?? "",
-          createdAt: data.createdAt?.toDate?.() ?? null,
-        }
-      })
-      missions.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
-      onData(missions)
-    },
-    (error) => onError?.(error)
-  )
+  return subscribeToMissions(q, onData, onError)
+}
+
+// Toutes les demandes d'une résidence (page Interventions : demandes en
+// attente de réponse, refusées ou sans réponse).
+export function subscribeToResidenceMissions(
+  residenceId: string,
+  onData: (missions: ProMission[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  return subscribeToMissions(query(collection(db, "missions"), where("residenceId", "==", residenceId)), onData, onError)
 }
 
 // --- Devis, facture et fil d'une mission (côté syndic) ---

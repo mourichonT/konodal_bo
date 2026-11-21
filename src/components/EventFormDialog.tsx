@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
-import { Ban, ChevronDown, Save } from "lucide-react"
+import { Ban, ChevronDown, Save, Send } from "lucide-react"
 import { doc, getDoc } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { DateInput } from "@/components/DateInput"
@@ -19,6 +19,7 @@ import { toast } from "sonner"
 import { db } from "@/firebase"
 import { GERANCE_PLACEHOLDER_LOGO_URL, type EventInput } from "@/lib/events"
 import { subscribeToContacts } from "@/lib/contacts"
+import { createProMission } from "@/lib/proAccounts"
 import { subscribeToStructures } from "@/lib/structures"
 import { resolveUsersByUids } from "@/lib/users"
 import { CONTACT_SERVICE_ICONS, type Contact } from "@/types/contact"
@@ -89,6 +90,30 @@ function structureLabel(s: StructureResidence): string {
   return `${s.type} ${s.name}`.trim()
 }
 
+// Demande d'intervention (2026-11-21) : un contact de la résidence reçoit
+// une demande qu'il accepte ou refuse avant « Répondre avant », puis fixe
+// lui-même la date et le créneau de son passage (lien de partage, ou
+// Konodal Pro s'il y a un compte). Seule la gérance garde une date fixée
+// ici, sans demande. Raison pour laquelle un contact ne peut pas recevoir
+// de demande, ou null.
+function demandUnavailableReason(contact: Contact, fromSinistre: boolean): string | null {
+  if (contact.pro?.entrepriseId) {
+    if (!fromSinistre) return "Konodal Pro : à mandater depuis un sinistre"
+    if (contact.pro.conformite !== "conforme") return "Konodal Pro : pièces à mettre à jour"
+    return null
+  }
+  return contact.mail?.trim() ? null : "sans email"
+}
+
+// Délai proposé par défaut : le lendemain à 18 h (comme Konodal Pro).
+function defaultDeadlineParts(): { dateOnly: string; time: string } {
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  return { dateOnly: dateToLocalParts(tomorrow).dateOnly, time: "18:00" }
+}
+
+const ANSWER_MIN_MS = 30 * 60 * 1000
+
 // Pré-remplissage partiel (titre/localisation) lors de la création d'une
 // intervention depuis "Programmer une intervention" sur une fiche sinistre -
 // distinct de `initial` (édition complète, avec date et prestataire déjà
@@ -123,6 +148,10 @@ type EventFormDialogProps = {
   // champs n'ont plus de sens à modifier (la date/le prestataire affichés
   // sont obsolètes), seule l'annulation reste possible - cf. onCancel.
   readOnly?: boolean
+  // Édition d'une intervention dont la date a été fixée par le prestataire
+  // (demande d'intervention) : date et heure non modifiables ici, avec
+  // cette explication.
+  dateLockedReason?: string
 }
 
 // Le contenu (et son état) n'est monté QUE quand la modale est ouverte : un
@@ -152,6 +181,7 @@ function EventFormDialogContent({
   onCancel,
   onClose,
   readOnly,
+  dateLockedReason,
 }: Omit<EventFormDialogProps, "open" | "onOpenChange"> & { onClose: () => void }) {
   const [residenceId, setResidenceId] = useState(initialResidenceId ?? "")
   const [eventTitle, setEventTitle] = useState(initial?.title ?? prefillFromSinistre?.title ?? "")
@@ -180,6 +210,7 @@ function EventFormDialogContent({
   )
   const [csMembers, setCsMembers] = useState<KonodalUser[]>([])
   const [audience, setAudience] = useState<EventAudience>(initial?.audience ?? "all")
+  const [urgence, setUrgence] = useState(false)
 
   useEffect(() => {
     return subscribeToContacts(setContacts, () => {
@@ -277,6 +308,17 @@ function EventFormDialogContent({
     [prestaName, geranceAgentLabel, residenceContacts, initial?.pathImage]
   )
 
+  // Création avec un contact pour prestataire : demande d'intervention (la
+  // date saisie est le délai de réponse). Gérance ou édition : date
+  // d'intervention, comme avant.
+  const selectedContact = residenceContacts.find((c) => c.name === prestaName)
+  const demandMode = !initial && !!selectedContact
+  useEffect(() => {
+    if (!demandMode) return
+    setEventDateOnly((current) => current || defaultDeadlineParts().dateOnly)
+    setEventTime((current) => current || defaultDeadlineParts().time)
+  }, [demandMode])
+
   const selectedStructure = structures.find((s) => structureLabel(s) === locationElement)
   const floorOptions = selectedStructure?.etage ?? []
   // Tant qu'aucune résidence n'est choisie (hors édition, où elle est
@@ -298,6 +340,10 @@ function EventFormDialogContent({
     }
     if (!prestaName) {
       toast.error("Choisissez un prestataire")
+      return
+    }
+    if (demandMode && selectedContact) {
+      await submitDemand(selectedContact)
       return
     }
     setSubmitting(true)
@@ -322,6 +368,53 @@ function EventFormDialogContent({
       })
     } catch (err) {
       toast.error("Échec de l'enregistrement : " + (err as Error).message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Demande au contact choisi (pro_create_mission) : rien n'est publié dans
+  // l'app tant qu'il n'a pas accepté et fixé son passage.
+  async function submitDemand(contact: Contact) {
+    const unavailable = demandUnavailableReason(contact, !!linkedSinistreId)
+    if (unavailable) {
+      toast.error(`${contact.name} ne peut pas recevoir de demande (${unavailable})`)
+      return
+    }
+    if (!eventTime) {
+      toast.error("Choisissez l'heure limite de réponse")
+      return
+    }
+    const deadline = new Date(`${eventDateOnly}T${eventTime}`)
+    if (Number.isNaN(deadline.getTime()) || deadline.getTime() < Date.now() + ANSWER_MIN_MS) {
+      toast.error("Laissez au prestataire au moins 30 minutes pour répondre")
+      return
+    }
+    setSubmitting(true)
+    try {
+      const result = await createProMission({
+        residenceId,
+        ...(linkedSinistreId ? { sinistreId: linkedSinistreId } : {}),
+        contactId: contact.id,
+        repondreAvant: deadline.toISOString(),
+        title: eventTitle,
+        description,
+        pathImage,
+        locationElement,
+        locationFloor,
+        audience,
+        contactCsMemberIds,
+        urgence,
+      })
+      const when = deadline.toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })
+      toast.success(
+        result.canal === "pro"
+          ? `Mission envoyée à ${contact.name} sur Konodal Pro : réponse attendue avant le ${when}`
+          : `Demande envoyée à ${contact.name} par mail : réponse attendue avant le ${when}`
+      )
+      onClose()
+    } catch (err) {
+      toast.error("Demande non envoyée : " + (err as Error).message)
     } finally {
       setSubmitting(false)
     }
@@ -381,21 +474,34 @@ function EventFormDialogContent({
               onChange={(e) => setEventTitle(e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="event-date">Date</Label>
-              <DateInput value={eventDateOnly} onChange={setEventDateOnly} className="w-full" />
+          <div className="flex flex-col gap-2">
+            <div
+              className={cn("grid grid-cols-2 gap-3", dateLockedReason && "pointer-events-none opacity-60")}
+            >
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="event-date">{demandMode ? "Répondre avant le" : "Date"}</Label>
+                <DateInput value={eventDateOnly} onChange={setEventDateOnly} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="event-time">{demandMode ? "Heure" : "Heure (optionnel)"}</Label>
+                <Input
+                  id="event-time"
+                  type="time"
+                  required={demandMode}
+                  disabled={restDisabled || !!dateLockedReason}
+                  value={eventTime}
+                  onChange={(e) => setEventTime(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="event-time">Heure (optionnel)</Label>
-              <Input
-                id="event-time"
-                type="time"
-                disabled={restDisabled}
-                value={eventTime}
-                onChange={(e) => setEventTime(e.target.value)}
-              />
-            </div>
+            {demandMode && (
+              <p className="text-xs text-muted-foreground">
+                Le prestataire accepte ou refuse avant cette date, puis choisit lui-même le jour et le créneau de son
+                passage : l'intervention apparaît alors dans l'application. Sans réponse dans ce délai, vous êtes
+                prévenu et pouvez en mandater un autre.
+              </p>
+            )}
+            {dateLockedReason && <p className="text-xs text-muted-foreground">{dateLockedReason}</p>}
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -428,14 +534,32 @@ function EventFormDialogContent({
                 {residenceContacts.length === 0 && (
                   <option disabled>Aucun contact pour cette résidence</option>
                 )}
-                {residenceContacts.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
+                {residenceContacts.map((c) => {
+                  // En création, un contact qui ne peut pas recevoir de
+                  // demande (sans mail, Konodal Pro hors sinistre ou non
+                  // conforme) reste visible mais grisé, avec la raison.
+                  const unavailable = initial ? null : demandUnavailableReason(c, !!linkedSinistreId)
+                  return (
+                    <option key={c.id} value={c.name} disabled={!!unavailable}>
+                      {c.name}
+                      {unavailable ? ` (${unavailable})` : !initial && c.pro?.entrepriseId ? " · Konodal Pro" : ""}
+                    </option>
+                  )
+                })}
               </optgroup>
             </select>
           </div>
+          {demandMode && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4 rounded border-input"
+                checked={urgence}
+                onChange={(e) => setUrgence(e.target.checked)}
+              />
+              Urgent
+            </label>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-2">
               <Label htmlFor="event-batiment">Bâtiment (optionnel)</Label>
@@ -607,8 +731,8 @@ function EventFormDialogContent({
           </Button>
           {!readOnly && (
             <Button type="submit" disabled={submitting || cancelling} className={PRIMARY_CTA_CLASS}>
-              <Save />
-              Enregistrer
+              {demandMode ? <Send /> : <Save />}
+              {demandMode ? "Envoyer la demande" : "Enregistrer"}
             </Button>
           )}
         </DialogFooter>

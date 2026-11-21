@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { EventFormDialog } from "@/components/EventFormDialog"
 import { PageHeader } from "@/components/PageHeader"
+import { InterventionDemandsCard } from "@/components/pro/InterventionDemandsCard"
 import { useAuth } from "@/lib/auth-context"
 import { createEvent } from "@/lib/events"
 import { useAllEvents, type EventWithResidence } from "@/hooks/useAllEvents"
@@ -141,6 +142,8 @@ export default function EvenementsPage() {
           />
         </CardContent>
       </Card>
+
+      <InterventionDemandsCard residences={residences} />
 
       <Outlet context={{ events, loading, filters } satisfies EvenementsOutletContext} />
 

@@ -1,26 +1,22 @@
 import { useState } from "react"
-import { doc, getDoc } from "firebase/firestore"
 import { CalendarClock, Check, HardHat, Mail, Megaphone, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { db } from "@/firebase"
 import { useAuth } from "@/lib/auth-context"
 import { createCommunication } from "@/lib/communications"
 import { createEvent, GERANCE_PLACEHOLDER_LOGO_URL } from "@/lib/events"
-import { sendInterventionEmail } from "@/lib/interventionEmail"
+import { createProMission } from "@/lib/proAccounts"
 import { reportNodoActionResult, type NodoAction, type NodoActionEdit, type NodoActionStatus } from "@/lib/nodo"
-import { updateSinistreInterventionDate, updateSinistreStatut } from "@/lib/sinistres"
 import { sendUserEmail } from "@/lib/userEmails"
 import { cn, PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { CONTACT_SERVICE_ICONS } from "@/types/contact"
-import { emptyAddress, type Address } from "@/types/residence"
 
 const ACTION_META = {
   communication: { icon: Megaphone, label: "Communication à publier" },
   event: { icon: CalendarClock, label: "Intervention à programmer" },
   email: { icon: Mail, label: "Mail à envoyer" },
-  intervention: { icon: HardHat, label: "Intervention sur sinistre" },
+  intervention: { icon: HardHat, label: "Demande d'intervention sur sinistre" },
 } as const
 
 const STATUS_LABEL = {
@@ -97,49 +93,34 @@ export function NodoActionCard({
       })
       return `Intervention « ${title} » programmée le ${date.toLocaleString("fr-FR")} sur ${action.residenceName}.`
     }
-    if (action.type === "intervention") return executeIntervention(user.uid)
+    if (action.type === "intervention") return executeIntervention()
     await sendUserEmail(payload.recipientUid ?? "", title, body)
     return `Mail « ${title} » envoyé à ${payload.recipientName ?? "le résident"}.`
   }
 
-  // Même enchaînement que "Programmer une intervention" (SinistreDetailPage)
-  // puis "Envoyer au prestataire" (EvenementDetailPage), en un seul clic.
-  async function executeIntervention(uid: string) {
-    const date = new Date(eventDate)
-    if (Number.isNaN(date.getTime())) throw new Error("Date d'intervention invalide")
-    if (!payload.sinistreId || !payload.prestaMail) throw new Error("Sinistre ou email du prestataire manquant")
-    const residenceSnap = await getDoc(doc(db, "residences", action.residenceId))
-    const residence = residenceSnap.data() ?? {}
+  // Même demande que « Mandater un prestataire » (SinistreDetailPage) : le
+  // prestataire accepte ou refuse avant la date choisie ici, puis fixe
+  // lui-même son passage (pro_create_mission, 2026-11-21).
+  async function executeIntervention() {
+    const deadline = new Date(eventDate)
+    if (Number.isNaN(deadline.getTime())) throw new Error("Date limite de réponse invalide")
+    if (!payload.sinistreId || !payload.contactId) throw new Error("Sinistre ou prestataire manquant")
     const pathImage =
       CONTACT_SERVICE_ICONS[payload.prestaService as keyof typeof CONTACT_SERVICE_ICONS] ?? ""
-    const event = { title, description: body, eventDate: date, prestaName: payload.prestaName ?? "", pathImage }
-    const eventId = await createEvent(action.residenceId, uid, {
-      ...event,
-      linkedSinistreId: payload.sinistreId,
+    const result = await createProMission({
+      residenceId: action.residenceId,
+      sinistreId: payload.sinistreId,
+      contactId: payload.contactId,
+      repondreAvant: deadline.toISOString(),
+      title,
+      description: body,
+      pathImage: pathImage ? new URL(pathImage, window.location.origin).href : "",
       locationElement: payload.locationElement || undefined,
       locationFloor: payload.locationFloor || undefined,
+      message,
     })
-    await updateSinistreInterventionDate(action.residenceId, payload.sinistreId, date)
-    if (payload.sinistreStatut === "Transmis") {
-      await updateSinistreStatut(action.residenceId, payload.sinistreId, "En cours")
-    }
-    try {
-      await sendInterventionEmail({
-        residenceId: action.residenceId,
-        postId: eventId,
-        residenceName: action.residenceName,
-        address: (residence.address as Address | undefined) ?? emptyAddress,
-        event,
-        prestataireMail: payload.prestaMail,
-        message,
-      })
-    } catch (error) {
-      throw new Error(
-        "Intervention créée mais email non envoyé (renvoyez-le depuis la fiche intervention) : " +
-          (error instanceof Error ? error.message : String(error))
-      )
-    }
-    return `Intervention programmée le ${date.toLocaleString("fr-FR")} avec ${payload.prestaName} (${payload.ticket}), ordre envoyé à ${payload.prestaMail}.`
+    const how = result.canal === "pro" ? "sur Konodal Pro" : `par mail à ${payload.prestaMail}`
+    return `Demande envoyée à ${payload.prestaName} (${payload.ticket}) ${how} : réponse attendue avant le ${deadline.toLocaleString("fr-FR")}.`
   }
 
   // Champs modifiés par l'utilisateur : Nodo en tire des préférences
@@ -241,13 +222,16 @@ export function NodoActionCard({
           onChange={(e) => setTitle(e.target.value)}
         />
         {action.type === "intervention" && (
-          <input
-            type="datetime-local"
-            className={FIELD_CLASS}
-            value={eventDate}
-            disabled={disabled}
-            onChange={(e) => setEventDate(e.target.value)}
-          />
+          <label className="flex flex-col gap-1 text-xs text-[oklch(40%_0.01_150)]">
+            Répondre avant (le prestataire fixe ensuite lui-même son passage)
+            <input
+              type="datetime-local"
+              className={FIELD_CLASS}
+              value={eventDate}
+              disabled={disabled}
+              onChange={(e) => setEventDate(e.target.value)}
+            />
+          </label>
         )}
         {action.type === "event" && (
           <div className="flex gap-2">

@@ -59,6 +59,8 @@ function toResidenceEvent(residenceId: string, d: DocumentSnapshot<DocumentData>
     annule: (data.annule as boolean) || false,
     contactCsMemberIds: (data.contactCsMemberIds as string[] | undefined) || undefined,
     audience: data.audience === "proprietaires" ? "proprietaires" : "all",
+    missionId: (data.missionId as string) || undefined,
+    eventEnd: toDateOrNull(event.eventEnd),
   }
 }
 

@@ -133,15 +133,19 @@ export default function EvenementDetailPage() {
           </div>
           {event && (
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSend}
-                disabled={sending || event.reporte || event.annule}
-              >
-                <Mail />
-                Envoyer
-              </Button>
+              {/* Intervention issue d'une demande : le prestataire a déjà son
+                  lien (ou Konodal Pro), rien à renvoyer. */}
+              {!event.missionId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSend}
+                  disabled={sending || event.reporte || event.annule}
+                >
+                  <Mail />
+                  Envoyer
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -188,10 +192,12 @@ export default function EvenementDetailPage() {
                   {event.eventDate ? event.eventDate.toLocaleDateString("fr-FR") : "—"}
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Heure : </span>
+                  <span className="text-muted-foreground">{event.eventEnd ? "Créneau : " : "Heure : "}</span>
                   {event.eventDate
                     ? event.eventDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
                     : "—"}
+                  {event.eventEnd &&
+                    ` – ${event.eventEnd.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`}
                 </div>
                 {event.linkedSinistreId && (
                   <div className="flex items-center justify-between gap-2 border-t pt-3 sm:col-span-2">
@@ -286,6 +292,11 @@ export default function EvenementDetailPage() {
           setEditing(false)
         }}
         readOnly={!!event?.reporte}
+        dateLockedReason={
+          event?.missionId
+            ? "Date fixée par le prestataire : il la reprogramme lui-même depuis son lien ou Konodal Pro."
+            : undefined
+        }
       />
     </div>
   )

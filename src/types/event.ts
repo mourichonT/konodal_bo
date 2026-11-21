@@ -60,4 +60,11 @@ export type ResidenceEvent = {
   // depuis LE POST plutôt que depuis la résidence).
   contactCsMemberIds?: string[]
   audience: EventAudience
+  // Demande d'intervention (missions/{id}, pro_create_mission, 2026-11-21) :
+  // intervention publiée quand le prestataire a accepté et fixé lui-même sa
+  // date et son créneau (lien de partage ou Konodal Pro).
+  missionId?: string
+  // Fin du créneau choisi par le prestataire (absente des interventions
+  // programmées directement par le BO).
+  eventEnd?: Date | null
 }
