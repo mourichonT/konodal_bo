@@ -15,6 +15,16 @@ function run(command, cwd) {
   execSync(command, { cwd, stdio: "inherit" })
 }
 
+// La prod se publie depuis master uniquement : une branche en cours (ex.
+// feat/konodal-pro, qui dépend d'un serveur pas encore déployé) mettrait en
+// ligne des écrans qui échouent.
+const branch = execSync("git branch --show-current", { cwd: repoRoot }).toString().trim()
+if (branch !== "master") {
+  console.error(`\nPublication refusée : konodal_bo est sur la branche « ${branch} ».`)
+  console.error("Repasse sur master (git switch master), puis relance npm run deploy.")
+  process.exit(1)
+}
+
 run("npm run build", repoRoot)
 run("firebase deploy --only hosting:portail --project konodal-web", repoRoot)
 
