@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { SortableTableHead } from "@/components/SortableTableHead"
 import { useTableSort } from "@/hooks/useTableSort"
-import { Link } from "react-router-dom"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
-import { CheckCircle2, Clock3, Merge, Pencil, Phone, Plus, Search, Trash2, Users, X } from "lucide-react"
+import { CheckCircle2, Clock3, HardHat, Merge, Pencil, Phone, Plus, Search, Trash2, Users, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ContactFormDialog } from "@/components/ContactFormDialog"
+import { ProComplianceBadge } from "@/components/pro/ProComplianceBadge"
+import { ProProviderAddDialog } from "@/components/pro/ProProviderAddDialog"
 import { PageHeader } from "@/components/PageHeader"
 import { EmergencyContactFormDialog } from "@/components/EmergencyContactFormDialog"
 import { FilterKpiCard } from "@/components/FilterKpiCard"
@@ -49,12 +51,18 @@ function matchesSearch(contact: Contact, search: string): boolean {
   return haystack.includes(search.toLowerCase())
 }
 
-export default function ContactsPage() {
+// addPro : route /contacts/ajouter-pro?ref=... (lien de la fiche Konodal Pro
+// d'un prestataire, ouvert depuis son QR code ou son mail), qui ouvre
+// directement l'ajout au carnet.
+export default function ContactsPage({ addPro = false }: { addPro?: boolean } = {}) {
   const { contacts, residences, loading } = useAllContacts((message) => toast.error(message))
   const { isSuperAdmin } = useIsSuperAdmin()
   const [search, setSearch] = useState("")
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>(null)
   const [creating, setCreating] = useState(false)
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const [addingPro, setAddingPro] = useState(addPro)
   const [deleting, setDeleting] = useState<Contact | null>(null)
   const [merging, setMerging] = useState<{ keep: Contact; other: Contact } | null>(null)
 
@@ -168,10 +176,16 @@ export default function ContactsPage() {
       <PageHeader
         title="Contacts"
         actions={
-          <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
-            <Plus />
-            Ajouter un contact
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setAddingPro(true)}>
+              <HardHat />
+              Ajouter un prestataire Konodal Pro
+            </Button>
+            <Button onClick={() => setCreating(true)} className={PRIMARY_CTA_CLASS}>
+              <Plus />
+              Ajouter un contact
+            </Button>
+          </div>
         }
       />
 
@@ -293,12 +307,15 @@ export default function ContactsPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={contact.isApproved ? "default" : "outline"}
-                      className={!contact.isApproved ? "border-transparent bg-amber-100 text-amber-800" : undefined}
-                    >
-                      {contact.isApproved ? "Approuvé" : "En attente"}
-                    </Badge>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge
+                        variant={contact.isApproved ? "default" : "outline"}
+                        className={!contact.isApproved ? "border-transparent bg-amber-100 text-amber-800" : undefined}
+                      >
+                        {contact.isApproved ? "Approuvé" : "En attente"}
+                      </Badge>
+                      <ProComplianceBadge pro={contact.pro} />
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -378,6 +395,18 @@ export default function ContactsPage() {
           </CardContent>
         </Card>
       )}
+
+      <ProProviderAddDialog
+        open={addingPro}
+        onOpenChange={(open) => {
+          setAddingPro(open)
+          // Fermé depuis /contacts/ajouter-pro : retour à la liste.
+          if (!open && addPro) navigate("/contacts", { replace: true })
+        }}
+        residences={residences}
+        initialQuery={addPro ? (searchParams.get("ref") ?? "") : ""}
+        onAdded={(contactId) => navigate(`/contacts/${contactId}`)}
+      />
 
       <ContactFormDialog
         open={creating}

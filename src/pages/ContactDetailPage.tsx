@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, CheckCircle2, Save, Search, Trash2, XCircle } from "lucide-react"
+import { ArrowLeft, CheckCircle2, HardHat, Save, Search, Trash2, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,9 @@ import { PRIMARY_CTA_CLASS } from "@/lib/utils"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
 import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
+import { ProComplianceBadge } from "@/components/pro/ProComplianceBadge"
+import { inviteProContact } from "@/lib/proAccounts"
+import { PRO_CONFORMITE_LABELS } from "@/types/contact"
 import { subscribeToResidences } from "@/lib/residences"
 import { subscribeToGerances, setContactGeranceLink } from "@/lib/gerances"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
@@ -154,6 +157,22 @@ export default function ContactDetailPage() {
     }
   }
 
+  // Konodal Pro : invitation par mail à créer son compte d'entreprise (lien
+  // valable 30 jours) ; le contact est relié à son inscription.
+  const [invitingPro, setInvitingPro] = useState(false)
+  async function handleInvitePro() {
+    if (!contact) return
+    setInvitingPro(true)
+    try {
+      const result = await inviteProContact(contact.id)
+      toast.success(result.alreadySent ? "Invitation déjà envoyée cette semaine" : `Invitation envoyée à ${contact.mail}`)
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setInvitingPro(false)
+    }
+  }
+
   async function handleToggleApproval() {
     if (!id || !contact) return
     try {
@@ -217,6 +236,13 @@ export default function ContactDetailPage() {
               >
                 {contact.isApproved ? "Approuvé" : "En attente"}
               </Badge>
+              <ProComplianceBadge pro={contact.pro} />
+              {!contact.pro && (
+                <Button variant="outline" size="sm" onClick={handleInvitePro} disabled={invitingPro || !contact.mail}>
+                  <HardHat />
+                  Inviter sur Konodal Pro
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={handleToggleApproval}>
                 {contact.isApproved ? <XCircle /> : <CheckCircle2 />}
                 {contact.isApproved ? "Désapprouver" : "Approuver"}
@@ -393,6 +419,44 @@ export default function ContactDetailPage() {
           </Card>
 
           <div className="flex flex-col gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Konodal Pro</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2 text-sm">
+                {contact.pro ? (
+                  <>
+                    <p>
+                      Compte Konodal Pro relié (référence {contact.pro.ref}) :{" "}
+                      {PRO_CONFORMITE_LABELS[contact.pro.conformite].toLowerCase()}.
+                    </p>
+                    <p className="text-muted-foreground">
+                      Vous pouvez lui confier une mission depuis un sinistre (« Mandater ») : il y répond, planifie
+                      l'intervention et dépose son compte-rendu dans Konodal Pro.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-muted-foreground">
+                      Ce prestataire n'a pas de compte Konodal Pro : il reçoit les interventions par mail, avec un lien.
+                      Invitez-le à créer son compte (gratuit) pour suivre vos missions, ses pièces de conformité et ses
+                      comptes-rendus.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-fit"
+                      onClick={handleInvitePro}
+                      disabled={invitingPro || !contact.mail}
+                    >
+                      <HardHat />
+                      Inviter sur Konodal Pro
+                    </Button>
+                    {!contact.mail && <p className="text-xs text-muted-foreground">Ajoutez d'abord son email.</p>}
+                  </>
+                )}
+              </CardContent>
+            </Card>
             {isSuperAdmin ? (
               <>
                 <Card>

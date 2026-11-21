@@ -38,6 +38,7 @@ import ResidenceRequestDetailPage from "@/pages/ResidenceRequestDetailPage"
 import ContentsLayout from "@/pages/ContentsLayout"
 import ResidenceImportPage from "@/pages/ResidenceImportPage"
 import ClaudeConnectPage from "@/pages/ClaudeConnectPage"
+import ProCompliancePage from "@/pages/ProCompliancePage"
 
 // Ancienne page Facturation : devenue l'onglet Abonnement de la page Agence.
 // Les retours Stripe (Checkout, portail) arrivent encore ici, avec ?checkout=.
@@ -143,6 +144,8 @@ function App() {
           }
         />
         <Route path="contacts" element={<ContactsPage />} />
+        {/* Lien de la fiche Konodal Pro d'un prestataire (QR code, mail). */}
+        <Route path="contacts/ajouter-pro" element={<ContactsPage addPro />} />
         <Route path="contacts/:id" element={<ContactDetailPage />} />
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="messages" element={<MessagesPage />} />
@@ -153,6 +156,14 @@ function App() {
           element={
             <RequireSuperAdmin>
               <PublicitesPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="konodal-pro/conformite"
+          element={
+            <RequireSuperAdmin>
+              <ProCompliancePage />
             </RequireSuperAdmin>
           }
         />

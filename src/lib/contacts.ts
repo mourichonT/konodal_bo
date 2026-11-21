@@ -17,7 +17,7 @@ import {
 } from "firebase/firestore"
 import { db } from "@/firebase"
 import { emptyAddress, type Address, type Residence } from "@/types/residence"
-import type { Contact } from "@/types/contact"
+import type { Contact, ContactPro } from "@/types/contact"
 import type { Gerance } from "@/types/gerance"
 
 const contactsCollection = collection(db, "contacts")
@@ -38,7 +38,15 @@ function toContact(d: DocumentSnapshot<DocumentData>): Contact {
     siret: (data.siret as string) ?? "",
     likelyDuplicateIds: (data.likelyDuplicateIds as string[]) ?? [],
     isApproved: (data.isApproved as boolean) ?? false,
+    pro: toContactPro(data.pro),
   }
+}
+
+// contacts.pro : entreprise Konodal Pro reliée (écrit par le serveur seul).
+function toContactPro(value: unknown): ContactPro | undefined {
+  const pro = value as Partial<ContactPro> | undefined
+  if (!pro?.entrepriseId) return undefined
+  return { entrepriseId: pro.entrepriseId, ref: pro.ref ?? "", conformite: pro.conformite ?? "incomplet" }
 }
 
 // Le rattachement résidence<->contact ne vit plus sur ce document (cf.

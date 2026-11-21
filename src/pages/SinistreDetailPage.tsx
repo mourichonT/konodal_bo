@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Eye,
   FileDown,
+  HardHat,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,6 +26,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { EventFormDialog } from "@/components/EventFormDialog"
+import { MandateDialog } from "@/components/pro/MandateDialog"
+import { SinistreMissionsCard } from "@/components/pro/SinistreMissionsCard"
 import { PostCommentsCard } from "@/components/PostCommentsCard"
 import { SinistreMediaViewer } from "@/components/SinistreMediaViewer"
 import { SinistrePriorityIcon } from "@/components/SinistrePriorityIcon"
@@ -78,6 +81,8 @@ export default function SinistreDetailPage() {
   const [geranceRef, setGeranceRef] = useState<GeranceRef | undefined>(undefined)
   const [csmembers, setCsmembers] = useState<string[] | undefined>(undefined)
   const [schedulingIntervention, setSchedulingIntervention] = useState(false)
+  // Mission confiée à un prestataire Konodal Pro (MandateDialog).
+  const [mandating, setMandating] = useState(false)
   const [interventionEventId, setInterventionEventId] = useState<string | undefined>(undefined)
   const [mediaIndex, setMediaIndex] = useState(0)
   const [exportingPdf, setExportingPdf] = useState(false)
@@ -294,6 +299,16 @@ export default function SinistreDetailPage() {
               </Button>
               <Button
                 size="sm"
+                variant="outline"
+                disabled={sinistre.statut === "Terminé"}
+                title={sinistre.statut === "Terminé" ? "Ticket terminé" : "Confier le sinistre à un prestataire Konodal Pro"}
+                onClick={() => setMandating(true)}
+              >
+                <HardHat />
+                Mandater
+              </Button>
+              <Button
+                size="sm"
                 disabled={exportingPdf}
                 onClick={handleExportPdf}
                 className="bg-slate-200 text-slate-800 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-100 dark:hover:bg-slate-500"
@@ -434,6 +449,8 @@ export default function SinistreDetailPage() {
                   )}
                 </CardContent>
               </Card>
+
+              <SinistreMissionsCard residenceId={residenceId} sinistreId={postId} />
 
               <DeclarantCard
                 title="Déclarant"
@@ -630,6 +647,15 @@ export default function SinistreDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MandateDialog
+        open={mandating}
+        onOpenChange={setMandating}
+        residenceId={residenceId}
+        sinistreId={postId}
+        contactRefs={contactRefs}
+        csmembers={csmembers}
+      />
 
       <EventFormDialog
         open={schedulingIntervention}

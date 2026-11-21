@@ -20,6 +20,8 @@ dist-ssr
 .env
 .env.*
 !.env.example
+# Émulateurs locaux (npm run dev:emulateurs) : valeurs factices uniquement.
+!.env.emulateurs
 
 # Editor directories and files
 .vscode/*

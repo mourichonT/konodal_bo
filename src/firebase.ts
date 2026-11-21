@@ -1,8 +1,8 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
-import { getFunctions } from "firebase/functions";
+import { connectAuthEmulator, getAuth } from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { connectStorageEmulator, getStorage } from "firebase/storage";
+import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 
 // Config du projet Firebase konodal-dev (partagé avec l'app Flutter),
 // app Web dédiée "Konodal Backoffice" enregistrée séparément côté Firebase
@@ -51,3 +51,15 @@ export const storage = getStorage(app);
 // où vivent invite_agency_account / revoke_agency_account - getFunctions() cible
 // "us-central1" par défaut, précisé explicitement pour ne pas en dépendre.
 export const functions = getFunctions(app, "europe-west9");
+
+// Mode local (`npm run dev:emulateurs`, .env.emulateurs) : BO branché sur les
+// émulateurs Firebase de konodal_pro/emulateurs (projet demo-konodal-pro,
+// aucune ressource réelle). Les fonctions HTTP appelées par URL complète
+// (FUNCTIONS_BASE de linkPreview, offers, passwordReset, sinistres) n'y
+// passent pas et échouent sans effet.
+if (import.meta.env.VITE_EMULATEURS === "true") {
+  connectAuthEmulator(auth, "http://127.0.0.1:9299", { disableWarnings: true });
+  connectFirestoreEmulator(db, "127.0.0.1", 8383);
+  connectStorageEmulator(storage, "127.0.0.1", 9499);
+  connectFunctionsEmulator(functions, "127.0.0.1", 5201);
+}

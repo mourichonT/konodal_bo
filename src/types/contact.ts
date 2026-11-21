@@ -80,4 +80,25 @@ export type Contact = {
   // Verrouillé côté règles Firestore : seul le BO (isSuperAdmin) peut le
   // faire passer à true, même logique que users/{uid}.isApproved.
   isApproved: boolean
+  // Entreprise Konodal Pro reliée à ce contact (pro_link_contact,
+  // functions_python/pro.py) : écrit par le serveur seul (firestore.rules),
+  // jamais dans ContactProfileInput (lib/contacts.ts).
+  pro?: ContactPro
+}
+
+// Konodal Pro (pro.konodal.com), webapp des artisans : état de conformité
+// de l'entreprise (pièces URSSAF, Kbis, assurances…), recopié sur le contact.
+export type ProConformite = "incomplet" | "a_verifier" | "conforme" | "expire"
+
+export type ContactPro = {
+  entrepriseId: string
+  ref: string
+  conformite: ProConformite
+}
+
+export const PRO_CONFORMITE_LABELS: Record<ProConformite, string> = {
+  incomplet: "Pièces à fournir",
+  a_verifier: "Pièces en vérification",
+  conforme: "Conforme",
+  expire: "Pièce expirée",
 }

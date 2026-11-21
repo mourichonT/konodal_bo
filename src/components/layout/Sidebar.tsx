@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   Library,
+  HardHat,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useIsSuperAdmin } from "@/hooks/useIsSuperAdmin"
@@ -131,6 +132,8 @@ const superAdminNavGroup: NavGroup = {
       ],
     },
     { to: "/acces", label: "Accès", icon: ShieldCheck },
+    // Konodal Pro : relecture des pièces de conformité des entreprises.
+    { to: "/konodal-pro/conformite", label: "Konodal Pro", icon: HardHat },
   ],
 }
 
