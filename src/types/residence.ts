@@ -18,10 +18,21 @@ export type GeranceRef = {
   agentUid?: string
 }
 
+// Syndicat des copropriétaires, pour la facturation électronique des
+// artisans de Konodal Pro (pro.py, pro_create_facture) : un syndicat
+// assujetti à la TVA et doté d'un SIREN reçoit des factures électroniques ;
+// sinon (le cas général), l'artisan fait de l'e-reporting. Champ propre au
+// backoffice et à Konodal Pro, ignoré par l'app mobile.
+export type SyndicatInfo = {
+  siren?: string
+  assujettiTva?: boolean
+}
+
 export type Residence = {
   id: string
   name: string
   address: Address
+  syndicat?: SyndicatInfo
   // Autres adresses de la résidence (autre entrée, autre voie qui la
   // dessert) - même champ que Residence.alternateAddresses côté app mobile
   // (residence.dart) : la recherche de résidence à l'inscription et le

@@ -14,7 +14,7 @@ import {
 } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { db, functions } from "@/firebase"
-import type { Address, GeranceRef, Residence } from "@/types/residence"
+import type { Address, GeranceRef, Residence, SyndicatInfo } from "@/types/residence"
 // ?url&no-inline : cf. commentaire équivalent dans lib/events.ts
 // (GERANCE_PLACEHOLDER_LOGO_URL) - garantit une vraie URL joignable depuis
 // une boîte mail, jamais inlinée en base64 par Vite.
@@ -100,6 +100,23 @@ export type ResidenceInput = {
   // Autres entrées ou voies (création depuis un import de documents, cf.
   // lib/residenceImport.ts) ; le formulaire de création ne les saisit pas.
   alternateAddresses?: Address[]
+  // Facturation électronique des artisans de Konodal Pro (cf. SyndicatInfo).
+  syndicat?: SyndicatInfo
+}
+
+/** SIREN valide : 9 chiffres et clé de Luhn (comme le SIREN de l'INSEE). */
+export function isValidSiren(siren: string): boolean {
+  if (!/^\d{9}$/.test(siren)) return false
+  let sum = 0
+  for (let i = 0; i < 9; i++) {
+    let digit = Number(siren[i])
+    if (i % 2 === 1) {
+      digit *= 2
+      if (digit > 9) digit -= 9
+    }
+    sum += digit
+  }
+  return sum % 10 === 0
 }
 
 // geranceRef : requis côté règle Firestore pour qu'une Agence (pas un

@@ -23,6 +23,7 @@ import { db } from "@/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { AddressAutocompleteInput } from "@/components/AddressAutocompleteInput"
 import { ZipCodeCityInput } from "@/components/ZipCodeCityInput"
 import { SearchableSelect } from "@/components/SearchableSelect"
@@ -48,6 +49,7 @@ import {
   updateResidence,
   updateResidenceAlternateAddresses,
   updateResidenceGeranceRef,
+  isValidSiren,
   type ResidenceInput,
 } from "@/lib/residences"
 import {
@@ -415,6 +417,9 @@ function InfoSection({ residence }: { residence: Residence }) {
   const [zipCode, setZipCode] = useState(residence.address.zipCode)
   const [city, setCity] = useState(residence.address.city)
   const [mailContact, setMailContact] = useState(residence.mail_contact ?? "")
+  // Facturation électronique des artisans de Konodal Pro (cf. SyndicatInfo).
+  const [syndicatSiren, setSyndicatSiren] = useState(residence.syndicat?.siren ?? "")
+  const [assujettiTva, setAssujettiTva] = useState(residence.syndicat?.assujettiTva ?? false)
   const [saving, setSaving] = useState(false)
   const { isSuperAdmin } = useIsSuperAdmin()
 
@@ -435,6 +440,8 @@ function InfoSection({ residence }: { residence: Residence }) {
     setZipCode(residence.address.zipCode)
     setCity(residence.address.city)
     setMailContact(residence.mail_contact ?? "")
+    setSyndicatSiren(residence.syndicat?.siren ?? "")
+    setAssujettiTva(residence.syndicat?.assujettiTva ?? false)
     setGeranceId(residence.geranceRef?.geranceId ?? "")
     setServiceType(residence.geranceRef?.serviceType ?? "")
     setAgentUid(residence.geranceRef?.agentUid ?? "")
@@ -476,12 +483,18 @@ function InfoSection({ residence }: { residence: Residence }) {
   }, [serviceType, selectedGerance])
 
   async function handleSave() {
+    const siren = syndicatSiren.replace(/\s/g, "")
+    if (siren && !isValidSiren(siren)) {
+      toast.error("SIREN du syndicat invalide : 9 chiffres attendus, vérifiez la saisie.")
+      return
+    }
     setSaving(true)
     try {
       const input: ResidenceInput = {
         name,
         address: { ...emptyAddress, street, zipCode, city },
         mail_contact: mailContact,
+        syndicat: { siren, assujettiTva },
       }
       await updateResidence(residence.id, input)
       if (isSuperAdmin) {
@@ -549,6 +562,42 @@ function InfoSection({ residence }: { residence: Residence }) {
         </div>
 
         <AlternateAddresses residence={residence} />
+
+        {/* Factures des artisans de Konodal Pro : facture électronique pour un
+            syndicat assujetti à la TVA doté d'un SIREN, e-reporting sinon. */}
+        <div className="flex flex-col gap-3 border-t pt-4">
+          <Label>Facturation électronique</Label>
+          <p className="text-xs text-muted-foreground">
+            Pour les factures des artisans de Konodal Pro. Un syndicat assujetti à la TVA et doté d'un SIREN reçoit
+            des factures électroniques ; sinon, le cas le plus courant, l'artisan déclare la facture en e-reporting.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="info-syndicat-siren">SIREN du syndicat des copropriétaires</Label>
+              <Input
+                id="info-syndicat-siren"
+                inputMode="numeric"
+                placeholder="S'il en a un"
+                value={syndicatSiren}
+                onChange={(e) => setSyndicatSiren(e.target.value)}
+              />
+            </div>
+            <div className="flex items-start gap-3 sm:pt-6">
+              <div className="min-w-0 flex-1">
+                <div id="info-syndicat-tva" className="text-sm font-medium">
+                  Syndicat assujetti à la TVA
+                </div>
+                <div className="text-xs text-muted-foreground">Rare : par exemple, location de parkings à des professionnels.</div>
+              </div>
+              <Switch
+                checked={assujettiTva}
+                onCheckedChange={setAssujettiTva}
+                aria-labelledby="info-syndicat-tva"
+                className="mt-0.5"
+              />
+            </div>
+          </div>
+        </div>
 
         {isSuperAdmin && (
           <div className="flex flex-col gap-3 border-t pt-4">
