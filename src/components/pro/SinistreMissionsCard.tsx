@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { toast } from "sonner"
-import { CheckCircle2, ChevronDown, ChevronUp, Send, XCircle } from "lucide-react"
+import { CheckCircle2, ChevronDown, ChevronUp, FileText, Send, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,6 +11,7 @@ import {
   decideProDevis,
   markProMissionRead,
   missionStatusLine,
+  openProFacture,
   PRO_MISSION_LABELS,
   sendProMessage,
   setProFactureStatut,
@@ -138,6 +139,15 @@ function MissionDetail({ mission: m }: { mission: ProMission }) {
     if (m.unreadSyndic > 0) void markProMissionRead(m.id).catch(() => undefined)
   }, [m.id, m.unreadSyndic])
 
+  // PDF reçu par mail ; pas encore envoyé : le motif du serveur.
+  async function openPdf(factureId: string) {
+    try {
+      await openProFacture(m.id, factureId)
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
+
   async function run(action: () => Promise<unknown>, success: string) {
     setBusy(true)
     try {
@@ -222,9 +232,16 @@ function MissionDetail({ mission: m }: { mission: ProMission }) {
             <span className="text-xs text-muted-foreground">
               Échéance le {finance.echeance.toLocaleDateString("fr-FR")}
               {finance.paidAt && ` · payée le ${finance.paidAt.toLocaleDateString("fr-FR")}`}
+              {finance.factureRelanceeAt && ` · relance du prestataire le ${finance.factureRelanceeAt.toLocaleDateString("fr-FR")}`}
             </span>
           )}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {finance.factureId && (
+              <Button size="sm" variant="outline" onClick={() => openPdf(finance.factureId!)}>
+                <FileText />
+                Voir la facture (PDF)
+              </Button>
+            )}
             {finance.factureStatut === "envoyee" && (
               <Button size="sm" disabled={busy} onClick={() => run(() => setProFactureStatut(m.id, "bon_a_payer"), "Bon à payer")}>
                 Bon à payer
@@ -238,6 +255,19 @@ function MissionDetail({ mission: m }: { mission: ProMission }) {
           </div>
         </div>
       )}
+
+      {finance?.avoirs.map((a) => (
+        <div key={a.avoirId} className="flex items-center justify-between gap-2 rounded-md border bg-background p-2.5">
+          <span className="text-muted-foreground">
+            Facture {a.factureNumero} annulée par l'avoir {a.avoirNumero}
+            {a.totalTTC != null && ` · −${euros(a.totalTTC)} TTC`}
+          </span>
+          <Button size="sm" variant="outline" onClick={() => openPdf(a.avoirId)}>
+            <FileText />
+            Voir l'avoir
+          </Button>
+        </div>
+      ))}
 
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-semibold uppercase text-muted-foreground">Messages avec l'entreprise</span>

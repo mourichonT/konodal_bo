@@ -288,13 +288,27 @@ export function decideProDevis(missionId: string, devisId: string, accept: boole
   return call("pro_decide_devis", { missionId, devisId, accept, reason })
 }
 
+// Facture annulée de la mission et l'avoir qui l'annule (pro_create_avoir).
+export type ProAvoir = {
+  factureId: string
+  factureNumero: string
+  avoirId: string
+  avoirNumero: string
+  totalTTC: number | null
+}
+
 export type ProMissionFinance = {
   devisTTC: number | null
+  factureId: string | null
   factureNumero: string | null
   factureTTC: number | null
   factureStatut: "envoyee" | "bon_a_payer" | "payee" | null
   echeance: Date | null
   paidAt: Date | null
+  // PDF reçu par mail (pro_envoyer_facture), dernière relance du prestataire.
+  factureEnvoyeeAt: Date | null
+  factureRelanceeAt: Date | null
+  avoirs: ProAvoir[]
 }
 
 export function subscribeToMissionFinance(missionId: string, onData: (f: ProMissionFinance | null) => void): Unsubscribe {
@@ -303,11 +317,21 @@ export function subscribeToMissionFinance(missionId: string, onData: (f: ProMiss
     const x = snap.data()
     onData({
       devisTTC: (x.devisTTC as number) ?? null,
+      factureId: (x.factureId as string) ?? null,
       factureNumero: (x.factureNumero as string) ?? null,
       factureTTC: (x.factureTTC as number) ?? null,
       factureStatut: (x.factureStatut as ProMissionFinance["factureStatut"]) ?? null,
       echeance: x.echeance?.toDate?.() ?? null,
       paidAt: x.paidAt?.toDate?.() ?? null,
+      factureEnvoyeeAt: x.factureEnvoyeeAt?.toDate?.() ?? null,
+      factureRelanceeAt: x.factureRelanceeAt?.toDate?.() ?? null,
+      avoirs: ((x.avoirs as Record<string, unknown>[]) ?? []).map((a) => ({
+        factureId: String(a.factureId ?? ""),
+        factureNumero: String(a.factureNumero ?? ""),
+        avoirId: String(a.avoirId ?? ""),
+        avoirNumero: String(a.avoirNumero ?? ""),
+        totalTTC: typeof a.totalTTC === "number" ? a.totalTTC : null,
+      })),
     })
   })
 }
@@ -387,6 +411,25 @@ export function reviewProDocument(input: {
   validUntil?: string
 }): Promise<{ conformite: ProConformite }> {
   return call("pro_review_document", input)
+}
+
+// Facture ou avoir de la mission, ouvert dans un nouvel onglet : le PDF que
+// le syndic a reçu par mail (pro_get_facture_pdf).
+export async function openProFacture(missionId: string, factureId: string): Promise<void> {
+  const tab = window.open("", "_blank")
+  try {
+    const result = await call<
+      { missionId: string; factureId: string },
+      { fileName: string; contentType: string; data: string }
+    >("pro_get_facture_pdf", { missionId, factureId })
+    const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0))
+    const url = URL.createObjectURL(new Blob([bytes], { type: result.contentType }))
+    if (tab) tab.location.href = url
+    else window.open(url, "_blank")
+  } catch (err) {
+    tab?.close()
+    throw err
+  }
 }
 
 // Pièce ouverte dans un nouvel onglet (contenu renvoyé par la fonction :
